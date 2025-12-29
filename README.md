@@ -1,3 +1,6 @@
+make these updates while giving me the project structure at the end
+i need it to be a complete software with these changes(keeping python scripts for handling the functionalities )
+
 In my app i need to be able to load xls,csv files 
 show files as list where i can select the file and perform the following operations () on it
 
