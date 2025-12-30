@@ -124,11 +124,10 @@ elif choice == "Workforce Tracking":
 
     master_path = "data/workforce.xlsx"
     
-    # Ensure the master file exists to avoid errors
+    # Load Master
     if os.path.exists(master_path):
         work_df = pd.read_excel(master_path)
     else:
-        # Create an empty template if file doesn't exist
         work_df = pd.DataFrame(columns=["Date", "Shift", "matr", "Name", "Ship", "Status"])
 
     # --- 1. Upload & Merge Logic ---
@@ -138,27 +137,46 @@ elif choice == "Workforce Tracking":
     if uploaded_shift:
         new_data = pd.read_excel(uploaded_shift)
         
-        # Check if necessary headers exist
-        required_cols = ["Date", "Shift", "matr"]
-        if all(col in new_data.columns for col in required_cols):
+        # 1a. Normalize Headers (Ignore Case)
+        # Mapping everything to lowercase for comparison
+        actual_cols = {col.lower(): col for col in new_data.columns}
+        required_lower = ["date", "shift", "matr"]
+        
+        if all(req in actual_cols for req in required_lower):
             if st.button("Merge & Replace Matching Records"):
-                # Combine old and new
-                # We put new_data last so 'keep=last' prioritizes it
+                # 1b. Normalize Data Values for Matching
+                # We create temporary columns to ensure 'Night' matches 'night'
+                temp_master = work_df.copy()
+                temp_new = new_data.copy()
+                
+                for col in ["Shift", "matr"]: # Date is usually handled as datetime
+                    # Find the actual case-sensitive name in new_data
+                    real_col_name = actual_cols[col.lower()]
+                    temp_new[col.lower()] = temp_new[real_col_name].astype(str).str.strip().str.lower()
+                    temp_master[col.lower()] = temp_master[col].astype(str).str.strip().str.lower()
+                
+                # Combine
                 combined_df = pd.concat([work_df, new_data], ignore_index=True)
                 
-                # Deduplicate: if Date, Shift, and matr match, keep the newest version
-                combined_df = combined_df.drop_duplicates(
-                    subset=["Date", "Shift", "matr"], 
-                    keep="last"
+                # We need to deduplicate based on the normalized values
+                # To do this safely, we calculate indices to keep
+                # We temporarily add normalized keys to the combined dataframe
+                combined_df['match_key'] = (
+                    combined_df[actual_cols['date']].astype(str) + 
+                    combined_df[actual_cols['shift']].astype(str).str.lower() + 
+                    combined_df[actual_cols['matr']].astype(str).str.lower()
                 )
                 
+                combined_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
+                
                 combined_df.to_excel(master_path, index=False)
-                st.success("Data merged! Matching records updated based on Date, Shift, and matr.")
-                st.rerun() # Refresh to show updated table
+                st.success("Data merged successfully (Case-Insensitive Match)!")
+                st.rerun()
         else:
-            st.error(f"Header mismatch! The file must include these columns: {required_cols}")
+            st.error(f"Missing columns! Required (case-insensitive): {required_lower}")
 
     st.divider()
+    # ... (Rest of your data_editor code)
 
     # --- 2. Manual View & Edit ---
     st.subheader("Master Workforce Log")
@@ -167,3 +185,4 @@ elif choice == "Workforce Tracking":
     if st.button("Save Manual Changes"):
         edited_work.to_excel(master_path, index=False)
         st.toast("Manual changes saved to database.")        
+
