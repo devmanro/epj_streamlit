@@ -3,9 +3,9 @@ import pandas as pd
 import os
 from modules.processor import calculate_daily_totals
 # Import your specific scripts
-from modules.gendeb import run_debarquement
-from modules.genBorderaux import generate_borderau
-from modules.genPvs import generate_pv
+#from modules.genBorderaux import generate_borderau
+#from modules.gendeb import run_debarquement
+#from modules.genPvs import generate_pv
 
 st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
 
@@ -61,14 +61,16 @@ if choice == "File Manager":
         # 2, 3, 4. Operations on Selected File
         if col2.button("📋 Gen. Debarquement"):
             # Call your gendeb.py logic here
-            result = run_debarquement(edited_df)
+            #result = run_debarquement(edited_df)
             st.info("Debarquement Table Generated")
             
         if col3.button("📜 Gen. Borderaux"):
-            generate_borderau(edited_df)
+            #generate_borderau(edited_df)
+            st.info("Gen. Borderaux")
             
         if col4.button("📝 Gen. Daily PVs"):
-            generate_pv(edited_df)
+            #generate_pv(edited_df)
+            st.info("Gen. Daily PVs")
 
 # ---------------------------------------------------------
 # 6. PORT MAP MODULE (Interactive Overlay)

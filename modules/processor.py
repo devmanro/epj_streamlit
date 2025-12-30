@@ -7,3 +7,4 @@ def calculate_daily_totals(df):
         'nombre colis': 'sum'
     }).reset_index()
     return summary
+    
