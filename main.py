@@ -125,3 +125,6 @@ elif choice == "Workforce Tracking":
     edited_work = st.data_editor(work_df, num_rows="dynamic")
     if st.button("Update Shift Logs"):
         edited_work.to_excel("data/workforce.xlsx", index=False)
+
+
+        
