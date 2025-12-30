@@ -121,10 +121,49 @@ elif choice == "Logistics Tools":
 # ---------------------------------------------------------
 elif choice == "Workforce Tracking":
     st.header("👷 Shift & Tally Follow-up")
-    work_df = pd.read_excel("data/workforce.xlsx")
-    edited_work = st.data_editor(work_df, num_rows="dynamic")
-    if st.button("Update Shift Logs"):
-        edited_work.to_excel("data/workforce.xlsx", index=False)
 
+    master_path = "data/workforce.xlsx"
+    
+    # Ensure the master file exists to avoid errors
+    if os.path.exists(master_path):
+        work_df = pd.read_excel(master_path)
+    else:
+        # Create an empty template if file doesn't exist
+        work_df = pd.DataFrame(columns=["Date", "Shift", "matr", "Name", "Ship", "Status"])
 
+    # --- 1. Upload & Merge Logic ---
+    st.subheader("Import Shift Sheet")
+    uploaded_shift = st.file_uploader("Upload new shift Excel file", type=["xlsx"])
+
+    if uploaded_shift:
+        new_data = pd.read_excel(uploaded_shift)
         
+        # Check if necessary headers exist
+        required_cols = ["Date", "Shift", "matr"]
+        if all(col in new_data.columns for col in required_cols):
+            if st.button("Merge & Replace Matching Records"):
+                # Combine old and new
+                # We put new_data last so 'keep=last' prioritizes it
+                combined_df = pd.concat([work_df, new_data], ignore_index=True)
+                
+                # Deduplicate: if Date, Shift, and matr match, keep the newest version
+                combined_df = combined_df.drop_duplicates(
+                    subset=["Date", "Shift", "matr"], 
+                    keep="last"
+                )
+                
+                combined_df.to_excel(master_path, index=False)
+                st.success("Data merged! Matching records updated based on Date, Shift, and matr.")
+                st.rerun() # Refresh to show updated table
+        else:
+            st.error(f"Header mismatch! The file must include these columns: {required_cols}")
+
+    st.divider()
+
+    # --- 2. Manual View & Edit ---
+    st.subheader("Master Workforce Log")
+    edited_work = st.data_editor(work_df, num_rows="dynamic", key="work_editor")
+    
+    if st.button("Save Manual Changes"):
+        edited_work.to_excel(master_path, index=False)
+        st.toast("Manual changes saved to database.")        
