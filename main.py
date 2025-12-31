@@ -21,7 +21,7 @@ st.markdown("""
 # --- Sidebar Navigation ---
 st.sidebar.title("🚢 Port Operations")
 menu = ["Dashboard", "File Manager", "Port Map", "Workforce Tracking", "Logistics Tools", "Templates"]
-choice = st.sidebar.radio("Navigation", menu)
+choice = st.sidebar.radio("Port Map", menu)
 
 # --- Helper: File Management Logic ---
 UPLOAD_DIR = "data/uploads/"
