@@ -121,9 +121,8 @@ elif choice == "Logistics Tools":
 # ---------------------------------------------------------
 elif choice == "Workforce Tracking":
     st.header("👷 Shift & Tally Follow-up")
-
     master_path = "data/workforce.xlsx"
-    
+
     # Load Master
     if os.path.exists(master_path): 
         work_df = pd.read_excel(master_path)
@@ -137,48 +136,41 @@ elif choice == "Workforce Tracking":
     if uploaded_shift:
         new_data = pd.read_excel(uploaded_shift)
         
-        # 1a. Normalize Headers (Ignore Case)
-        # Mapping everything to lowercase for comparison
-        actual_cols = {col.lower(): col for col in new_data.columns}
-        required_lower = ["date", "shift", "mat"]
+        # Normalize Headers (Ignore Case & Strip whitespace)
+        map_new = {col.lower().strip(): col for col in new_data.columns}
+        required_cols = ["date", "mat"] # These are strictly needed for the match_key
         
-        if all(req in actual_cols for req in required_lower):
+        # Check if required columns exist
+        if all(req in map_new for req in required_cols):
             if st.button("Merge & Replace Matching Records"):
-                # 1. Map headers to find case-insensitive column names
-                map_new = {col.lower().strip(): col for col in new_data.columns}
+                # Map master headers too
                 map_master = {col.lower().strip(): col for col in work_df.columns}
 
-                # 2. Check for required keys (date and mat)
-                if 'date' in map_new and 'mat' in map_new:
-                    # 3. Create a normalized Match Key (Date only + Cleaned Mat)
-                    # Process the new data
-                    new_data['match_key'] = (
-                        pd.to_datetime(new_data[map_new['date']]).dt.date.astype(str) + 
-                        new_data[map_new['mat']].astype(str).str.lower().str.strip()
-                    )
-                    
-                    # Process the existing master data
-                    work_df['match_key'] = (
-                        pd.to_datetime(work_df[map_master['date']]).dt.date.astype(str) + 
-                        work_df[map_master['mat']].astype(str).str.lower().str.strip()
-                    )
+                # 3. Create normalized Match Keys
+                new_data['match_key'] = (
+                    pd.to_datetime(new_data[map_new['date']]).dt.date.astype(str) + 
+                    new_data[map_new['mat']].astype(str).str.lower().str.strip()
+                )
+                
+                work_df['match_key'] = (
+                    pd.to_datetime(work_df[map_master['date']]).dt.date.astype(str) + 
+                    work_df[map_master['mat']].astype(str).str.lower().str.strip()
+                )
 
-                    # 4. Concatenate: New data at the end so 'keep=last' picks it over the old rows
-                    combined_df = pd.concat([work_df, new_data], ignore_index=True)
-                    
-                    # 5. Deduplicate based on the normalized key
-                    final_df = combined_df.drop_duplicates(subset=['match_key'], keep='last')
-                    
-                    # 6. Cleanup: Remove the temporary key and save
-                    final_df = final_df.drop(columns=['match_key'])
-                    final_df.to_excel(master_path, index=False)
-                    
-                    st.success("Successfully normalized and merged records (Date/Mat match).")
-                    st.rerun()
-            else:
-                st.error(f"Missing columns! Required (case-insensitive): {required_lower}")
-
-       
+                # 4. Concatenate and Deduplicate (keep latest)
+                combined_df = pd.concat([work_df, new_data], ignore_index=True)
+                final_df = combined_df.drop_duplicates(subset=['match_key'], keep='last')
+                
+                # 5. Cleanup and Save
+                final_df = final_df.drop(columns=['match_key'])
+                final_df.to_excel(master_path, index=False)
+                
+                st.success("Successfully normalized and merged records (Date/Mat match).")
+                st.rerun()
+        else:
+            # Show exactly which columns are missing for better debugging
+            missing = [r for r in required_cols if r not in map_new]
+            st.error(f"Missing columns in uploaded file: {missing}")
 
     st.divider()
     # ... (Rest of your data_editor code)
@@ -189,5 +181,4 @@ elif choice == "Workforce Tracking":
     
     if st.button("Save Manual Changes"):
         edited_work.to_excel(master_path, index=False)
-        st.toast("Manual changes saved to database.")        
-
+        st.toast("Manual changes saved to database.")
