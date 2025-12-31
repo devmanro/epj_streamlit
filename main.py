@@ -133,46 +133,46 @@ elif choice == "Workforce Tracking":
     st.subheader("Import Shift Sheet")
     uploaded_shift = st.file_uploader("Upload new shift Excel file", type=["xlsx"])
 
-    if uploaded_shift:
-        new_data = pd.read_excel(uploaded_shift)
-        
-        # Normalize Headers (Ignore Case & Strip whitespace)
+    if st.button("Merge & Replace Matching Records"):
+        map_master = {col.lower().strip(): col for col in work_df.columns}
         map_new = {col.lower().strip(): col for col in new_data.columns}
-        required_cols = ["date", "mat"] # These are strictly needed for the match_key
+
+        # --- STEP A: Rename New Data columns to match Master Case ---
+        # This prevents duplicate columns like 'mat' and 'Mat'
+        rename_map = {}
+        for low_key, original_new_name in map_new.items():
+            if low_key in map_master:
+                rename_map[original_new_name] = map_master[low_key]
         
-        # Check if required columns exist
-        if all(req in map_new for req in required_cols):
-            if st.button("Merge & Replace Matching Records"):
-                # Map master headers too
-                map_master = {col.lower().strip(): col for col in work_df.columns}
-                map_new = {col.lower().strip(): col for col in new_data.columns}
+        new_data = new_data.rename(columns=rename_map)
 
-                # 3. Create normalized Match Keys
-                new_data['match_key'] = (
-                    pd.to_datetime(new_data[map_new['date']]).dt.date.astype(str) + 
-                    new_data[map_new['mat']].astype(str).str.lower().str.strip()
-                )
-                
-                work_df['match_key'] = (
-                    pd.to_datetime(work_df[map_master['date']]).dt.date.astype(str) + 
-                    work_df[map_master['mat']].astype(str).str.lower().str.strip()
-                )
+        # --- STEP B: Create Match Keys using the Master's column names ---
+        # We use map_master to get the correct case-sensitive name
+        col_date = map_master['date']
+        col_mat = map_master['mat']
 
-                # 4. Concatenate and Deduplicate (keep latest)
-                combined_df = pd.concat([work_df, new_data], ignore_index=True)
-                final_df = combined_df.drop_duplicates(subset=['match_key'], keep='last')
-                
-                # 5. Cleanup and Save
-                final_df = final_df.drop(columns=['match_key'])
-                final_df.to_excel(master_path, index=False)
-                
-                st.success("Successfully normalized and merged records (Date/Mat match).")
-                st.rerun()
-        else:
-            # Show exactly which columns are missing for better debugging
-            missing = [r for r in required_cols if r not in map_new]
-            st.error(f"Missing columns in uploaded file: {missing}")
+        new_data['match_key'] = (
+            pd.to_datetime(new_data[col_date]).dt.date.astype(str) + 
+            new_data[col_mat].astype(str).str.lower().str.strip()
+        )
+        
+        work_df['match_key'] = (
+            pd.to_datetime(work_df[col_date]).dt.date.astype(str) + 
+            work_df[col_mat].astype(str).str.lower().str.strip()
+        )
 
+        # --- STEP C: Combine and Deduplicate ---
+        combined_df = pd.concat([work_df, new_data], ignore_index=True)
+        
+        # Keep 'last' ensures the new_data (which is at the bottom) replaces the old
+        final_df = combined_df.drop_duplicates(subset=['match_key'], keep='last')
+        
+        # --- STEP D: Cleanup ---
+        final_df = final_df.drop(columns=['match_key'])
+        final_df.to_excel(master_path, index=False)
+        
+        st.success("Successfully merged! Headers aligned and records updated.")
+        st.rerun()
     st.divider()
     # ... (Rest of your data_editor code)
 
