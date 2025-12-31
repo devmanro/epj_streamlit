@@ -153,16 +153,19 @@ elif choice == "Workforce Tracking":
                         rename_map[original_new_name] = map_master[low_key]
                 
                 new_data = new_data.rename(columns=rename_map)
-                
+
+                col_date = map_master['date']
+                col_mat = map_master['mat']
+
                 # 3. Create normalized Match Keys
                 new_data['match_key'] = (
-                    pd.to_datetime(new_data[map_new['date']]).dt.date.astype(str) + 
-                    new_data[map_new['mat']].astype(str).str.lower().str.strip()
+                    pd.to_datetime(new_data[col_date]).dt.date.astype(str) + 
+                    new_data[col_mat].astype(str).str.lower().str.strip()
                 )
                 
                 work_df['match_key'] = (
-                    pd.to_datetime(work_df[map_master['date']]).dt.date.astype(str) + 
-                    work_df[map_master['mat']].astype(str).str.lower().str.strip()
+                    pd.to_datetime(work_df[col_date]).dt.date.astype(str) + 
+                    work_df[col_mat].astype(str).str.lower().str.strip()
                 )
 
                 # 4. Concatenate and Deduplicate (keep latest)
