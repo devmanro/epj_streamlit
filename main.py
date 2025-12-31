@@ -82,7 +82,7 @@ elif choice == "Port Map":
     import plotly.express as px
     from PIL import Image
     
-    img = Image.open("assets/port_map.png")
+    img = Image.open("assets/map/port_map.png")
     
     # Placeholder data for ship positions (You would store this in a JSON/CSV)
     map_data = pd.DataFrame({
