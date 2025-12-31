@@ -128,7 +128,7 @@ elif choice == "Workforce Tracking":
     if os.path.exists(master_path):
         work_df = pd.read_excel(master_path)
     else:
-        work_df = pd.DataFrame(columns=["Date", "Shift", "matr", "Name", "Ship", "Status"])
+        work_df = pd.DataFrame(columns=["Date", "Shift", "Matr", "Name", "Ship", "Status"])
 
     # --- 1. Upload & Merge Logic ---
     st.subheader("Import Shift Sheet")
@@ -140,7 +140,7 @@ elif choice == "Workforce Tracking":
         # 1a. Normalize Headers (Ignore Case)
         # Mapping everything to lowercase for comparison
         actual_cols = {col.lower(): col for col in new_data.columns}
-        required_lower = ["date", "shift", "matr"]
+        required_lower = ["date", "shift", "mat"]
         
         if all(req in actual_cols for req in required_lower):
             if st.button("Merge & Replace Matching Records"):
