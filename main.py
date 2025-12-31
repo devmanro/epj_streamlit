@@ -148,12 +148,17 @@ elif choice == "Workforce Tracking":
         
         # Check if required columns exist
         if all(req in map_new for req in required_cols):
-            map_master = {col.lower().strip(): col for col in work_df.columns}
+            map_master = {col.lower().strip(): col for col in st.session_state["workforce_data"].columns}
             map_new = {col.lower().strip(): col for col in new_data.columns}
 
             # 1. Rename new_data headers to match Master case
             rename_map = {orig: map_master[low] for low, orig in map_new.items() if low in map_master}
             new_data = new_data.rename(columns=rename_map)
+
+
+            # Force the Date column to show ONLY the date (no time)
+            new_data[col_date] = pd.to_datetime(new_data[col_date]).dt.date
+            st.session_state["workforce_data"][col_date] = pd.to_datetime(st.session_state["workforce_data"][col_date]).dt.date
 
             # 2. Identify the Master column names
             col_date = map_master['date']
@@ -161,7 +166,7 @@ elif choice == "Workforce Tracking":
             col_shift = map_master['shift']
 
             # 3. Create the Triple-Key (Date + Mat + Shift)
-            for df in [work_df, new_data]:
+            for df in [st.session_state["workforce_data"], new_data]:
                 df['match_key'] = (
                     pd.to_datetime(df[col_date]).dt.date.astype(str) + "_" +
                     df[col_mat].astype(str).str.lower().str.strip() + "_" +
@@ -169,7 +174,7 @@ elif choice == "Workforce Tracking":
                 )
 
             # 4. Merge: Put new_data at the end and drop older duplicates
-            combined_df = pd.concat([work_df, new_data], ignore_index=True)
+            combined_df = pd.concat([st.session_state["workforce_data"], new_data], ignore_index=True)
             # Keep last ensures the newly uploaded records replace the old ones in the view
             updated_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
 
