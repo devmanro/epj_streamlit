@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from modules.processor import calculate_daily_totals
+import time
 # Import your specific scripts
 #from modules.genBorderaux import generate_borderau
 #from modules.gendeb import run_debarquement
@@ -176,6 +177,7 @@ elif choice == "Workforce Tracking":
             st.session_state["workforce_data"] = updated_df
             st.success("Table updated in view! Review and click 'Save Manual Changes' to commit to Excel.")
             st.session_state["file_processed"]=True
+            time.sleep(3) # Wait for 3 seconds
             st.rerun()
         else:
             # Show exactly which columns are missing for better debugging
