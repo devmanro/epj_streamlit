@@ -125,10 +125,10 @@ elif choice == "Workforce Tracking":
     master_path = "data/workforce.xlsx"
     
     # Load Master
-    if os.path.exists(master_path):
+    if os.path.exists(master_path): 
         work_df = pd.read_excel(master_path)
     else:
-        work_df = pd.DataFrame(columns=["Date", "Shift", "Matr", "Name", "Ship", "Status"])
+        work_df = pd.DataFrame(columns=["Mat","Nom", "Fonction","Affectation","Navire","Marchandise","Shift","Date"]) 
 
     # --- 1. Upload & Merge Logic ---
     st.subheader("Import Shift Sheet")
@@ -149,7 +149,7 @@ elif choice == "Workforce Tracking":
                 temp_master = work_df.copy()
                 temp_new = new_data.copy()
                 
-                for col in ["Shift", "matr"]: # Date is usually handled as datetime
+                for col in ["shift", "mat"]: # Date is usually handled as datetime
                     # Find the actual case-sensitive name in new_data
                     real_col_name = actual_cols[col.lower()]
                     temp_new[col.lower()] = temp_new[real_col_name].astype(str).str.strip().str.lower()
@@ -162,9 +162,9 @@ elif choice == "Workforce Tracking":
                 # To do this safely, we calculate indices to keep
                 # We temporarily add normalized keys to the combined dataframe
                 combined_df['match_key'] = (
-                    combined_df[actual_cols['date']].astype(str) + 
+                    combined_df[actual_cols['date']].dt.date.astype(str) + 
                     combined_df[actual_cols['shift']].astype(str).str.lower() + 
-                    combined_df[actual_cols['matr']].astype(str).str.lower()
+                    combined_df[actual_cols['mat']].astype(str).str.lower()
                 )
                 
                 combined_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
