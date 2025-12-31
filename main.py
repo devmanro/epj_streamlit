@@ -145,6 +145,7 @@ elif choice == "Workforce Tracking":
             if st.button("Merge & Replace Matching Records"):
                 # Map master headers too
                 map_master = {col.lower().strip(): col for col in work_df.columns}
+                map_new = {col.lower().strip(): col for col in new_data.columns}
 
                 # 3. Create normalized Match Keys
                 new_data['match_key'] = (
