@@ -174,8 +174,8 @@ elif choice == "Workforce Tracking":
 
             # 5. Update the UI state so the changes appear in the table immediately
             st.session_state["workforce_data"] = updated_df
-            st.session_state["file_processed"]=True
             st.success("Table updated in view! Review and click 'Save Manual Changes' to commit to Excel.")
+            st.session_state["file_processed"]=True
             st.rerun()
         else:
             # Show exactly which columns are missing for better debugging
