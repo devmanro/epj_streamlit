@@ -155,15 +155,14 @@ elif choice == "Workforce Tracking":
             rename_map = {orig: map_master[low] for low, orig in map_new.items() if low in map_master}
             new_data = new_data.rename(columns=rename_map)
 
-
-            # Force the Date column to show ONLY the date (no time)
-            new_data[col_date] = pd.to_datetime(new_data[col_date]).dt.date
-            st.session_state["workforce_data"][col_date] = pd.to_datetime(st.session_state["workforce_data"][col_date]).dt.date
-
             # 2. Identify the Master column names
             col_date = map_master['date']
             col_mat = map_master['mat']
             col_shift = map_master['shift']
+
+            # Force the Date column to show ONLY the date (no time)
+            new_data[col_date] = pd.to_datetime(new_data[col_date]).dt.date
+            st.session_state["workforce_data"][col_date] = pd.to_datetime(st.session_state["workforce_data"][col_date]).dt.date
 
             # 3. Create the Triple-Key (Date + Mat + Shift)
             for df in [st.session_state["workforce_data"], new_data]:
