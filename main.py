@@ -144,36 +144,41 @@ elif choice == "Workforce Tracking":
         
         if all(req in actual_cols for req in required_lower):
             if st.button("Merge & Replace Matching Records"):
-                # 1b. Normalize Data Values for Matching
-                # We create temporary columns to ensure 'Night' matches 'night'
-                temp_master = work_df.copy()
-                temp_new = new_data.copy()
-                
-                for col in ["shift", "mat"]: # Date is usually handled as datetime
-                    # Find the actual case-sensitive name in new_data
-                    real_col_name = actual_cols[col.lower()]
-                    temp_new[col.lower()] = temp_new[real_col_name].astype(str).str.strip().str.lower()
-                    temp_master[col.lower()] = temp_master[col].astype(str).str.strip().str.lower()
-                
-                # Combine
-                combined_df = pd.concat([work_df, new_data], ignore_index=True)
-                
-                # We need to deduplicate based on the normalized values
-                # To do this safely, we calculate indices to keep
-                # We temporarily add normalized keys to the combined dataframe
-                combined_df['match_key'] = (
-                    combined_df[actual_cols['date']].dt.date.astype(str) + 
-                    combined_df[actual_cols['shift']].astype(str).str.lower() + 
-                    combined_df[actual_cols['mat']].astype(str).str.lower()
-                )
-                
-                combined_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
-                
-                combined_df.to_excel(master_path, index=False)
-                st.success("Data merged successfully (Case-Insensitive Match)!")
-                st.rerun()
-        else:
-            st.error(f"Missing columns! Required (case-insensitive): {required_lower}")
+                # 1. Map headers to find case-insensitive column names
+                map_new = {col.lower().strip(): col for col in new_data.columns}
+                map_master = {col.lower().strip(): col for col in work_df.columns}
+
+                # 2. Check for required keys (date and mat)
+                if 'date' in map_new and 'mat' in map_new:
+                    # 3. Create a normalized Match Key (Date only + Cleaned Mat)
+                    # Process the new data
+                    new_data['match_key'] = (
+                        pd.to_datetime(new_data[map_new['date']]).dt.date.astype(str) + 
+                        new_data[map_new['mat']].astype(str).str.lower().str.strip()
+                    )
+                    
+                    # Process the existing master data
+                    work_df['match_key'] = (
+                        pd.to_datetime(work_df[map_master['date']]).dt.date.astype(str) + 
+                        work_df[map_master['mat']].astype(str).str.lower().str.strip()
+                    )
+
+                    # 4. Concatenate: New data at the end so 'keep=last' picks it over the old rows
+                    combined_df = pd.concat([work_df, new_data], ignore_index=True)
+                    
+                    # 5. Deduplicate based on the normalized key
+                    final_df = combined_df.drop_duplicates(subset=['match_key'], keep='last')
+                    
+                    # 6. Cleanup: Remove the temporary key and save
+                    final_df = final_df.drop(columns=['match_key'])
+                    final_df.to_excel(master_path, index=False)
+                    
+                    st.success("Successfully normalized and merged records (Date/Mat match).")
+                    st.rerun()
+            else:
+                st.error(f"Missing columns! Required (case-insensitive): {required_lower}")
+
+       
 
     st.divider()
     # ... (Rest of your data_editor code)
