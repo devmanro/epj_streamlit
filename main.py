@@ -129,16 +129,21 @@ elif choice == "Workforce Tracking":
     else:
         work_df = pd.DataFrame(columns=["Mat","Nom", "Fonction","Affectation","Navire","Marchandise","Shift","Date"]) 
 
+    if "workforce_data" not in st.session_state:
+        st.session_state["workforce_data"] = work_df
+    if "file_processed" not in st.session_state:
+        st.session_state["file_processed"] = False
+        
+
     # --- 1. Upload & Merge Logic ---
     st.subheader("Import Shift Sheet")
     uploaded_shift = st.file_uploader("Upload new shift Excel file", type=["xlsx"])
 
-    if uploaded_shift:
+    if uploaded_shift and not st.session_state["file_processed"]:
         new_data = pd.read_excel(uploaded_shift)
-        
         # Normalize Headers (Ignore Case & Strip whitespace)
         map_new = {col.lower().strip(): col for col in new_data.columns}
-        required_cols = ["date", "mat"] # These are strictly needed for the match_key
+        required_cols = ["date", "mat","shift"] # These are strictly needed for the match_key
         
         # Check if required columns exist
         if all(req in map_new for req in required_cols):
@@ -169,8 +174,8 @@ elif choice == "Workforce Tracking":
 
             # 5. Update the UI state so the changes appear in the table immediately
             st.session_state["workforce_data"] = updated_df
+            st.session_state["file_processed"]=True
             st.success("Table updated in view! Review and click 'Save Manual Changes' to commit to Excel.")
-            uploaded_shift=None
             st.rerun()
         else:
             # Show exactly which columns are missing for better debugging
