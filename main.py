@@ -142,36 +142,35 @@ elif choice == "Workforce Tracking":
         
         # Check if required columns exist
         if all(req in map_new for req in required_cols):
-            if st.button("Merge & Replace Matching Records"):
-                map_master = {col.lower().strip(): col for col in work_df.columns}
-                map_new = {col.lower().strip(): col for col in new_data.columns}
+            map_master = {col.lower().strip(): col for col in work_df.columns}
+            map_new = {col.lower().strip(): col for col in new_data.columns}
 
-                # 1. Rename new_data headers to match Master case
-                rename_map = {orig: map_master[low] for low, orig in map_new.items() if low in map_master}
-                new_data = new_data.rename(columns=rename_map)
+            # 1. Rename new_data headers to match Master case
+            rename_map = {orig: map_master[low] for low, orig in map_new.items() if low in map_master}
+            new_data = new_data.rename(columns=rename_map)
 
-                # 2. Identify the Master column names
-                col_date = map_master['date']
-                col_mat = map_master['mat']
-                col_shift = map_master['shift']
+            # 2. Identify the Master column names
+            col_date = map_master['date']
+            col_mat = map_master['mat']
+            col_shift = map_master['shift']
 
-                # 3. Create the Triple-Key (Date + Mat + Shift)
-                for df in [work_df, new_data]:
-                    df['match_key'] = (
-                        pd.to_datetime(df[col_date]).dt.date.astype(str) + "_" +
-                        df[col_mat].astype(str).str.lower().str.strip() + "_" +
-                        df[col_shift].astype(str).str.lower().str.strip()
-                    )
+            # 3. Create the Triple-Key (Date + Mat + Shift)
+            for df in [work_df, new_data]:
+                df['match_key'] = (
+                    pd.to_datetime(df[col_date]).dt.date.astype(str) + "_" +
+                    df[col_mat].astype(str).str.lower().str.strip() + "_" +
+                    df[col_shift].astype(str).str.lower().str.strip()
+                )
 
-                # 4. Merge: Put new_data at the end and drop older duplicates
-                combined_df = pd.concat([work_df, new_data], ignore_index=True)
-                # Keep last ensures the newly uploaded records replace the old ones in the view
-                updated_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
+            # 4. Merge: Put new_data at the end and drop older duplicates
+            combined_df = pd.concat([work_df, new_data], ignore_index=True)
+            # Keep last ensures the newly uploaded records replace the old ones in the view
+            updated_df = combined_df.drop_duplicates(subset=['match_key'], keep='last').drop(columns=['match_key'])
 
-                # 5. Update the UI state so the changes appear in the table immediately
-                st.session_state["workforce_data"] = updated_df
-                st.success("Table updated in view! Review and click 'Save Manual Changes' to commit to Excel.")
-                st.rerun()
+            # 5. Update the UI state so the changes appear in the table immediately
+            st.session_state["workforce_data"] = updated_df
+            st.success("Table updated in view! Review and click 'Save Manual Changes' to commit to Excel.")
+            st.rerun()
         else:
             # Show exactly which columns are missing for better debugging
             missing = [r for r in required_cols if r not in map_new]
