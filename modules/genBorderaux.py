@@ -8,8 +8,8 @@ import math
 from assets.constants.constants import PATH_BRDX,PATH_TEMPLATES
 
 if not os.path.exists(PATH_BRDX):
-    os.makedirs(UPLOAD_DIR)
-    
+    os.makedirs(PATH_BRDX)
+
 def format_entry_docx(doc, row):
     client = str(row.get("client", "")).strip()
     # Initial commodity from excel
