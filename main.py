@@ -68,7 +68,7 @@ if choice == "File Manager":
 
         if col3.button("📜 Gen. Borderaux"):
             # 1. Generate the file and get the path back
-            generated_path = generate_brd(file_path, sheet_name=0, template_path="template.docx")
+            generated_path = generate_brd(file_path, sheet_name=0, template_name="template.docx")
             
             # 2. Read the file into memory
             with open(generated_path, "rb") as f:
