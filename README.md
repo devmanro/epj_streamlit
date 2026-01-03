@@ -16,22 +16,4 @@ show files as list where i can select the file and perform the following operati
 9-a page dedicated for following up with tally/workers for each shift ,and the ships they have worked on i use a simple excel sheet for this
 
 
-
-
-
-
-  if st.session_state.brd_generated_path:
-            st.divider()
-            with open(st.session_state.brd_generated_path, "rb") as f:
-                btn = st.download_button(
-                    label="📥 Download Generated Word Doc",
-                    data=f.read(),
-                    file_name=os.path.basename(st.session_state.brd_generated_path),
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    type="primary" # Makes the button stand out
-                )
-
-
-
-
-
+add feature to merge each new uploaded file to the database of files after clicking save.

@@ -25,7 +25,7 @@ def format_entry_docx(doc, row):
     # print(f"client------{client}")
     
     if nb_colis is None or (isinstance(nb_colis, float) and math.isnan(nb_colis)):
-        nb_colis = 0
+        rec_qty = 0
 
     if rec_qty is None or (isinstance(rec_qty, float) and math.isnan(rec_qty)):
         rec_qty = 0

@@ -15,7 +15,7 @@ st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
 # --- CSS for styling ---
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
+    .main { background-color: #f9f7f9; }
     .stButton>button { width: 100%; }
     </style>
     """, unsafe_allow_html=True)
@@ -30,14 +30,11 @@ choice = st.sidebar.radio("Navigation", menu)
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-
 if "active_download" not in st.session_state:
     # Will store a dict: {"path": ..., "type": ...}
     st.session_state.active_download = None
 
 # Callback to clear state
-
-
 def clear_downloads():
     st.session_state.active_download = None
 
