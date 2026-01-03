@@ -91,7 +91,7 @@ if choice == "File Manager":
         # --- OPERATION 3: GENERATE BORDERAUX ---
         if col3.button("📜 Gen. Borderaux"):
             # Execute generation logic
-            generated_path = generate_brd(file_path, sheet_name=0, template_path="template.docx")
+            generated_path = generate_brd(file_path, sheet_name=0, template_name="template.docx")
             
             # Save the path to session state to keep it visible
             st.session_state.brd_generated_path = generated_path
