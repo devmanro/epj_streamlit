@@ -67,9 +67,21 @@ if choice == "File Manager":
             st.info("Debarquement Table Generated")
 
         if col3.button("📜 Gen. Borderaux"):
-            #generate_brd(file_path, edited_df)
-            generate_brd(file_path, sheet_name=0, template_name="template.docx")
-            st.info("Gen. Borderaux")
+            # 1. Generate the file and get the path back
+            generated_path = generate_brd(file_path, sheet_name=0, template_path="template.docx")
+            
+            # 2. Read the file into memory
+            with open(generated_path, "rb") as f:
+                file_bytes = f.read()
+                
+            # 3. Provide the download button
+            st.download_button(
+                label="📥 Download Generated Word Doc",
+                data=file_bytes,
+                file_name=os.path.basename(generated_path),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+            st.success("Bordereau Generated Successfully!")
 
         if col4.button("📝 Gen. Daily PVs"):
             #generate_pv(edited_df)

@@ -222,9 +222,8 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     file_name_only = os.path.splitext(base_name)[0]
     output_docx=f"{PATH_BRDX}/{file_name_only}.docx"
     template_path=f"{PATH_TEMPLATES}/{template_name}"
-
     excel_to_docx_custom(sourcefile, sheet_name, template_path, output_docx)
-
+    return output_docx
 
 #if __name__ == "__main__":
     # Ensure book1.xlsx exists in your directory
