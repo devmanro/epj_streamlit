@@ -4,7 +4,7 @@ import os
 from modules.processor import calculate_daily_totals
 import time
 # Import your specific scripts
-#from modules.genBorderaux import generate_borderau
+from modules.genBorderaux import generate_brd
 #from modules.gendeb import run_debarquement
 #from modules.genPvs import generate_pv
 
@@ -21,7 +21,7 @@ st.markdown("""
 # --- Sidebar Navigation ---
 st.sidebar.title("🚢 Port Operations")
 menu = ["Dashboard", "File Manager", "Port Map", "Workforce Tracking", "Logistics Tools", "Templates"]
-choice = st.sidebar.radio("Port Map", menu)
+choice = st.sidebar.radio("Navigation", menu)
 
 # --- Helper: File Management Logic ---
 UPLOAD_DIR = "data/uploads/"
@@ -66,7 +66,7 @@ if choice == "File Manager":
             st.info("Debarquement Table Generated")
             
         if col3.button("📜 Gen. Borderaux"):
-            #generate_borderau(edited_df)
+            generate_borderau(edited_df)
             st.info("Gen. Borderaux")
             
         if col4.button("📝 Gen. Daily PVs"):
