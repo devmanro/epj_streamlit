@@ -192,8 +192,9 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
 def gen_table(filepath=None):
     # --- MAIN EXECUTION ---
-   if not filepath:
+   if not filepath: 
         return False
+
     try:
         base_name = os.path.basename(sourcefile) 
         file_name_only = os.path.splitext(base_name)[0]
