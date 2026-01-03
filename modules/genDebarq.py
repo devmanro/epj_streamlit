@@ -3,6 +3,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
+from assets.constants.constants import PATH_DEBRQ
 
 # --- GLOBAL SETTINGS ---
 SHIP_NAME_PLACEHOLDER = "SHIP NAME: [ENTER NAME HERE]"
@@ -189,38 +190,48 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
     return last_col_idx
 
-# --- MAIN EXECUTION ---
-try:
-    source_df = pd.read_excel('source.xlsx')
-    source_df.columns = source_df.columns.str.strip().str.upper()
+def gen_table(filepath=None):
+    # --- MAIN EXECUTION ---
+   if not filepath:
+        return False
+    try:
+        base_name = os.path.basename(sourcefile) 
+        file_name_only = os.path.splitext(base_name)[0]
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Fiche Débarquements"
+        source_df = pd.read_excel(filepath)
+        source_df.columns = source_df.columns.str.strip().str.upper()
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = f"{file_name_only}"
 
-    ws.merge_cells('A1:G1')
-    ws['A1'].value = SHIP_NAME_PLACEHOLDER
-    ws['A1'].font = Font(bold=True, size=14)
+        ws.merge_cells('A1:G1')
+        ws['A1'].value = SHIP_NAME_PLACEHOLDER
+        ws['A1'].font = Font(bold=True, size=14)
 
-    specific_keywords = ["BOBINE", "TUBE", "CTP", "BIGBAG"]
-    start_col = 1
-    all_matched_indices = pd.Index([])
+        specific_keywords = ["BOBINE", "TUBE", "CTP", "BIGBAG"]
+        start_col = 1
+        all_matched_indices = pd.Index([])
 
-    for keyword in specific_keywords:
-        mask = source_df['PRODUITS'].astype(str).str.contains(keyword, case=False, na=False)
-        p_data = source_df[mask]
-        if not p_data.empty:
-            all_matched_indices = all_matched_indices.union(p_data.index)
-            last_col_idx = create_product_table(ws, keyword.upper(), p_data, start_col, is_others=False)
-            start_col = last_col_idx + 3
+        for keyword in specific_keywords:
+            mask = source_df['PRODUITS'].astype(str).str.contains(keyword, case=False, na=False)
+            p_data = source_df[mask]
+            if not p_data.empty:
+                all_matched_indices = all_matched_indices.union(p_data.index)
+                last_col_idx = create_product_table(ws, keyword.upper(), p_data, start_col, is_others=False)
+                start_col = last_col_idx + 3
 
-    others_data = source_df.drop(all_matched_indices)
-    if not others_data.empty:
-        create_product_table(ws, "UNITS + PACKAGES", others_data, start_col, is_others=True)
+        others_data = source_df.drop(all_matched_indices)
+        if not others_data.empty:
+            create_product_table(ws, "UNITS + PACKAGES", others_data, start_col, is_others=True)
 
-    output_fn = "Final_Fiche_Debarquements.xlsx"
-    wb.save(output_fn)
-    print(f"File '{output_fn}' created successfully.")
+        output_fn = f"{file_name_only}.xlsx"
+        wb.save(output_fn)
+#        print(f"File '{output_fn}' created successfully.")
+        
+        output_docx=f"{PATH_DEBRQ}/{file_name_only}.xlsx"
+        return output_docx
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-except Exception as e:
-    print(f"An error occurred: {e}")
+

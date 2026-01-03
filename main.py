@@ -7,7 +7,7 @@ import time
 from assets.constants.constants import UPLOAD_DIR
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
-#from modules.gendeb import run_debarquement
+from modules.genDebarq import gen_table
 #from modules.genPvs import generate_pv
 
 st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
@@ -30,15 +30,12 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 
+if "active_download" not in st.session_state:
+    st.session_state.active_download = None # Will store a dict: {"path": ..., "type": ...}
 
-# 1. Initialize Session State
-if "brd_generated_path" not in st.session_state:
-    st.session_state.brd_generated_path = None
-
-# Helper function to hide the download button
-def clear_generated_file():
-    st.session_state.brd_generated_path = None
-
+# Callback to clear state
+def clear_downloads():
+    st.session_state.active_download = None
 
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
@@ -86,15 +83,25 @@ if choice == "File Manager":
 
         # --- OPERATION 2 ---
         if col2.button("📋 Gen. Debarquement"):
+            generated_path=gen_table(file_path)
+            st.session_state.active_download = {
+            "path": generated_path,
+            "label": "📥 Download Debarquement (Excel)",
+            "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
             st.info("Debarquement Table Generated")
 
         # --- OPERATION 3: GENERATE BORDERAUX ---
         if col3.button("📜 Gen. Borderaux"):
             # Execute generation logic
             generated_path = generate_brd(file_path, sheet_name=0, template_name="template.docx")
-            
             # Save the path to session state to keep it visible
-            st.session_state.brd_generated_path = generated_path
+            #st.session_state.brd_generated_path = generated_path
+            st.session_state.active_download = {
+            "path": generated_path,
+            "label": "📥 Download Bordereau (Word)",
+            "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
             st.success("Bordereau Generated!")
 
         # --- OPERATION 4 ---
@@ -102,17 +109,20 @@ if choice == "File Manager":
             st.info("Gen. Daily PVs")
 
         # 4. PERSISTENT DOWNLOAD BUTTON
-        # This sits outside the button-click blocks so it doesn't disappear immediately
-        if st.session_state.brd_generated_path:
+        # 3. DYNAMIC DOWNLOAD BUTTON
+        if st.session_state.active_download:
             st.divider()
-            with open(st.session_state.brd_generated_path, "rb") as f:
-                btn = st.download_button(
-                    label="📥 Download Generated Word Doc",
+            file_info = st.session_state.active_download
+            
+            with open(file_info["path"], "rb") as f:
+                st.download_button(
+                    label=file_info["label"],
                     data=f.read(),
-                    file_name=os.path.basename(st.session_state.brd_generated_path),
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    type="primary" # Makes the button stand out
+                    file_name=os.path.basename(file_info["path"]),
+                    mime=file_info["mime"],
+                    type="primary"
                 )
+       
 # ---------------------------------------------------------
 # 6. PORT MAP MODULE (Interactive Overlay)
 # ---------------------------------------------------------

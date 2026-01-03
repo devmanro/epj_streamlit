@@ -20,6 +20,16 @@ show files as list where i can select the file and perform the following operati
 
 
 
+  if st.session_state.brd_generated_path:
+            st.divider()
+            with open(st.session_state.brd_generated_path, "rb") as f:
+                btn = st.download_button(
+                    label="📥 Download Generated Word Doc",
+                    data=f.read(),
+                    file_name=os.path.basename(st.session_state.brd_generated_path),
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    type="primary" # Makes the button stand out
+                )
 
 
 
