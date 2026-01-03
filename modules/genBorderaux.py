@@ -190,7 +190,7 @@ def format_entry_docx(doc, row):
     run_sep = p_sep.add_run("=*"*29)
     run_sep.bold = True
 
-def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx):
+def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx=None):
     if not output_docx:
         return
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl",header=0)
