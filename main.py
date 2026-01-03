@@ -3,6 +3,8 @@ import pandas as pd
 import os
 from modules.processor import calculate_daily_totals
 import time
+
+from assets.constants.constants import UPLOAD_DIR
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
 #from modules.gendeb import run_debarquement
@@ -24,7 +26,6 @@ menu = ["Dashboard", "File Manager", "Port Map", "Workforce Tracking", "Logistic
 choice = st.sidebar.radio("Navigation", menu)
 
 # --- Helper: File Management Logic ---
-UPLOAD_DIR = "data/uploads/"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
@@ -33,7 +34,7 @@ if not os.path.exists(UPLOAD_DIR):
 # ---------------------------------------------------------
 if choice == "File Manager":
     st.header("📂 Data Management Center")
-    
+
     # Upload new files
     uploaded_file = st.file_uploader("Upload XLS/CSV Ship Data", type=["xlsx", "csv"])
     if uploaded_file:
@@ -58,18 +59,18 @@ if choice == "File Manager":
         if col1.button("💾 Save Changes"):
             edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
-            
+
         # 2, 3, 4. Operations on Selected File
         if col2.button("📋 Gen. Debarquement"):
             # Call your gendeb.py logic here
             #result = run_debarquement(edited_df)
             st.info("Debarquement Table Generated")
-            
+
         if col3.button("📜 Gen. Borderaux"):
             #generate_brd(file_path, edited_df)
             generate_brd(file_path, sheet_name=0, template_path="template.docx")
             st.info("Gen. Borderaux")
-            
+
         if col4.button("📝 Gen. Daily PVs"):
             #generate_pv(edited_df)
             st.info("Gen. Daily PVs")

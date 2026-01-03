@@ -5,8 +5,11 @@ from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 import math
-from assets.constants.constants import PATH_BRDX
+from assets.constants.constants import PATH_BRDX,PATH_TEMPLATES
 
+if not os.path.exists(PATH_BRDX):
+    os.makedirs(UPLOAD_DIR)
+    
 def format_entry_docx(doc, row):
     client = str(row.get("client", "")).strip()
     # Initial commodity from excel
@@ -214,10 +217,12 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
     doc.save(output_docx)
     #print(f"New File {output_docx} Saved")
 
-def generate_brd(sourcefile, sheet_name=0, template_path="template.docx"):
+def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     base_name = os.path.basename(sourcefile) 
     file_name_only = os.path.splitext(base_name)[0]
     output_docx=f"{PATH_BRDX}/{file_name_only}.docx"
+    template_path=f"{PATH_TEMPLATES}/{template_name}"
+
     excel_to_docx_custom(sourcefile, sheet_name, template_path, output_docx)
 
 
