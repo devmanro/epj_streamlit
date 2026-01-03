@@ -68,7 +68,7 @@ if choice == "File Manager":
 
         if col3.button("📜 Gen. Borderaux"):
             #generate_brd(file_path, edited_df)
-            generate_brd(file_path, sheet_name=0, template_path="template.docx")
+            generate_brd(file_path, sheet_name=0, template_name="template.docx")
             st.info("Gen. Borderaux")
 
         if col4.button("📝 Gen. Daily PVs"):
