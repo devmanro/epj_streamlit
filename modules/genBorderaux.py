@@ -217,7 +217,7 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
 def generate_brd(sourcefile, sheet_name=0, template_path="template.docx"):
     base_name = os.path.basename(sourcefile) 
     file_name_only = os.path.splitext(base_name)[0]
-    output_docx=f"{constants.PATH_BRDX}/{file_name_only}.docx"
+    output_docx=f"{PATH_BRDX}/{file_name_only}.docx"
     excel_to_docx_custom(sourcefile, sheet_name, template_path, output_docx)
 
 
