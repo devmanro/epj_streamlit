@@ -29,23 +29,44 @@ choice = st.sidebar.radio("Navigation", menu)
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
+
+
+# 1. Initialize Session State
+if "brd_generated_path" not in st.session_state:
+    st.session_state.brd_generated_path = None
+
+# Helper function to hide the download button
+def clear_generated_file():
+    st.session_state.brd_generated_path = None
+
+
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
 # ---------------------------------------------------------
 if choice == "File Manager":
     st.header("📂 Data Management Center")
 
-    # Upload new files
-    uploaded_file = st.file_uploader("Upload XLS/CSV Ship Data", type=["xlsx", "csv"])
+    # 2. Upload Logic
+    uploaded_file = st.file_uploader(
+        "Upload XLS/CSV Ship Data", 
+        type=["xlsx", "csv"],
+        on_change=clear_generated_file # Clear button if new file uploaded
+    )
+    
     if uploaded_file:
-        with open(os.path.join(UPLOAD_DIR, uploaded_file.name), "wb") as f:
+        save_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
+        with open(save_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         st.success(f"Saved {uploaded_file.name}")
 
-    # List and Select Files
+    # 3. List and Select Files
     files = os.listdir(UPLOAD_DIR)
     if files:
-        selected_file = st.selectbox("Select a ship file to operate on:", files)
+        selected_file = st.selectbox(
+            "Select a ship file to operate on:", 
+            files,
+            on_change=clear_generated_file # Clear button if selection changes
+        )
         file_path = os.path.join(UPLOAD_DIR, selected_file)
         
         # Load Data
@@ -56,37 +77,42 @@ if choice == "File Manager":
         edited_df = st.data_editor(df, num_rows="dynamic", key="editor")
         
         col1, col2, col3, col4 = st.columns(4)
+        
+        # --- SAVE CHANGES ---
         if col1.button("💾 Save Changes"):
             edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
+            clear_generated_file() # Clear old doc as data has changed
 
-        # 2, 3, 4. Operations on Selected File
+        # --- OPERATION 2 ---
         if col2.button("📋 Gen. Debarquement"):
-            # Call your gendeb.py logic here
-            #result = run_debarquement(edited_df)
             st.info("Debarquement Table Generated")
 
+        # --- OPERATION 3: GENERATE BORDERAUX ---
         if col3.button("📜 Gen. Borderaux"):
-            # 1. Generate the file and get the path back
-            generated_path = generate_brd(file_path, sheet_name=0, template_name="template.docx")
+            # Execute generation logic
+            generated_path = generate_brd(file_path, sheet_name=0, template_path="template.docx")
             
-            # 2. Read the file into memory
-            with open(generated_path, "rb") as f:
-                file_bytes = f.read()
-                
-            # 3. Provide the download button
-            st.download_button(
-                label="📥 Download Generated Word Doc",
-                data=file_bytes,
-                file_name=os.path.basename(generated_path),
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-            st.success("Bordereau Generated Successfully!")
+            # Save the path to session state to keep it visible
+            st.session_state.brd_generated_path = generated_path
+            st.success("Bordereau Generated!")
 
+        # --- OPERATION 4 ---
         if col4.button("📝 Gen. Daily PVs"):
-            #generate_pv(edited_df)
             st.info("Gen. Daily PVs")
 
+        # 4. PERSISTENT DOWNLOAD BUTTON
+        # This sits outside the button-click blocks so it doesn't disappear immediately
+        if st.session_state.brd_generated_path:
+            st.divider()
+            with open(st.session_state.brd_generated_path, "rb") as f:
+                btn = st.download_button(
+                    label="📥 Download Generated Word Doc",
+                    data=f.read(),
+                    file_name=os.path.basename(st.session_state.brd_generated_path),
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    type="primary" # Makes the button stand out
+                )
 # ---------------------------------------------------------
 # 6. PORT MAP MODULE (Interactive Overlay)
 # ---------------------------------------------------------
