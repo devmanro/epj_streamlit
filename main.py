@@ -66,7 +66,7 @@ if choice == "File Manager":
             st.info("Debarquement Table Generated")
             
         if col3.button("📜 Gen. Borderaux"):
-            generate_borderau(edited_df)
+            generate_brd(edited_df)
             st.info("Gen. Borderaux")
             
         if col4.button("📝 Gen. Daily PVs"):

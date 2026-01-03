@@ -5,6 +5,7 @@ from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 import math
+from assets.constants.constants import PATH_BRDX
 
 def format_entry_docx(doc, row):
     client = str(row.get("client", "")).strip()
@@ -189,9 +190,10 @@ def format_entry_docx(doc, row):
     run_sep = p_sep.add_run("=*"*29)
     run_sep.bold = True
 
-def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx="output.docx"):
+def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx):
+    if not output_docx:
+        return
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl",header=0)
-    
     doc = Document(template_path) if template_path else Document()
 
     style = doc.styles["Normal"]
@@ -207,14 +209,17 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
 
     if os.path.exists(output_docx):
         os.remove(output_docx)
-        print(f"{output_docx} has been deleted.")
+        #print(f"{output_docx} has been deleted.")
 
     doc.save(output_docx)
-    print(f"New File {output_docx} Saved")
+    #print(f"New File {output_docx} Saved")
 
-
-def generate_brd(sourcefile, sheet_name=0, template_path="template.docx", output_docx="entries.docx"):
+def generate_brd(sourcefile, sheet_name=0, template_path="template.docx"):
+    base_name = os.path.basename(sourcefile) 
+    file_name_only = os.path.splitext(base_name)[0]
+    output_docx=f"{constants.PATH_BRDX}/{file_name_only}.docx"
     excel_to_docx_custom(sourcefile, sheet_name, template_path, output_docx)
+
 
 #if __name__ == "__main__":
     # Ensure book1.xlsx exists in your directory
