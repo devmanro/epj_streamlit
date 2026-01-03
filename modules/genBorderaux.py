@@ -15,18 +15,21 @@ def format_entry_docx(doc, row):
     # Initial commodity from excel
     raw_commodity = str(row.get("type", "")).strip().upper() 
 
-    nb_colis = row.get("qte") or 0
-    tonnage = row.get("poids") or 0.0
-    rec_qty = row.get("rec_qty") or 0
+    nb_colis = row.get("qte") 
+    tonnage = row.get("poids") 
+    rec_qty = row.get("rec_qty") 
     # nb_colis =   0     if pd.notna(row.get("nb_colis")) else  row.get("nb_colis")
     # tonnage  =   0.0   if pd.notna(row.get("tonnage"))  else  row.get("tonnage")
     #rec_qty  =0 if pd.notna(row.get("rec_qty"))  else  row.get("rec_qty")
 
-        
     # print(f"client------{client}")
     
+    if nb_colis is None or (isinstance(nb_colis, float) and math.isnan(nb_colis)):
+        nb_colis = 0
+
     if rec_qty is None or (isinstance(rec_qty, float) and math.isnan(rec_qty)):
         rec_qty = 0
+
 
     # Create table
     table = doc.add_table(rows=5, cols=2)
