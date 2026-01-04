@@ -10,26 +10,32 @@ from assets.constants.constants import PATH_BRDX,PATH_TEMPLATES
 if not os.path.exists(PATH_BRDX):
     os.makedirs(PATH_BRDX)
 
+def clean_excel_val(val):
+    # Check for None or empty string
+    if val is None or val == "":
+        return 0
+    # Check for NaN (only if val is a number)
+    if isinstance(val, (int, float)) and math.isnan(val):
+        return 0
+    return val
+
 def format_entry_docx(doc, row):
     client = str(row.get("client", "")).strip()
     # Initial commodity from excel
     raw_commodity = str(row.get("type", "")).strip().upper() 
 
-    nb_colis = row.get("qte") 
-    tonnage = row.get("poids") 
-    rec_qty = row.get("rec_qty") 
     # nb_colis =   0     if pd.notna(row.get("nb_colis")) else  row.get("nb_colis")
     # tonnage  =   0.0   if pd.notna(row.get("tonnage"))  else  row.get("tonnage")
     #rec_qty  =0 if pd.notna(row.get("rec_qty"))  else  row.get("rec_qty")
 
     # print(f"client------{client}")
-    
-    if nb_colis is None or (isinstance(nb_colis, float) and math.isnan(nb_colis)):
-        rec_qty = 0
-
-    if rec_qty is None or (isinstance(rec_qty, float) and math.isnan(rec_qty)):
-        rec_qty = 0
-
+    nb_colis = row.get("qte") 
+    tonnage = row.get("poids") 
+    rec_qty = row.get("rec_qty") 
+  
+    nb_colis =clean_excel_val(  nb_colis)
+    tonnage =clean_excel_val(  tonnage)
+    rec_qty =clean_excel_val(  rec_qty)
 
     # Create table
     table = doc.add_table(rows=5, cols=2)
