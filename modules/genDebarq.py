@@ -28,8 +28,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     raw_color = get_manual_color(product_name) if not is_others else None
 
     # --- Styles ---
-    header_fill = PatternFill(start_color=raw_color, end_color=raw_color,
-                              fill_type="solid") if raw_color else PatternFill(fill_type=None)
+    header_fill = PatternFill(start_color=raw_color, end_color=raw_color,fill_type="solid") if raw_color else PatternFill(fill_type=None)
     header_font = Font(bold=True, size=11)
     title_font = Font(bold=True, size=12)
     border = Border(left=Side(style='thin'), right=Side(style='thin'),
@@ -110,8 +109,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
     for client, col in col_mapping.items():
         try:
-            bl_num = product_data[product_data[client_col]
-                                  == client][bl_col_name].iloc[0]
+            bl_num = product_data[product_data[client_col]== client][bl_col_name].iloc[0]
         except:
             bl_num = "-"
         ws[f"{col}{bl_row}"].value = str(bl_num)
@@ -178,8 +176,11 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
     for client, col in list(col_mapping.items()) + [(None, extra_cols[0])]:
         ws[f"{col}{summary_rows[0]}"].value = f"=SUM({col}{data_start_row}:{col}{curr_data_row-1})"
-        q_manifest = product_data[product_data[client_col] == client][qty_col_name].sum(
-        ) if client else product_data[qty_col_name].sum()
+        #q_manifest = product_data[product_data[client_col] == client][qty_col_name].sum() if client else product_data[qty_col_name].sum()
+
+        target_data = product_data[product_data[client_col] == client] if client else product_data
+        q_manifest = pd.to_numeric(target_data[qty_col_name], errors='coerce').sum()
+
         ws[f"{col}{summary_rows[1]}"].value = q_manifest
         ws[f"{col}{summary_rows[2]}"].value = f"={col}{summary_rows[1]}-{col}{summary_rows[0]}"
         for r in summary_rows:
@@ -224,19 +225,16 @@ def gen_table(filepath=None):
     all_matched_indices = pd.Index([])
 
     for keyword in specific_keywords:
-        mask = source_df['PRODUITS'].astype(
-            str).str.contains(keyword, case=False, na=False)
+        mask = source_df['PRODUITS'].astype(str).str.contains(keyword, case=False, na=False)
         p_data = source_df[mask]
         if not p_data.empty:
             all_matched_indices = all_matched_indices.union(p_data.index)
-            last_col_idx = create_product_table(
-                ws, keyword.upper(), p_data, start_col, is_others=False)
+            last_col_idx = create_product_table(ws, keyword.upper(), p_data, start_col, is_others=False)
             start_col = last_col_idx + 3
 
     others_data = source_df.drop(all_matched_indices)
     if not others_data.empty:
-        create_product_table(ws, "UNITS + PACKAGES",
-                             others_data, start_col, is_others=True)
+        create_product_table(ws, "UNITS + PACKAGES",others_data, start_col, is_others=True)
 
     output_docx = f"{PATH_DEBRQ}/{file_name_only}.xlsx"
     #output_fn = f"{file_name_only}.xlsx"
