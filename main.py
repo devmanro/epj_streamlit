@@ -4,7 +4,7 @@ import os
 from modules.processor import calculate_daily_totals
 import time
 
-from assets.constants.constants import UPLOAD_DIR
+from assets.constants.constants import UPLOAD_DIR,DB_PATH
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table
@@ -58,7 +58,7 @@ if choice == "State Manager":
     with tab1:
         # Call the function from Part 1
         # Make sure render_global_manager is defined or imported
-        render_global_manager(UPLOAD_DIR)
+        render_global_manager(DB_PATH)
 
     # TAB 2: Single File Manager (The original feature)
     with tab2:
