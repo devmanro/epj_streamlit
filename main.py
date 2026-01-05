@@ -7,7 +7,7 @@ import time
 from assets.constants.constants import UPLOAD_DIR
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
-from modules.genDebarq import gen_table
+from modules.gendb import gen_table
 # from modules.genPvs import generate_pv
 
 st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
