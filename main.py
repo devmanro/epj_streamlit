@@ -10,9 +10,11 @@ from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
+from modules.portMap import show_map  # Import the function
+
 # from modules.genPvs import generate_pv
 
-st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
+# st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
 
 # --- CSS for styling ---
 st.markdown("""
@@ -76,29 +78,31 @@ if choice == "State Manager":
 # ---------------------------------------------------------
 elif choice == "Port Map":
     st.header("📍 Port Djendjen Interactive Map")
-    # This uses a scatter plot over your image to simulate "positions"
-    import plotly.express as px
-    from PIL import Image
+    show_map()  # Call the function 
 
-    img = Image.open("assets/map/port_map.png")
+    # # This uses a scatter plot over your image to simulate "positions"
+    # import plotly.express as px
+    # from PIL import Image
 
-    # Placeholder data for ship positions (You would store this in a JSON/CSV)
-    map_data = pd.DataFrame({
-        'x': [100, 250, 400],
-        'y': [200, 150, 300],
-        'Ship': ['Ship A', 'Ship B', 'Ship C'],
-        'Client': ['CMA CGM', 'MSC', 'Maersk'],
-        'Type': ['Containers', 'General Cargo', 'Bulk']
-    })
+    # img = Image.open("assets/map/port_map.png")
 
-    fig = px.scatter(map_data, x='x', y='y', text='Ship', color='Client',
-                     hover_data=['Type'])
-    fig.update_layout(images=[dict(source=img, xref="x", yref="y", x=0, y=500,
-                                   sizex=1000, sizey=500, sizing="stretch", layer="below")])
-    fig.update_xaxes(showgrid=False, range=[0, 1000])
-    fig.update_yaxes(showgrid=False, range=[0, 500])
+    # # Placeholder data for ship positions (You would store this in a JSON/CSV)
+    # map_data = pd.DataFrame({
+    #     'x': [100, 250, 400],
+    #     'y': [200, 150, 300],
+    #     'Ship': ['Ship A', 'Ship B', 'Ship C'],
+    #     'Client': ['CMA CGM', 'MSC', 'Maersk'],
+    #     'Type': ['Containers', 'General Cargo', 'Bulk']
+    # })
 
-    st.plotly_chart(fig, use_container_width=True)
+    # fig = px.scatter(map_data, x='x', y='y', text='Ship', color='Client',
+    #                  hover_data=['Type'])
+    # fig.update_layout(images=[dict(source=img, xref="x", yref="y", x=0, y=500,
+    #                                sizex=1000, sizey=500, sizing="stretch", layer="below")])
+    # fig.update_xaxes(showgrid=False, range=[0, 1000])
+    # fig.update_yaxes(showgrid=False, range=[0, 500])
+
+    # st.plotly_chart(fig, use_container_width=True)
 
     st.write("### Manage Positions")
     # Add form here to update x, y coordinates for specific ships
