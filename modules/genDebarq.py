@@ -210,9 +210,9 @@ def gen_table(filepath=None):
     ws = wb.active
     ws.title = f"{file_name_only}"
 
+    ship_name_placeholder=f"{SHIP NAME: file_name_only}"
     ws.merge_cells('A1:G1')
-    SHIP_NAME_PLACEHOLDER=f"{SHIP NAME: file_name_only}"
-    ws['A1'].value = SHIP_NAME_PLACEHOLDER
+    ws['A1'].value = ship_name_placeholder
     ws['A1'].font = Font(bold=True, size=14)
 
     specific_keywords = ["BOBINE", "TUBE", "CTP", "BIGBAG"]
