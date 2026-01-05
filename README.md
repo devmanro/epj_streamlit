@@ -17,3 +17,13 @@ show files as list where i can select the file and perform the following operati
 
 
 add feature to merge each new uploaded file to the database of files after clicking save.
+
+
+
+#genDebarq.py excel should have this headings
+"N° BL	nombre colis	Poids brute	Client	produits"
+
+
+
+
+
