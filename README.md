@@ -1,4 +1,4 @@
-make these updates while giving me the project structure at the end
+Make these updates while giving me the project structure at the end
 i need it to be a complete software with these changes(keeping python scripts for handling the functionalities )
 
 In my app i need to be able to load xls,csv files 
@@ -14,6 +14,20 @@ show files as list where i can select the file and perform the following operati
 7-a list of usual/mostly used files word,excel files .
 8- a small page for tools such as calculating the surface marchandise took on land (depending on type of good)
 9-a page dedicated for following up with tally/workers for each shift ,and the ships they have worked on i use a simple excel sheet for this
+10-add feature to merge each new uploaded file to the database of files after clicking save.
+
+New features yet to add:
+11-make option in file manager to see full state of landing of ships .
+12-fix genPVS to run correctly .
+13-create loop and download templates .
+14-in workforce tracking add option to generate a new day empty to fill with affecation and make dropdown or typing hints for usual things .
+   add print to this tracking option
+15-add map legende and map adding options for multiple goods with ease  
+
+16-the dashboard should keep status of current ships on deck ,also it should have options to see ships on berth and expected
+add to this port status emb/deb in day,week,month or year.
 
 
-add feature to merge each new uploaded file to the database of files after clicking save.
+
+#genDebarq.py excel should have this headings
+"N° BL	nombre colis	Poids brute	Client	produits"
