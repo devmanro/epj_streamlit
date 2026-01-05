@@ -8,6 +8,8 @@ from assets.constants.constants import UPLOAD_DIR
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table
+from modules.landingManager import render_global_manager
+from modules.shipManager import render_single_file_manager
 # from modules.genPvs import generate_pv
 
 st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
@@ -22,7 +24,7 @@ st.markdown("""
 
 # --- Sidebar Navigation ---
 st.sidebar.title("🚢 Port Operations")
-menu = ["Dashboard", "File Manager", "Port Map",
+menu = ["Dashboard", "State Manager", "Port Map",
         "Workforce Tracking", "Logistics Tools", "Templates"]
 choice = st.sidebar.radio("Navigation", menu)
 
@@ -42,90 +44,32 @@ def clear_downloads():
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
 # ---------------------------------------------------------
-if choice == "File Manager":
-    st.header("📂 Data Management Center")
+if choice == "State Manager":
+    st.header("⚓ State Manager")
+    
+    # Initialize session state for downloads if not exists
+    if "active_download" not in st.session_state:
+        st.session_state.active_download = None
 
-    # 2. Upload Logic
-    uploaded_file = st.file_uploader(
-        "Upload XLS/CSV Ship Data",
-        type=["xlsx", "csv"],
-        on_change=clear_downloads  # Clear button if new file uploaded
-    )
+    # Create the Tabs
+    tab1, tab2 = st.tabs(["🌍 Global Loading Manager", "📂 Single File Manager"])
 
-    if uploaded_file:
-        save_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success(f"Saved {uploaded_file.name}")
+    # TAB 1: Global View (The new feature)
+    with tab1:
+        # Call the function from Part 1
+        # Make sure render_global_manager is defined or imported
+        render_global_manager(UPLOAD_DIR)
 
-    # 3. List and Select Files
-    files = os.listdir(UPLOAD_DIR)
-    if files:
-        selected_file = st.selectbox(
-            "Select a ship file to operate on:",
-            files,
-            on_change=clear_downloads  # Clear button if selection changes
+    # TAB 2: Single File Manager (The original feature)
+    with tab2:
+        # Call the function from Part 2
+        # We pass your existing helper functions to keep it modular
+        render_single_file_manager(
+            UPLOAD_DIR, 
+            clear_downloads, 
+            gen_table, 
+            generate_brd
         )
-        file_path = os.path.join(UPLOAD_DIR, selected_file)
-
-        # Load Data
-        df = pd.read_excel(file_path) if selected_file.endswith(
-            '.xlsx') else pd.read_csv(file_path)
-
-        # CRUD Operations
-        st.subheader(f"Editing: {selected_file}")
-        edited_df = st.data_editor(df, num_rows="dynamic", key="editor")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        # --- SAVE CHANGES ---
-        if col1.button("💾 Save Changes"):
-            edited_df.to_excel(file_path, index=False)
-            st.toast("File Updated!")
-            clear_downloads()  # Clear old doc as data has changed
-
-        # --- OPERATION 2 ---
-        if col2.button("📋 Gen. Debarquement"):
-            generated_path = gen_table(file_path)
-            st.session_state.active_download = {
-                "path": generated_path,
-                "label": "📥 Download Debarquement (Excel)",
-                "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            }
-            st.info("Debarquement Table Generated")
-
-        # --- OPERATION 3: GENERATE BORDERAUX ---
-        if col3.button("📜 Gen. Borderaux"):
-            # Execute generation logic
-            generated_path = generate_brd(
-                file_path, sheet_name=0, template_name="template.docx")
-            # Save the path to session state to keep it visible
-            # st.session_state.brd_generated_path = generated_path
-            st.session_state.active_download = {
-                "path": generated_path,
-                "label": "📥 Download Bordereau (Word)",
-                "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            }
-            st.success("Bordereau Generated!")
-
-        # --- OPERATION 4 ---
-        if col4.button("📝 Gen. Daily PVs"):
-            st.info("Gen. Daily PVs")
-
-        # 4. PERSISTENT DOWNLOAD BUTTON
-        # 3. DYNAMIC DOWNLOAD BUTTON
-        if st.session_state.active_download:
-            st.divider()
-            file_info = st.session_state.active_download
-
-            with open(file_info["path"], "rb") as f:
-                st.download_button(
-                    label=file_info["label"],
-                    data=f.read(),
-                    file_name=os.path.basename(file_info["path"]),
-                    mime=file_info["mime"],
-                    type="primary"
-                )
 
 # ---------------------------------------------------------
 # 6. PORT MAP MODULE (Interactive Overlay)
