@@ -7,7 +7,7 @@ from assets.constants.constants import PATH_DEBRQ
 import os
 
 # --- GLOBAL SETTINGS ---
-SHIP_NAME_PLACEHOLDER = "SHIP NAME: [ENTER NAME HERE]"
+#SHIP_NAME_PLACEHOLDER = "SHIP NAME: [ENTER NAME HERE]"
 
 def get_manual_color(product_name):
     """Maps product names to specific hex colors as requested."""
@@ -211,6 +211,7 @@ def gen_table(filepath=None):
     ws.title = f"{file_name_only}"
 
     ws.merge_cells('A1:G1')
+    SHIP_NAME_PLACEHOLDER=f"{SHIP NAME: file_name_only}"
     ws['A1'].value = SHIP_NAME_PLACEHOLDER
     ws['A1'].font = Font(bold=True, size=14)
 
