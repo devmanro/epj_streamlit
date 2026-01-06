@@ -18,6 +18,7 @@ def get_icon(item_type):
     return mapping.get(item_type, '📦')
 
 def show_map():
+    st.set_page_config(layout="wide")
     # --- 1. Session State Initialization ---
     if 'port_data' not in st.session_state:
         st.session_state['port_data'] = pd.DataFrame([
@@ -56,6 +57,8 @@ def show_map():
     else:
         st.sidebar.warning("👇 Click on the map to place the item.")
         st.sidebar.write(f"Placing: **{st.session_state['temp_item_details']['type']}**")
+        st.sidebar.info("💡 Use the toolbar on the left of the map to Pan/Drag if needed.")
+        
         if st.sidebar.button("Cancel Placement"):
             st.session_state['placement_mode'] = False
             st.session_state['temp_item_details'] = {}
@@ -64,14 +67,19 @@ def show_map():
     # --- 3. Map Logic ---
     bg_image = None
     if os.path.exists(MAP_IMAGE_PATH):
-        bg_image = Image.open(MAP_IMAGE_PATH)
+        try:
+            raw_img = Image.open(MAP_IMAGE_PATH).convert("RGB")
+            bg_image = raw_img.resize((CANVAS_WIDTH, CANVAS_HEIGHT))
+        except Exception as e:
+            st.error(f"Error loading image: {e}")
     else:
         st.warning("Map image not found. Using blank grid.")
 
-    # --- MODE 1: PLACEMENT MODE ---
+    # --- MODE 1: PLACEMENT MODE (CANVAS) ---
     if st.session_state['placement_mode']:
-        st.info("Click the exact location on the map to drop the item.")
+        st.info("Select the **Point** tool to drop items. Use **Pan (Hand)** to move map.")
         
+        # Display Toolbar = True enables dragging/panning
         canvas_result = st_canvas(
             fill_color="rgba(255, 165, 0, 0.3)",
             stroke_width=2,
@@ -80,7 +88,9 @@ def show_map():
             update_streamlit=True,
             height=CANVAS_HEIGHT,
             width=CANVAS_WIDTH,
-            drawing_mode="point",
+            drawing_mode="point", # Default tool
+            display_toolbar=True, # <--- ENABLES TOOLBAR FOR PANNING/DRAGGING
+            point_display_radius=5,
             key="canvas_clicker",
         )
 
@@ -108,7 +118,7 @@ def show_map():
                 st.success("Item placed successfully!")
                 st.rerun()
 
-    # --- MODE 2: VIEW MODE ---
+    # --- MODE 2: VIEW MODE (PLOTLY + EDITABLE TABLE) ---
     else:
         df_viz = st.session_state['port_data'].copy()
 
@@ -122,7 +132,8 @@ def show_map():
                 title="Real-time Port Status",
             )
 
-            fig.update_traces(textfont_size=24, marker=dict(opacity=0))
+            # Updated textfont_size to 14 (Smaller Icons)
+            fig.update_traces(textfont_size=14, marker=dict(opacity=0))
 
             if bg_image:
                 fig.update_layout(
@@ -140,7 +151,20 @@ def show_map():
 
             st.plotly_chart(fig, use_container_width=True)
             
-            with st.expander("📋 View Manifest Table"):
-                st.dataframe(st.session_state['port_data'], use_container_width=True)
+            # --- EDITABLE TABLE ---
+            with st.expander("📋 View & Edit Manifest Table", expanded=True):
+                # Using data_editor allows direct editing
+                edited_df = st.data_editor(
+                    st.session_state['port_data'], 
+                    num_rows="dynamic", # Allows adding/deleting rows
+                    use_container_width=True,
+                    key="manifest_editor"
+                )
+                
+                # If changes are detected, update session state and rerun to update map
+                if not edited_df.equals(st.session_state['port_data']):
+                    st.session_state['port_data'] = edited_df
+                    st.rerun()
         else:
             st.info("Map is empty. Use the sidebar to define an item.")
+
