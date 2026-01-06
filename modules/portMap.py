@@ -34,7 +34,7 @@ def show_map():
 
     # --- 2. Sidebar Operations ---
     st.sidebar.markdown("---")
-    st.sidebar.header("🏗️ Port Map Controls")
+    st.sidebar.header("🏗️ Port Map Controls xxxx")
 
     if not st.session_state['placement_mode']:
         st.sidebar.subheader("1. Define New Item")
