@@ -64,14 +64,7 @@ def show_map():
     # --- 3. Map Logic ---
     bg_image = None
     if os.path.exists(MAP_IMAGE_PATH):
-        try:
-            # 1. Open and convert to RGB (Crucial for the internal encoder)
-            raw_img = Image.open(MAP_IMAGE_PATH).convert("RGB")
-            # 2. Force resize to match your CANVAS constants
-            # This prevents the "coordinate shift" bug where clicks don't line up
-            bg_image = raw_img.resize((CANVAS_WIDTH, CANVAS_HEIGHT))
-        except Exception as e:
-            st.error(f"Error loading image: {e}")
+        bg_image = Image.open(MAP_IMAGE_PATH)
     else:
         st.warning("Map image not found. Using blank grid.")
 
@@ -88,7 +81,6 @@ def show_map():
             height=CANVAS_HEIGHT,
             width=CANVAS_WIDTH,
             drawing_mode="point",
-            point_display_radius=5,    # Added for better visibility
             key="canvas_clicker",
         )
 
