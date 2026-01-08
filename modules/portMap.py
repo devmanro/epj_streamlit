@@ -196,48 +196,32 @@ def show_map():
 
             # 4. SAVE LOGIC
             if st.button("💾 Save All Changes", type="primary"):
-                # inside SAVE LOGIC
-                updated_rows = []
-                for row in edited_df.to_dict('records'):
-                    updated_rows.append(row)
+                coords_map, new_pts = {}, []
+                for obj in canvas_result.json_data.get("objects", []):
+                    if obj.get("type") in ["text"] and obj.get("userData", {}).get("id"):
+                        coords_map[obj["userData"]["id"]] = (obj["left"], CANVAS_HEIGHT - obj["top"])
+                    elif obj.get("type") == "circle":
+                        new_pts.append((obj["left"], CANVAS_HEIGHT - obj["top"]))
 
-                coords_map = {}
-                new_points = []
-                if canvas_result.json_data:
-                    for obj in canvas_result.json_data["objects"]:
-                        if "userData" in obj and "id" in obj["userData"]:
-                            coords_map[obj["userData"]["id"]] = {
-                                'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]
-                            }
-                        elif obj.get("type") in ["point", "circle"]:
-                            new_points.append({
-                                'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]
-                            })
-
-                for row in updated_rows:
-                    rid = row["id"]
+                upd = []
+                for _, r in edited_df.iterrows():
+                    rid = r["id"]
+                    rdict = r.to_dict()
                     if rid in coords_map:
-                        row["x"], row["y"] = coords_map[rid]["x"], coords_map[rid]["y"]
+                        rdict["x"], rdict["y"] = coords_map[rid]
                     else:
-                        orig = st.session_state['port_data']
-                        match = orig[orig['id'] == rid]
-                        if not match.empty:
-                            row['x'], row['y'] = match.iloc[0][['x','y']]
+                        orig = st.session_state['port_data'].query("id==@rid").iloc[0]
+                        rdict["x"], rdict["y"] = orig["x"], orig["y"]
+                    upd.append(rdict)
 
-                det = st.session_state.get('temp_item_details')
-                if not det:
-                    st.error("Set details before dropping new items")
-                    st.stop()
+                det = st.session_state.get("temp_item_details", {})
+                next_id = max([r["id"] for r in upd]+[0]) + 1
+                for x,y in new_pts:
+                    upd.append({**det, "id": next_id, "x": x, "y": y})
+                    next_id+=1
 
-                next_id = max([r['id'] for r in updated_rows]+[0]) + 1
-                for pt in new_points:
-                    new = {**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']}
-                    updated_rows.append(new)
-                    next_id += 1
-
-                st.session_state['port_data'] = pd.DataFrame(updated_rows)
-                st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
-                st.success("Saved")
+                st.session_state["port_data"] = pd.DataFrame(upd)
+                st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
                 st.rerun()
 
         # ---------------------------------------------------------
@@ -288,7 +272,17 @@ def show_map():
                 
                 # 5. Summary Table for View Mode
                 st.write("### 📋 Current Port Inventory")
-                st.dataframe(df_viz[['id', 'client', 'type', 'qty']], use_container_width=True, hide_index=True)
+                # recompute location columns like in edit mode
+                df_viz['Dock'], df_viz['Berth'], df_viz['Zone'] = zip(*df_viz.apply(lambda r: determine_location(r['x'], r['y']), axis=1))
+
+                # add Icon
+                df_viz['Icon'] = df_viz['type'].apply(lambda x: get_icon(x))
+
+                # choose same columns as edit
+                cols = ['Icon','Dock','Berth','Zone','client','type','qty','size','id']
+
+                st.dataframe(df_viz[cols], use_container_width=True, hide_index=True)
+
                 
             else:
                 st.warning("The port map is currently empty. Switch to Edit Mode to place items.")
