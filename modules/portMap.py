@@ -213,20 +213,24 @@ def show_map():
                                     "y": CANVAS_HEIGHT - obj["top"]
                                 })
                         
-               
-
-                # 2) Merge table + moved coords
                 upd = []
-                for row in edited_df.to_dict("records"):
-                    rid = row["id"]
+                for _, r in edited_df.iterrows():
+                    rid = r["id"]
+                    rdict = r.to_dict()
                     if rid in coords_map:
-                        row["x"], row["y"] = coords_map[rid]["x"], coords_map[rid]["y"]
+                        rdict["x"], rdict["y"] = coords_map[rid]
                     else:
-                        orig = st.session_state["port_data"]
-                        prev = orig[orig["id"] == rid]
-                        if not prev.empty:
-                            row["x"], row["y"] = prev.iloc[0][["x", "y"]]
-                    upd.append(row)
+                        orig = st.session_state['port_data'].query("id==@rid").iloc[0]
+                        rdict["x"], rdict["y"] = orig["x"], orig["y"]
+                    upd.append(rdict)
+
+                det = st.session_state.get("temp_item_details", {})
+                next_id = max([r["id"] for r in upd]+[0]) + 1
+                for x,y in new_pts:
+                    upd.append({**det, "id": next_id, "x": x, "y": y})
+                    next_id+=1
+
+                
 
                 st.session_state["port_data"] = pd.DataFrame(upd)
                 st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
