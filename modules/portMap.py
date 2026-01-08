@@ -198,20 +198,11 @@ def show_map():
             if st.button("💾 Save All Changes", type="primary"):
                 coords_map, new_pts = {}, []
                 #if canvas_result and canvas_result.json_data and "objects" in canvas_result.json_data:
-                for obj in canvas_result.json_data.get("objects", []): 
-                    # moved existing
-                    if obj.get("type") == "text" and obj.get("userData", {}).get("id"):
-                        coords_map[obj["userData"]["id"]] = {
-                            "x": obj["left"],
-                            "y": CANVAS_HEIGHT - obj["top"]
-                        }
-                    # new drops
-                    elif obj.get("type") in ["circle", "point"]:
-                        new_pts.append({
-                            "x": obj["left"],
-                            "y": CANVAS_HEIGHT - obj["top"]
-                        })
-
+                for obj in canvas_result.json_data.get("objects", []):
+                    if obj.get("type") in ["text"] and obj.get("userData", {}).get("id"):
+                        coords_map[obj["userData"]["id"]] = (obj["left"], CANVAS_HEIGHT - obj["top"])
+                    elif obj.get("type") == "circle":
+                        new_pts.append((obj["left"], CANVAS_HEIGHT - obj["top"]))
 
                 upd = []
                 for _, r in edited_df.iterrows():
