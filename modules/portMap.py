@@ -196,44 +196,44 @@ def show_map():
 
             # 4. SAVE LOGIC
             if st.button("💾 Save All Changes", type="primary"):
-                # Create a map of updated coordinates from the canvas
+                # 1. Map coordinates from the Canvas
                 coords_map = {}
                 new_points = []
-                
                 if canvas_result.json_data and "objects" in canvas_result.json_data:
                     for obj in canvas_result.json_data["objects"]:
                         if "userData" in obj and "id" in obj["userData"]:
-                            # Existing items being moved
                             coords_map[obj["userData"]["id"]] = {'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]}
                         elif obj.get("type") == "point":
-                            # New points placed
                             new_points.append({'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]})
 
-                # Merge coordinates back into the data from the table
+                # 2. Merge Table edits with Canvas coordinates
                 updated_rows = edited_df.to_dict('records')
                 for row in updated_rows:
-                    # Retrieve x/y from canvas map, or keep original from session_state if not moved
-                    if row['id'] in coords_map:
-                        row['x'] = coords_map[row['id']]['x']
-                        row['y'] = coords_map[row['id']]['y']
+                    row_id = row['id']
+                    # If moved on canvas, use new coords. Otherwise, keep original coords.
+                    if row_id in coords_map:
+                        row['x'] = coords_map[row_id]['x']
+                        row['y'] = coords_map[row_id]['y']
                     else:
-                        # Crucial: Keep original x,y if they weren't in the editable table
-                        orig = st.session_state['port_data'][st.session_state['port_data']['id'] == row['id']]
+                        # Look up original x,y because they aren't in the table
+                        orig = st.session_state['port_data'][st.session_state['port_data']['id'] == row_id]
                         if not orig.empty:
                             row['x'] = orig.iloc[0]['x']
                             row['y'] = orig.iloc[0]['y']
 
-                # Add new points
+                # 3. Add Brand New Points
                 det = st.session_state.get('temp_item_details', {'client':'New', 'type':'Container', 'qty':'0', 'size':'Std'})
                 next_id = max([r.get('id', 0) for r in updated_rows] + [0]) + 1
                 for pt in new_points:
-                    updated_rows.append({**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']})
+                    new_item = {**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']}
+                    updated_rows.append(new_item)
                     next_id += 1
 
+                # 4. Final Save
                 st.session_state['port_data'] = pd.DataFrame(updated_rows)
                 st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
+                st.success("Data and positions saved!")
                 st.rerun()
-
         # ---------------------------------------------------------
         # MODE: VIEW
         # ---------------------------------------------------------
@@ -241,10 +241,11 @@ def show_map():
             st.subheader("👁️ Live Map View")
             df_viz = st.session_state['port_data'].copy()
             
-            # Validation: Ensure x and y exist before plotting
+            # Check if data exists AND has coordinates
             if not df_viz.empty and 'x' in df_viz.columns and 'y' in df_viz.columns:
                 df_viz['icon_visual'] = df_viz['type'].apply(lambda x: get_icon(x) if x else "📦")
                 
+                # Use explicit column names
                 fig = px.scatter(
                     df_viz, 
                     x='x', 
@@ -255,7 +256,7 @@ def show_map():
                     range_y=[0, CANVAS_HEIGHT]
                 )
                 
-                fig.update_traces(textfont_size=20, marker=dict(opacity=0))
+                fig.update_traces(textfont_size=18, marker=dict(opacity=0))
                 
                 if bg_image:
                     fig.update_layout(images=[dict(
@@ -270,14 +271,8 @@ def show_map():
                     height=CANVAS_HEIGHT, 
                     margin=dict(l=0, r=0, b=0, t=10), 
                     xaxis_visible=False, 
-                    yaxis_visible=False,
-                    showlegend=True
+                    yaxis_visible=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            elif df_viz.empty:
-                st.info("Port is currently empty. Go to Edit Mode to add items.")
             else:
-                st.error("Data error: Coordinate columns (x, y) were lost. Resetting app...")
-                if st.button("Reset Data"):
-                    del st.session_state['port_data']
-                    st.rerun()
+                st.warning("No coordinate data found. Please add items in Edit Mode and click Save.")
