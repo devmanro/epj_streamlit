@@ -195,7 +195,7 @@ def show_map():
             )
 
             # 4. SAVE LOGIC
-           if st.button("💾 Save All Changes", type="primary"):
+            if st.button("💾 Save All Changes", type="primary"):
                 # Create a map of updated coordinates from the canvas
                 coords_map = {}
                 new_points = []
