@@ -195,57 +195,43 @@ def show_map():
             )
 
             # 4. SAVE LOGIC
-            if st.button("💾 Save All Changes", type="primary"):
-            # 1. Map existing IDs to their new positions from the Canvas
-                canvas_positions = {}
-                new_points_list = []
-
+           if st.button("💾 Save All Changes", type="primary"):
+                # Create a map of updated coordinates from the canvas
+                coords_map = {}
+                new_points = []
+                
                 if canvas_result.json_data and "objects" in canvas_result.json_data:
                     for obj in canvas_result.json_data["objects"]:
-                        # If it has an ID, it's an existing item being moved
                         if "userData" in obj and "id" in obj["userData"]:
-                            canvas_positions[obj["userData"]["id"]] = {
-                                'x': obj["left"], 
-                                'y': CANVAS_HEIGHT - obj["top"]
-                            }
-                        # If it's a raw 'point', it's a brand new placement
+                            # Existing items being moved
+                            coords_map[obj["userData"]["id"]] = {'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]}
                         elif obj.get("type") == "point":
-                            new_points_list.append({
-                                'x': obj["left"], 
-                                'y': CANVAS_HEIGHT - obj["top"]
-                            })
+                            # New points placed
+                            new_points.append({'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]})
 
-                # 2. Start with the data currently in the Table Editor
-                # This captures your text edits (Client, Qty, etc.)
+                # Merge coordinates back into the data from the table
                 updated_rows = edited_df.to_dict('records')
-
-                # 3. Apply the new coordinates from the Canvas to those rows
                 for row in updated_rows:
-                    if row['id'] in canvas_positions:
-                        row['x'] = canvas_positions[row['id']]['x']
-                        row['y'] = canvas_positions[row['id']]['y']
+                    # Retrieve x/y from canvas map, or keep original from session_state if not moved
+                    if row['id'] in coords_map:
+                        row['x'] = coords_map[row['id']]['x']
+                        row['y'] = coords_map[row['id']]['y']
+                    else:
+                        # Crucial: Keep original x,y if they weren't in the editable table
+                        orig = st.session_state['port_data'][st.session_state['port_data']['id'] == row['id']]
+                        if not orig.empty:
+                            row['x'] = orig.iloc[0]['x']
+                            row['y'] = orig.iloc[0]['y']
 
-                # 4. Append the Brand New Points
+                # Add new points
                 det = st.session_state.get('temp_item_details', {'client':'New', 'type':'Container', 'qty':'0', 'size':'Std'})
-                
-                current_max_id = max([r.get('id', 0) for r in updated_rows] + [0])
-                
-                for pt in new_points_list:
-                    current_max_id += 1
-                    new_row = {
-                        'id': current_max_id,
-                        'x': pt['x'], 'y': pt['y'],
-                        'client': det['client'], 'type': det['type'],
-                        'qty': det['qty'], 'size': det['size']
-                    }
-                    updated_rows.append(new_row)
+                next_id = max([r.get('id', 0) for r in updated_rows] + [0]) + 1
+                for pt in new_points:
+                    updated_rows.append({**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']})
+                    next_id += 1
 
-                # 5. Final Save to Session State
                 st.session_state['port_data'] = pd.DataFrame(updated_rows)
-                # Clear the initial JSON so the canvas redraws from the new data
                 st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
-                
-                st.success(f"Saved {len(new_points_list)} new items and updated positions!")
                 st.rerun()
 
         # ---------------------------------------------------------
