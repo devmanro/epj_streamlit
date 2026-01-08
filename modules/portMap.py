@@ -196,50 +196,50 @@ def show_map():
 
             # 4. SAVE LOGIC
             if st.button("💾 Save All Changes", type="primary"):
-                # A. Map coordinates from the Canvas (Moves & New Points)
+                # inside SAVE LOGIC
+                updated_rows = []
+                for row in edited_df.to_dict('records'):
+                    updated_rows.append(row)
+
                 coords_map = {}
                 new_points = []
-                if canvas_result.json_data and "objects" in canvas_result.json_data:
+                if canvas_result.json_data:
                     for obj in canvas_result.json_data["objects"]:
                         if "userData" in obj and "id" in obj["userData"]:
-                            # Moved existing item
-                            coords_map[obj["userData"]["id"]] = {'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]}
-                        elif obj.get("type") == "point":
-                            # Brand new dot
-                            new_points.append({'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]})
+                            coords_map[obj["userData"]["id"]] = {
+                                'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]
+                            }
+                        elif obj.get("type") in ["point", "circle"]:
+                            new_points.append({
+                                'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]
+                            })
 
-                # B. Merge Table data with Coordinates
-                updated_rows = edited_df.to_dict('records')
                 for row in updated_rows:
-                    row_id = row['id']
-                    # If item was moved on map, use those coords
-                    if row_id in coords_map:
-                        row['x'] = coords_map[row_id]['x']
-                        row['y'] = coords_map[row_id]['y']
+                    rid = row["id"]
+                    if rid in coords_map:
+                        row["x"], row["y"] = coords_map[rid]["x"], coords_map[rid]["y"]
                     else:
-                        # Otherwise, recover x/y from the original session state
-                        orig = st.session_state['port_data'][st.session_state['port_data']['id'] == row_id]
-                        if not orig.empty:
-                            row['x'] = orig.iloc[0]['x']
-                            row['y'] = orig.iloc[0]['y']
+                        orig = st.session_state['port_data']
+                        match = orig[orig['id'] == rid]
+                        if not match.empty:
+                            row['x'], row['y'] = match.iloc[0][['x','y']]
 
-                # C. Add New Items from clicks
-                det = st.session_state.get('temp_item_details', {'client':'New', 'type':'Container Ship', 'qty':'0', 'size':'Std'})
-                # Find the next available ID
-                existing_ids = [r.get('id', 0) for r in updated_rows]
-                next_id = max(existing_ids + [0]) + 1
-                
+                det = st.session_state.get('temp_item_details')
+                if not det:
+                    st.error("Set details before dropping new items")
+                    st.stop()
+
+                next_id = max([r['id'] for r in updated_rows]+[0]) + 1
                 for pt in new_points:
-                    new_item = {**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']}
-                    updated_rows.append(new_item)
+                    new = {**det, 'id': next_id, 'x': pt['x'], 'y': pt['y']}
+                    updated_rows.append(new)
                     next_id += 1
 
-                # D. Push to Session State and refresh
                 st.session_state['port_data'] = pd.DataFrame(updated_rows)
-                # Re-generate icons for the canvas
                 st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
-                st.success(f"Successfully saved {len(updated_rows)} items.")
+                st.success("Saved")
                 st.rerun()
+
         # ---------------------------------------------------------
         # MODE: VIEW
         # ---------------------------------------------------------
