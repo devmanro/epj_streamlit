@@ -253,17 +253,45 @@ def show_map():
         # ---------------------------------------------------------
         else:
             st.subheader("👁️ Live Map View")
-            # ... (Standard View Logic) ...
             df_viz = st.session_state['port_data'].copy()
-            if not df_viz.empty:
+            
+            # Validation: Ensure x and y exist before plotting
+            if not df_viz.empty and 'x' in df_viz.columns and 'y' in df_viz.columns:
                 df_viz['icon_visual'] = df_viz['type'].apply(lambda x: get_icon(x) if x else "📦")
-                fig = px.scatter(df_viz, x='x', y='y', color='client', text='icon_visual')
-                fig.update_traces(textfont_size=16, marker=dict(opacity=0))
+                
+                fig = px.scatter(
+                    df_viz, 
+                    x='x', 
+                    y='y', 
+                    color='client', 
+                    text='icon_visual',
+                    range_x=[0, CANVAS_WIDTH],
+                    range_y=[0, CANVAS_HEIGHT]
+                )
+                
+                fig.update_traces(textfont_size=20, marker=dict(opacity=0))
                 
                 if bg_image:
-                    fig.update_layout(images=[dict(source=bg_image, xref="x", yref="y", x=0, y=CANVAS_HEIGHT, sizex=CANVAS_WIDTH, sizey=CANVAS_HEIGHT, sizing="stretch", layer="below")])
+                    fig.update_layout(images=[dict(
+                        source=bg_image, 
+                        xref="x", yref="y", 
+                        x=0, y=CANVAS_HEIGHT, 
+                        sizex=CANVAS_WIDTH, sizey=CANVAS_HEIGHT, 
+                        sizing="stretch", layer="below"
+                    )])
                 
-                fig.update_layout(height=CANVAS_HEIGHT, margin=dict(l=0, r=0, b=0, t=10), dragmode="pan", xaxis_visible=False, yaxis_visible=False)
+                fig.update_layout(
+                    height=CANVAS_HEIGHT, 
+                    margin=dict(l=0, r=0, b=0, t=10), 
+                    xaxis_visible=False, 
+                    yaxis_visible=False,
+                    showlegend=True
+                )
                 st.plotly_chart(fig, use_container_width=True)
+            elif df_viz.empty:
+                st.info("Port is currently empty. Go to Edit Mode to add items.")
             else:
-                st.info("Port Empty")
+                st.error("Data error: Coordinate columns (x, y) were lost. Resetting app...")
+                if st.button("Reset Data"):
+                    del st.session_state['port_data']
+                    st.rerun()
