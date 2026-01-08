@@ -198,27 +198,35 @@ def show_map():
             if st.button("💾 Save All Changes", type="primary"):
                 coords_map, new_pts = {}, []
                 for obj in canvas_result.json_data.get("objects", []):
-                    if obj.get("type") in ["text"] and obj.get("userData", {}).get("id"):
-                        coords_map[obj["userData"]["id"]] = (obj["left"], CANVAS_HEIGHT - obj["top"])
-                    elif obj.get("type") == "circle":
-                        new_pts.append((obj["left"], CANVAS_HEIGHT - obj["top"]))
+                    if canvas_result and canvas_result.json_data and "objects" in canvas_result.json_data:
+                        for obj in canvas_result.json_data["objects"]:
+                            # moved existing
+                            if obj.get("type") == "text" and obj.get("userData", {}).get("id"):
+                                coords_map[obj["userData"]["id"]] = {
+                                    "x": obj["left"],
+                                    "y": CANVAS_HEIGHT - obj["top"]
+                                }
+                            # new drops
+                            elif obj.get("type") in ["circle", "point"]:
+                                new_pts.append({
+                                    "x": obj["left"],
+                                    "y": CANVAS_HEIGHT - obj["top"]
+                                })
+                        
+               
 
+                # 2) Merge table + moved coords
                 upd = []
-                for _, r in edited_df.iterrows():
-                    rid = r["id"]
-                    rdict = r.to_dict()
+                for row in edited_df.to_dict("records"):
+                    rid = row["id"]
                     if rid in coords_map:
-                        rdict["x"], rdict["y"] = coords_map[rid]
+                        row["x"], row["y"] = coords_map[rid]["x"], coords_map[rid]["y"]
                     else:
-                        orig = st.session_state['port_data'].query("id==@rid").iloc[0]
-                        rdict["x"], rdict["y"] = orig["x"], orig["y"]
-                    upd.append(rdict)
-
-                det = st.session_state.get("temp_item_details", {})
-                next_id = max([r["id"] for r in upd]+[0]) + 1
-                for x,y in new_pts:
-                    upd.append({**det, "id": next_id, "x": x, "y": y})
-                    next_id+=1
+                        orig = st.session_state["port_data"]
+                        prev = orig[orig["id"] == rid]
+                        if not prev.empty:
+                            row["x"], row["y"] = prev.iloc[0][["x", "y"]]
+                    upd.append(row)
 
                 st.session_state["port_data"] = pd.DataFrame(upd)
                 st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
