@@ -196,69 +196,94 @@ def show_map():
 
             # 4. SAVE LOGIC
             if st.button("💾 Save All Changes", type="primary"):
-                # ... (Same robust save logic as before) ...
-                canvas_positions = {}
-                new_points_list = []
+                coords_map, new_pts = {}, []
+                #if canvas_result and canvas_result.json_data and "objects" in canvas_result.json_data:
+                for obj in canvas_result.json_data.get("objects", []):
+                    if obj.get("type") in ["text"] and obj.get("userData", {}).get("id"):
+                        coords_map[obj["userData"]["id"]] = (obj["left"], CANVAS_HEIGHT - obj["top"])
+                    elif obj.get("type") == "circle":
+                        new_pts.append((obj["left"], CANVAS_HEIGHT - obj["top"]))
 
-                if canvas_result.json_data:
-                    for obj in canvas_result.json_data["objects"]:
-                        if "userData" in obj and "id" in obj["userData"]:
-                            canvas_positions[obj["userData"]["id"]] = {'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]}
-                        elif obj["type"] == "point": # Only captured if Tool Mode was 'Place'
-                            new_points_list.append({'x': obj["left"], 'y': CANVAS_HEIGHT - obj["top"]})
-
-                final_rows = []
-                for index, row in edited_df.iterrows():
-                    row_id = row['id']
-                    new_row = row.to_dict()
-                    # Remove calculated visual columns
-                    for k in ['Icon', 'Dock', 'Berth', 'Zone']: new_row.pop(k, None)
-                    
-                    if row_id in canvas_positions:
-                        new_row['x'] = canvas_positions[row_id]['x']
-                        new_row['y'] = canvas_positions[row_id]['y']
+                upd = []
+                for _, r in edited_df.iterrows():
+                    rid = r["id"]
+                    rdict = r.to_dict()
+                    if rid in coords_map:
+                        rdict["x"], rdict["y"] = coords_map[rid]
                     else:
-                        # Fallback to original data if not moved
-                        old = st.session_state['port_data'][st.session_state['port_data']['id'] == row_id]
-                        if not old.empty:
-                            new_row['x'] = old.iloc[0]['x']
-                            new_row['y'] = old.iloc[0]['y']
-                    final_rows.append(new_row)
+                        orig = st.session_state['port_data'].query("id==@rid").iloc[0]
+                        rdict["x"], rdict["y"] = orig["x"], orig["y"]
+                    upd.append(rdict)
 
-                # Add New Points
-                if 'temp_item_details' not in st.session_state:
-                     st.session_state['temp_item_details'] = {'client':'New', 'type':'Container', 'qty':'', 'size':''}
-                     
-                for pt in new_points_list:
-                    det = st.session_state['temp_item_details']
-                    final_rows.append({
-                        'id': max([r.get('id',0) for r in final_rows] + [0]) + 1,
-                        'x': pt['x'], 'y': pt['y'],
-                        'client': det['client'], 'type': det['type'],
-                        'qty': det['qty'], 'size': det['size']
-                    })
+                det = st.session_state.get("temp_item_details", {})
+                next_id = max([r["id"] for r in upd]+[0]) + 1
+                for x,y in new_pts:
+                    upd.append({**det, "id": next_id, "x": x, "y": y})
+                    next_id+=1
 
-                st.session_state['port_data'] = pd.DataFrame(final_rows)
-                st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
-                st.success("Saved!")
+                st.session_state["port_data"] = pd.DataFrame(upd)
+                st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
                 st.rerun()
 
         # ---------------------------------------------------------
         # MODE: VIEW
         # ---------------------------------------------------------
+
         else:
             st.subheader("👁️ Live Map View")
-            # ... (Standard View Logic) ...
             df_viz = st.session_state['port_data'].copy()
-            if not df_viz.empty:
+            
+            # 1. Validation: Plotly needs 'x' and 'y' columns to exist
+            if not df_viz.empty and 'x' in df_viz.columns and 'y' in df_viz.columns:
                 df_viz['icon_visual'] = df_viz['type'].apply(lambda x: get_icon(x) if x else "📦")
-                fig = px.scatter(df_viz, x='x', y='y', color='client', text='icon_visual')
-                fig.update_traces(textfont_size=16, marker=dict(opacity=0))
                 
+                # 2. Build Plotly Figure
+                fig = px.scatter(
+                    df_viz, 
+                    x='x', 
+                    y='y', 
+                    color='client', 
+                    text='icon_visual',
+                    range_x=[0, CANVAS_WIDTH],
+                    range_y=[0, CANVAS_HEIGHT]
+                )
+                
+                # Make the emoji icons larger and hide the scatter dots
+                fig.update_traces(textfont_size=24, marker=dict(opacity=0))
+                
+                # 3. Add Background Image
                 if bg_image:
-                    fig.update_layout(images=[dict(source=bg_image, xref="x", yref="y", x=0, y=CANVAS_HEIGHT, sizex=CANVAS_WIDTH, sizey=CANVAS_HEIGHT, sizing="stretch", layer="below")])
+                    fig.update_layout(images=[dict(
+                        source=bg_image, 
+                        xref="x", yref="y", 
+                        x=0, y=CANVAS_HEIGHT, 
+                        sizex=CANVAS_WIDTH, sizey=CANVAS_HEIGHT, 
+                        sizing="stretch", layer="below"
+                    )])
                 
-                fig.update_layout(height=CANVAS_HEIGHT, margin=dict(l=0, r=0, b=0, t=10), dragmode="pan", xaxis_visible=False, yaxis_visible=False)
+                # 4. Clean up UI
+                fig.update_layout(
+                    height=CANVAS_HEIGHT, 
+                    margin=dict(l=0, r=0, b=0, t=10), 
+                    xaxis_visible=False, 
+                    yaxis_visible=False,
+                    showlegend=True
+                )
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # 5. Summary Table for View Mode
+                st.write("### 📋 Current Port Inventory")
+                # recompute location columns like in edit mode
+                df_viz['Dock'], df_viz['Berth'], df_viz['Zone'] = zip(*df_viz.apply(lambda r: determine_location(r['x'], r['y']), axis=1))
+
+                # add Icon
+                df_viz['Icon'] = df_viz['type'].apply(lambda x: get_icon(x))
+
+                # choose same columns as edit
+                cols = ['Icon','Dock','Berth','Zone','client','type','qty','size','id']
+
+                st.dataframe(df_viz[cols], use_container_width=True, hide_index=True)
+
+                
             else:
-                st.info("Port Empty")
+                st.warning("The port map is currently empty. Switch to Edit Mode to place items.")
