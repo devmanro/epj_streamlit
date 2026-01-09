@@ -17,3 +17,9 @@
 
 
 
+ pyenv activate epj
+
+
+  cd /mnt/e/shared_btw_linux_win/workspace/EPJ/epj_workstation/EPJ_PROJECT/logistics_app
+
+  
