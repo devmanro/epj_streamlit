@@ -10,7 +10,16 @@ from assets.constants.constants import MAP_IMAGE_PATH
 CANVAS_WIDTH = 900
 CANVAS_HEIGHT = 500
 
+CLIENT_COLORS = {
+    'CMA CGM': '#1f77b4', 'MSC': '#ff7f0e', 'Maersk': '#2ca02c',
+    'Sonatrach': '#d62728', 'Cevital': '#9467bd', 'Other': '#7f7f7f'
+}
 # === HELPER FUNCTIONS ===
+
+def get_client_color(client_name):
+    return CLIENT_COLORS.get(client_name, CLIENT_COLORS['Other'])
+
+
 def get_icon(item_type):
     mapping = {
         'Container Ship': '🚢', 'Bulk Carrier': '🛳️', 'Tanker': '⛽',
@@ -52,18 +61,27 @@ def generate_initial_drawing(df):
     if df.empty: return {"version": "4.4.0", "objects": []}
     
     for index, row in df.iterrows():
-        if pd.isna(row.get('x')) or pd.isna(row.get('y')): continue
+        if pd.isna(row.get('x')) or pd.isna(row.get('y')):
+             continue
+        # Get color based on client
+        c_color = get_client_color(row.get('client'))
+        icon=get_icon(row.get('type'))
+        item_id=row.get('item_id')
         obj = {
+            # "type": f"{letyp}|{row['item_id']}", 
             "type": "text", 
             "left": row['x'],
             "top": CANVAS_HEIGHT - row['y'],
-            "width": 20, "height": 20, "fill": "black",
-            "text": get_icon(row.get('type')),
-            "fontSize": 30, "fontFamily": "sans-serif",
-            "userData": {"id": row['id']}
+            "width": 12, "height": 12, "fill": c_color,
+            "text":icon,# ID encoded here
+            "fontSize": 30,
+            "fontFamily": f"sans-serif | {item_id}",
         }
+        
         objects.append(obj)
+
     return {"version": "4.4.0", "objects": objects}
+
 
 def show_map():
     st.set_page_config(layout="wide", page_title="Port Logic System")
@@ -71,10 +89,12 @@ def show_map():
     # --- 1. Session State & Data Init ---
     if 'port_data' not in st.session_state:
         st.session_state['port_data'] = pd.DataFrame([
-            {'id': 1, 'x': 150, 'y': 200, 'client': 'CMA CGM', 'type': 'Container Ship', 'qty': '1000 TEU', 'size': 'Large'},
-            {'id': 2, 'x': 450, 'y': 350, 'client': 'MSC', 'type': 'Plywood', 'qty': '500 pallets', 'size': '200m2'},
+            {'item_id': 1, 'x': 150, 'y': 200, 'client': 'CMA CGM', 'type': 'Container Ship', 'qty': '1000 TEU', 'size': 'Large'},
+            {'item_id': 2, 'x': 450, 'y': 350, 'client': 'MSC', 'type': 'Plywood', 'qty': '500 pallets', 'size': '200m2'},
         ])
-    
+        
+
+
     # Ensure tool mode exists
     if 'tool_mode' not in st.session_state:
         st.session_state['tool_mode'] = 'transform' # Default to moving items
@@ -86,9 +106,10 @@ def show_map():
     bg_image = None
     if os.path.exists(MAP_IMAGE_PATH):
         try:
-            raw_img = Image.open(MAP_IMAGE_PATH).convert("RGB")
-            bg_image = raw_img.resize((CANVAS_WIDTH, CANVAS_HEIGHT))
-        except: st.error("Image not found")
+            bg_image = Image.open(MAP_IMAGE_PATH).convert("RGB")
+            # bg_image = raw_img.resize((CANVAS_WIDTH, CANVAS_HEIGHT))
+        except: 
+            st.error("Image not found")
 
     st.title("⚓ Port Operations Map")
     col_map, col_controls = st.columns([3, 1], gap="medium")
@@ -120,29 +141,31 @@ def show_map():
             # C. Item Details Form
             # Only show this if we are in 'Place' mode to reduce clutter
             if st.session_state['tool_mode'] == "point":
-                with st.form("add_item_form"):
-                    st.markdown("#### 📦 New Item Details")
-                    client = st.selectbox("Client", ["CMA CGM", "MSC", "Maersk", "Sonatrach", "Cevital"])
-                    cat_type = st.selectbox("Item Type", ["Container Ship", "Bulk Carrier", "Tanker", "Plywood", "Coil", "Beams", "Utilities", "Grain"])
-                    qty = st.text_input("Quantity", "100")
-                    size = st.text_input("Size", "Std")
-                    
-                    if st.form_submit_button("Update Next Drop"):
-                        st.session_state['temp_item_details'] = {
-                            'client': client, 'type': cat_type, 'qty': qty, 'size': size
-                        }
-                        st.success("Details saved! Click on the map to drop.")
+                # with st.form("add_item_form"):
+                st.markdown("#### 📦 New Item Details")
+                client = st.selectbox("Client", ["CMA CGM", "MSC", "Maersk", "Sonatrach", "Cevital"])
+                cat_type = st.selectbox("Item Type", ["Container Ship", "Bulk Carrier", "Tanker", "Plywood", "Coil", "Beams", "Utilities", "Grain"])
+                qty = st.text_input("Quantity", "100")
+                size = st.text_input("Size", "Std")
+                
+                # if st.form_submit_button("Update Next Drop"):
+                st.session_state['temp_item_details'] = {
+                    'client': client, 'type': cat_type, 'qty': qty, 'size': size
+                }
+                
+                st.success(" Click on the map to drop a new Client.")
             else:
-                st.info("Select 'Place New Item' above to add cargo.")
+                st.info("Move Items Then click save Changes")
 
     # === LEFT COLUMN: MAP & TABLE ===
-    with col_map:
-        
+    with col_map:        
         # ---------------------------------------------------------
         # MODE: EDIT
         # ---------------------------------------------------------
         if app_mode == "✏️ Edit Mode":
             st.subheader("✏️ Editor Canvas")
+
+            st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
             
             # 1. Canvas with Dynamic Drawing Mode
             canvas_result = st_canvas(
@@ -157,12 +180,14 @@ def show_map():
                 display_toolbar=True,
                 key="canvas_editor_main"
             )
-
+            # preparing data for displaying it on the table
             # 2. Data Processing (Add Zone/Dock info)
             display_df = st.session_state['port_data'].copy()
             
+            # st.session_state['canvas_initial_json'] = generate_initial_drawing(st.session_state['port_data'])
+
             # Ensure safe columns
-            for c in ['x', 'y', 'type', 'client', 'id']:
+            for c in ['x', 'y', 'type', 'client', 'item_id']:
                 if c not in display_df.columns: display_df[c] = None
 
             loc_data = []
@@ -174,7 +199,7 @@ def show_map():
                     loc_data.append(res)
             else:
                 display_df['Icon'] = []
-            
+
             # Unpack the 3-part location tuple
             display_df['Dock'] = [l[0] for l in loc_data]
             display_df['Berth'] = [l[1] for l in loc_data]
@@ -182,7 +207,7 @@ def show_map():
 
             # 3. Editable Table
             st.subheader("📝 Edit Data")
-            cols_show = ['Icon', 'Dock', 'Berth', 'Zone', 'client', 'type', 'qty', 'size', 'id']
+            cols_show = ['Icon', 'Dock', 'Berth', 'Zone', 'client', 'type', 'qty', 'size', 'item_id']
             final_cols = [c for c in cols_show if c in display_df.columns]
             
             edited_df = st.data_editor(
@@ -190,39 +215,57 @@ def show_map():
                 num_rows="dynamic",
                 use_container_width=True,
                 key="table_editor_v2",
-                disabled=['Icon', 'Dock', 'Berth', 'Zone', 'id'],
+                disabled=['Icon', 'Dock', 'Berth', 'Zone', 'item_id'],
                 hide_index=True
             )
 
-            # 4. SAVE LOGIC
+            # 4. SAVE LOGIC From 
             if st.button("💾 Save All Changes", type="primary"):
+                # 1. Create a map of {item_id: (new_x, new_y)} from the canvas objects
+                # canvas_shapes   st.session_state["canvas_initial_json"]
+                # print("here is BEFORE moving data port ......")
+                # print(st.session_state["port_data"])
+                canvas_shapes = canvas_result.json_data.get("objects", [])
+               
                 coords_map, new_pts = {}, []
+               
                 #if canvas_result and canvas_result.json_data and "objects" in canvas_result.json_data:
-                for obj in canvas_result.json_data.get("objects", []):
-                    if obj.get("type") in ["text"] and obj.get("userData", {}).get("id"):
-                        coords_map[obj["userData"]["id"]] = (obj["left"], CANVAS_HEIGHT - obj["top"])
-                    elif obj.get("type") == "circle":
+                for obj in canvas_shapes:
+                    letype=obj.get("type")
+                    if  letype in ["text"]:
+                        _,item_id=obj.get("fontFamily").split("|")
+                        item_id = int(item_id.strip())
+                        coords_map[item_id] = (obj["left"], CANVAS_HEIGHT - obj["top"])
+                    elif letype in ["circle"]:
                         new_pts.append((obj["left"], CANVAS_HEIGHT - obj["top"]))
 
                 upd = []
                 for _, r in edited_df.iterrows():
-                    rid = r["id"]
+                    # rid = r["item_id"]
                     rdict = r.to_dict()
-                    if rid in coords_map:
-                        rdict["x"], rdict["y"] = coords_map[rid]
+                    
+                    rid2=int(rdict.get("item_id"))
+                    
+                    if  rid2 in coords_map:
+                        print("inside cordinate existed")
+                        rdict["x"], rdict["y"] = coords_map[rid2]
                     else:
-                        orig = st.session_state['port_data'].query("id==@rid").iloc[0]
+                        print("keeping original coordinate for table")
+                        orig = st.session_state['port_data'].query("item_id==@rid2").iloc[0]
                         rdict["x"], rdict["y"] = orig["x"], orig["y"]
+
                     upd.append(rdict)
 
                 det = st.session_state.get("temp_item_details", {})
-                next_id = max([r["id"] for r in upd]+[0]) + 1
+                next_id = max([r["item_id"] for r in upd]+[0]) + 1
                 for x,y in new_pts:
-                    upd.append({**det, "id": next_id, "x": x, "y": y})
+                    upd.append({**det, "item_id": next_id, "x": x, "y": y})
                     next_id+=1
 
                 st.session_state["port_data"] = pd.DataFrame(upd)
                 st.session_state["canvas_initial_json"] = generate_initial_drawing(st.session_state["port_data"])
+                print("here is after moving data port ......")
+                print(st.session_state["port_data"])
                 st.rerun()
 
         # ---------------------------------------------------------
@@ -269,10 +312,12 @@ def show_map():
                     yaxis_visible=False,
                     showlegend=True
                 )
+
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # 5. Summary Table for View Mode
                 st.write("### 📋 Current Port Inventory")
+
                 # recompute location columns like in edit mode
                 df_viz['Dock'], df_viz['Berth'], df_viz['Zone'] = zip(*df_viz.apply(lambda r: determine_location(r['x'], r['y']), axis=1))
 
@@ -280,7 +325,7 @@ def show_map():
                 df_viz['Icon'] = df_viz['type'].apply(lambda x: get_icon(x))
 
                 # choose same columns as edit
-                cols = ['Icon','Dock','Berth','Zone','client','type','qty','size','id']
+                cols = ['Icon','Dock','Berth','Zone','client','type','qty','size','item_id']
 
                 st.dataframe(df_viz[cols], use_container_width=True, hide_index=True)
 

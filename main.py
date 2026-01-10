@@ -28,7 +28,8 @@ st.markdown("""
 st.sidebar.title("🚢 Port Operations")
 menu = ["Dashboard", "State Manager", "Port Map",
         "Workforce Tracking", "Logistics Tools", "Templates"]
-choice = st.sidebar.radio("Navigation", menu)
+# choice = st.sidebar.radio("Navigation", menu)
+choice = st.sidebar.radio("Navigation", menu, index=2)
 
 # --- Helper: File Management Logic ---
 if not os.path.exists(UPLOAD_DIR):
