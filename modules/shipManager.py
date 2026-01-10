@@ -74,11 +74,11 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         if col4.button("📝 Gen. Daily PVs", key="btn_pvs"):
             # Execute generation logic
             generated_path = generate_daily_pv(file_path)
-            
+            # os.path.basename(generated_path)
             # Set session state for download button
             st.session_state.active_download = {
                 "path": generated_path,
-                "label": f"📥 Download {os.path.basename(generated_path)}",
+                "label": f"📥 Download {os.path.basename(file_path)}",
                 "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             }
             st.success(f"PV Generated in folder: {os.path.basename(file_path)}")
