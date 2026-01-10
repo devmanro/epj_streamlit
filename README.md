@@ -29,5 +29,11 @@ add to this port status emb/deb in day,week,month or year.
 
 
 
+
+
+17-fix map position when changing from view to edit mode,
+18-refactor the code for better working and even better organisation
+
+
 #genDebarq.py excel should have this headings
 "N° BL	nombre colis	Poids brute	Client	produits"
