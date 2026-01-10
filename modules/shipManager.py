@@ -60,18 +60,28 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # --- OPERATION 3: GENERATE BORDERAUX ---
         if col3.button("📜 Gen. Borderaux", key="btn_brd"):
             # Execute generation logic
-            generated_path = generate_brd_func(
-                file_path, sheet_name=0, template_name="template.docx")
+            generated_path = generate_brd_func(file_path, sheet_name=0, template_name="template.docx")
             
             st.session_state.active_download = {
                 "path": generated_path,
                 "label": "📥 Download Bordereau (Word)",
                 "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             }
+            
             st.success("Bordereau Generated!")
 
         # --- OPERATION 4 ---
         if col4.button("📝 Gen. Daily PVs", key="btn_pvs"):
+            # Execute generation logic
+            generated_path = generate_daily_pv(file_path)
+            
+            # Set session state for download button
+            st.session_state.active_download = {
+                "path": generated_path,
+                "label": f"📥 Download {os.path.basename(generated_path)}",
+                "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
+            st.success(f"PV Generated in folder: {os.path.basename(file_path)}")
             st.info("Gen. Daily PVs")
 
         # 3. DYNAMIC DOWNLOAD BUTTON
