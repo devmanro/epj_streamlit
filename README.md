@@ -36,4 +36,7 @@ add to this port status emb/deb in day,week,month or year.
 
 
 #genDebarq.py excel should have this headings
-"N° BL	nombre colis	Poids brute	Client	produits"
+from this "N° BL	,nombre colis	,Poids brute	,Client	produits" 
+to this "N° BL	,Marchandise,	qte	,client	,poids	,type	,rec_qty"
+(i will fix a standard version from the output of the sheet or should i make it selectable by columns on the gui interface )
+

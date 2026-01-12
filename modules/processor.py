@@ -8,3 +8,11 @@ def calculate_daily_totals(df):
     }).reset_index()
     return summary
     
+
+def calculate_surface(input_qty=1)
+    type_good = st.selectbox(
+        "Type of Good", ["Bulk", "Containers", "Steel Pipes"])
+    qty = input_qty
+    # Add your math logic here
+    surface = qty * 1.5  # Example multiplier
+    return qty

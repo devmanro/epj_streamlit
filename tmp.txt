@@ -1,3 +1,10 @@
+-----gen deb/gen borderaux
+-fix the standardization issue for the values of quantity ,weight,
+-auto group by client ,when creating the borderaux de reserve,
+
+
+
+
 -standariser format du excel sheet input
 -finish workforce generation of daily presence tables/add a filter with calendar ,and shifts ,also ships,
 to help in generation of table and to help in finding which staff worked on which ships and when.
