@@ -60,8 +60,7 @@ def staff_m():
         if st.button("Generate Rows from CSV Template"):
             try:
                 # 1. Load the fixed staff from CSV
-                staff_df = pd.read_csv(FIXED_STAFF_PATH)
-                
+                staff_df = pd.read_csv(FIXED_STAFF_PATH, sep=';')
                 # 2. Apply chosen Date and Shift
                 staff_df["Date"] = new_shift_date
                 staff_df["Shift"] = shift_type
