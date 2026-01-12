@@ -3,7 +3,8 @@ import pandas as pd
 import os
 import io
 from datetime import datetime
-  
+from assets.constants.constants import FIXED_STAFF_PATH
+
  
 
   
@@ -65,7 +66,7 @@ def staff_m():
                 staff_df["Date"] = new_shift_date
                 staff_df["Shift"] = shift_type
                 
-                
+
                 # 3. Add empty columns for work details
                 for col in ["Affectation", "Navire", "Marchandise"]:
                     staff_df[col] = ""
