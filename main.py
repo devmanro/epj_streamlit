@@ -122,7 +122,7 @@ elif choice == "Port Map":
 # ---------------------------------------------------------
 elif choice == "Logistics Tools":
     st.header("🧮 Calculation Tools")
-    utilities()
+    utilities(st)
    
 
 # ---------------------------------------------------------
