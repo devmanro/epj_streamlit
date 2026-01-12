@@ -9,7 +9,7 @@ def calculate_daily_totals(df):
     return summary
     
 
-def calculate_surface(input_qty=1)
+def calculate_surface(input_qty=1):
     type_good = st.selectbox(
         "Type of Good", ["Bulk", "Containers", "Steel Pipes"])
     qty = input_qty
