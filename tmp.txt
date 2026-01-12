@@ -1,6 +1,20 @@
+-standariser format du excel sheet input
+-finish workforce generation of daily presence tables/add a filter with calendar ,and shifts ,also ships,
+to help in generation of table and to help in finding which staff worked on which ships and when.
+-add export button to save excel sheet printable
+
+
+-fix map positions when movign from view to edit,
+add hand as right click to move map when want to insert new item
+
+-make logitic tools finilized for better surface calculation and other measurement details.
+-create a  ui layout for the templates page where you find all empty ready to use 
+layouts and templates to download and use ,find required through search and filters
+
+-get started in the dashboard main page layout for displaying daily/weekly/monthly stats of the port ,
+making 
+
 my local text to test merge
-
-
 
   if st.session_state.brd_generated_path:
             st.divider()
