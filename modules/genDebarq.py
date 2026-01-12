@@ -17,7 +17,7 @@ def get_manual_color(product_name):
         "BIGBAG": "00B0F0",   # Blue
         "TUBE": "C65911",     # Brown
         "BOBINE": "FF9999",   # Light Red
-        "BEAMS": "#a11039",    # RED  
+        "BEAMS": "A11039",    # RED  
     }
     return colors.get(name, None) # Returns None (White) if not found or for 'Others'
 
