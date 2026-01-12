@@ -13,7 +13,8 @@ def staff_m():
   
     # --- Configuration ---
     master_path = "data/workforce.xlsx"
-    required_cols = ["Mat", "Nom", "Fonction", "Affectation", "Navire", "Marchandise", "Shift", "Date"]
+    required_cols = ["Mat", "Nom", "Fonction", "Affectation","Shift", "Date","Navire", "Marchandise",]
+                        
 
     # --- 1. Load Master & Initialize Session State ---
     if "workforce_data" not in st.session_state:
