@@ -103,7 +103,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     ws[f"{get_column_letter(start_col+1)}{bl_row}"].value = "SHIFT"
     
     bl_col_name = 'N° BL' if 'N° BL' in product_data.columns else 'N°BL'
-    qty_col_name = 'NOMBRE COLIS' if 'NOMBRE COLIS' in product_data.columns else 'nombre colis'
+    qty_col_name = 'QTE' if 'QTE' in product_data.columns else 'nombre colis'
 
     for client, col in col_mapping.items():
         try:
