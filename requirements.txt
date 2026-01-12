@@ -4,3 +4,4 @@ openpyxl
 plotly
 streamlit-drawable-canvas-fix
 streamlit-drawable-canvas
+xlsxwriter

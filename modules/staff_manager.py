@@ -49,17 +49,37 @@ def staff_m():
 
     # --- 3. Feature: Insert New Shift (Empty Template) ---
     st.subheader("Shift Management")
-    if st.button("➕ Prepare New Shift (Reuse Staff List)"):
-        # Get unique staff to keep (Mat, Nom, Fonction)
-        if not df.empty:
-            new_shift_template = df[["Mat", "Nom", "Fonction"]].drop_duplicates()
-            # Add empty columns for the rest
-            for col in ["Affectation", "Navire", "Marchandise", "Shift", "Date"]:
-                new_shift_template[col] = None
-            
-            st.session_state["workforce_data"] = pd.concat([df, new_shift_template], ignore_index=True)
-            st.success("New shift rows added at the bottom. Fill in the Ship and Date in the table below.")
-            st.rerun()
+    with st.expander("➕ Prepare New Shift Template"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            new_shift_date = st.date_input("Select Date for New Shift", datetime.now())
+        with col_b:
+            shift_type = st.selectbox("Select Shift", ["Shift A", "Shift B", "Shift C", "Night"])
+
+        if st.button("Generate Rows from CSV Template"):
+            try:
+                # 1. Load the fixed staff from CSV
+                staff_df = pd.read_csv(FIXED_STAFF_PATH)
+                
+                # 2. Apply chosen Date and Shift
+                staff_df["Date"] = new_shift_date
+                staff_df["Shift"] = shift_type
+                
+                # 3. Add empty columns for work details
+                for col in ["Affectation", "Navire", "Marchandise"]:
+                    staff_df[col] = ""
+
+                # 4. Merge into the main session data
+                st.session_state["workforce_data"] = pd.concat(
+                    [st.session_state["workforce_data"], staff_df], 
+                    ignore_index=True
+                )
+                
+                st.success(f"Successfully added {len(staff_df)} workers for {new_shift_date}")
+                st.rerun()
+                
+            except FileNotFoundError:
+                st.error(f"Error: The file '{FIXED_STAFF_PATH}' was not found.")
 
     # --- 4. Upload Logic ---
     uploaded_shift = st.file_uploader("Upload new shift Excel file", type=["xlsx"], key="sh_up")
@@ -105,5 +125,6 @@ def staff_m():
         file_name=f"djendjen_shift_{datetime.now().strftime('%Y%m%d')}.xlsx",
         mime="application/vnd.ms-excel"
     )
+
 
     col2.info("💡 To print: Download the Excel file above and press Ctrl+P.")
