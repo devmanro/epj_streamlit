@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import os
-from modules.processor import calculate_daily_totals
 import time
 
+from modules.processor import calculate_daily_totals
 from assets.constants.constants import UPLOAD_DIR,DB_PATH
 # Import your specific scripts
 from modules.genBorderaux import generate_brd

@@ -17,6 +17,7 @@ def get_manual_color(product_name):
         "BIGBAG": "00B0F0",   # Blue
         "TUBE": "C65911",     # Brown
         "BOBINE": "FF9999",   # Light Red
+        "BEAMS": "#a11039",    # RED  
     }
     return colors.get(name, None) # Returns None (White) if not found or for 'Others'
 
@@ -215,7 +216,7 @@ def gen_table(filepath=None):
     ws['A1'].value = ship_name_placeholder
     ws['A1'].font = Font(bold=True, size=14)
 
-    specific_keywords = ["BOBINE", "TUBE", "CTP", "BIGBAG"]
+    specific_keywords = ["BOBINE", "TUBE", "CTP", "BIGBAG","BEAMS"]
     start_col = 1
     all_matched_indices = pd.Index([])
 
