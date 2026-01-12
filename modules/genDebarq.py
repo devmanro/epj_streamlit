@@ -35,7 +35,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
     # --- Column Setup ---
     client_col = 'CLIENT' if 'CLIENT' in product_data.columns else 'Client'
-    prod_col = 'PRODUITS' if 'PRODUITS' in product_data.columns else 'produits'
+    prod_col = 'TYPE' if 'TYPE' in product_data.columns else 'marchandise'
     clients = product_data[client_col].unique().tolist()
     
     col_mapping = {}
@@ -221,7 +221,7 @@ def gen_table(filepath=None):
     all_matched_indices = pd.Index([])
 
     for keyword in specific_keywords:
-        mask = source_df['PRODUITS'].astype(str).str.contains(keyword, case=False, na=False)
+        mask = source_df['TYPE'].astype(str).str.contains(keyword, case=False, na=False)
         p_data = source_df[mask]
         if not p_data.empty:
             all_matched_indices = all_matched_indices.union(p_data.index)
