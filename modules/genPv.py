@@ -4,14 +4,18 @@ from datetime import datetime
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from assets.constants.constants import PATH_PVS
+
 
 def generate_daily_pv(file_path):
     # --- 1. SETUP PATHS & FILENAME ---
     base_name = os.path.basename(file_path)
     file_name_only = os.path.splitext(base_name)[0]
     
+
     # Create directory named after the source file
-    output_dir = os.path.join(os.getcwd(), file_name_only)
+    output_dir =f"{PATH_PVS}/{file_name_only}"
+    # os.path.join(os.getcwd(), file_name_only)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         
@@ -23,10 +27,10 @@ def generate_daily_pv(file_path):
     # Assuming Table 1 is in Sheet 0 and Table 2 is in Sheet 1 
     # Or adjust if all data is in one sheet
     df_cargo = pd.read_excel(file_path, sheet_name=0) 
-    df_pointers = pd.read_excel(file_path, sheet_name=1) # Change if needed
+    df_pointers = pd.read_excel(file_path, sheet_name=0) # Change if needed
     
     # Mock variables (Replace with actual logic to extract from Excel if needed)
-    ship_name = "ST ARGUS" 
+    ship_name = file_name_only 
     report_date = current_date
 
     # --- 3. CREATE DOCUMENT ---

@@ -368,6 +368,7 @@ def show_map():
                 margin=dict(l=0, r=0, b=0, t=10),
                 xaxis_visible=False,
                 yaxis_visible=False,
+                showlegend=False,
                 # showlegend=True,
                 # legend=dict(
                 #     orientation="h",      # Horizontal legend

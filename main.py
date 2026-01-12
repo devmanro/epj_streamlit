@@ -8,6 +8,8 @@ from assets.constants.constants import UPLOAD_DIR,DB_PATH
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table
+from modules.genPv import generate_daily_pv
+
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
@@ -29,7 +31,7 @@ st.sidebar.title("🚢 Port Operations")
 menu = ["Dashboard", "State Manager", "Port Map",
         "Workforce Tracking", "Logistics Tools", "Templates"]
 # choice = st.sidebar.radio("Navigation", menu)
-choice = st.sidebar.radio("Navigation", menu, index=2)
+choice = st.sidebar.radio("Navigation", menu, index=1)
 
 # --- Helper: File Management Logic ---
 if not os.path.exists(UPLOAD_DIR):
@@ -71,7 +73,8 @@ if choice == "State Manager":
             UPLOAD_DIR, 
             clear_downloads, 
             gen_table, 
-            generate_brd
+            generate_brd,
+            generate_daily_pv
         )
 
 # ---------------------------------------------------------

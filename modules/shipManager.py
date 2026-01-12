@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
-def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func):
+def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
     st.subheader("📂 Single Ship Operations")
     
     # 1. Upload Logic
