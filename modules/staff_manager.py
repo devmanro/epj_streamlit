@@ -20,7 +20,7 @@ def staff_m():
             st.session_state["workforce_data"] = pd.DataFrame(columns=required_cols)
 
     # Ensure Date column is datetime
-    st.session_state["workforce_data"]["Date"] = pd.to_datetime(st.session_state["workforce_data"]["Date"]).dt.date
+    # st.session_state["workforce_data"]["Date"] = pd.to_datetime(st.session_state["workforce_data"]["Date"]).dt.date
 
     if "file_processed" not in st.session_state:
         st.session_state["file_processed"] = False
@@ -107,7 +107,8 @@ def staff_m():
     # Update master if edited
     if st.button("💾 Save Changes to Master"):
         # Merge edited view back to master logic
-        st.session_state["workforce_data"].update(edited_work)
+        # st.session_state["workforce_data"].update(edited_work)
+        st.session_state["workforce_data"] = edited_df
         st.session_state["workforce_data"].to_excel(WORKFORCE_DB, index=False)
         st.success("Changes saved to disk!")
 
@@ -126,6 +127,5 @@ def staff_m():
         file_name=f"djendjen_shift_{datetime.now().strftime('%Y%m%d')}.xlsx",
         mime="application/vnd.ms-excel"
     )
-
 
     col2.info("💡 To print: Download the Excel file above and press Ctrl+P.")
