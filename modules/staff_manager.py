@@ -11,7 +11,6 @@ def staff_m():
     # --- Configuration ---
     master_path = "data/workforce.xlsx"
     required_cols = ["Mat", "Nom", "Fonction", "Affectation","Shift", "Date","Navire", "Marchandise"]
-                        
 
     # --- 1. Load Master & Initialize Session State ---
     if "workforce_data" not in st.session_state:
@@ -67,12 +66,14 @@ def staff_m():
                 # 3. Add empty columns for work details
                 for col in ["Affectation", "Navire", "Marchandise"]:
                     staff_df[col] = ""
+                
 
                 # 4. Merge into the main session data
-                st.session_state["workforce_data"] = pd.concat(
-                    [st.session_state["workforce_data"], staff_df], 
-                    ignore_index=True
-                )
+                st.session_state["workforce_data"] =staff_df
+                # st.session_state["workforce_data"] = pd.concat(
+                #     [st.session_state["workforce_data"], staff_df], 
+                #     ignore_index=True
+                # )
                 
                 st.success(f"Successfully added {len(staff_df)} workers for {new_shift_date}")
                 st.rerun()
