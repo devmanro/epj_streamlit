@@ -5,15 +5,12 @@ import io
 from datetime import datetime
 from assets.constants.constants import FIXED_STAFF_PATH
 
- 
-
-  
 
 def staff_m():
   
     # --- Configuration ---
     master_path = "data/workforce.xlsx"
-    required_cols = ["Mat", "Nom", "Fonction", "Affectation","Shift", "Date","Navire", "Marchandise",]
+    required_cols = ["Mat", "Nom", "Fonction", "Affectation","Shift", "Date","Navire", "Marchandise"]
                         
 
     # --- 1. Load Master & Initialize Session State ---
