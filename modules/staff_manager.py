@@ -20,7 +20,7 @@ def staff_m():
             st.session_state["workforce_data"] = pd.DataFrame(columns=required_cols)
 
     # Ensure Date column is datetime
-    # st.session_state["workforce_data"]["Date"] = pd.to_datetime(st.session_state["workforce_data"]["Date"]).dt.date
+    st.session_state["workforce_data"]["Date"] = pd.to_datetime(st.session_state["workforce_data"]["Date"]).dt.date
 
     if "file_processed" not in st.session_state:
         st.session_state["file_processed"] = False
