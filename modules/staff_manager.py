@@ -108,7 +108,7 @@ def staff_m():
     if st.button("💾 Save Changes to Master"):
         # Merge edited view back to master logic
         # st.session_state["workforce_data"].update(edited_work)
-        st.session_state["workforce_data"] = edited_df
+        st.session_state["workforce_data"] = edited_work
         st.session_state["workforce_data"].to_excel(WORKFORCE_DB, index=False)
         st.success("Changes saved to disk!")
 
