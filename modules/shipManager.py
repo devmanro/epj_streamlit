@@ -86,15 +86,15 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # --- OPERATION 5: DELETE FILE ---
         if col5.button("🗑️ Delete File", key="btn_delete"):
-            try:
-                os.remove(file_path)
-                st.toast(f"Deleted {selected_file}")
-                # Clear session state so it doesn't try to look for the file
-                clear_downloads_func()
-                # Rerun to refresh the file list dropdown
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error deleting file: {e}")
+            confirm_delete = st.checkbox("Confirm Delete", key="check_del")
+            if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
+                try:
+                    os.remove(file_path)
+                    st.toast(f"Deleted {selected_file}")
+                    clear_downloads_func()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 
         # 3. DYNAMIC DOWNLOAD BUTTON
