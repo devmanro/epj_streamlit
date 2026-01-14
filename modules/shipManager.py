@@ -39,7 +39,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(df, num_rows="dynamic", key="single_file_editor") 
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         # --- SAVE CHANGES ---
         if col1.button("💾 Save Changes", key="btn_save"):
