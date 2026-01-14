@@ -90,7 +90,6 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             with c1:
                 confirm_delete = st.checkbox("", key="check_del")
             with c2:
-                confirm_delete = st.checkbox("Confirm Delete", key="check_del")
                 if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
                     try:
                         os.remove(file_path)
