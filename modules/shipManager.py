@@ -86,7 +86,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # --- OPERATION 5: DELETE FILE ---
         with col5:
-             c1, c2 = st.columns([1,2])
+            c1, c2 = st.columns([1,2])
             with c1:
                 confirm_delete = st.checkbox("", key="check_del")
             with c2:
