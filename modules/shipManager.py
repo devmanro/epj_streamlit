@@ -85,22 +85,20 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             st.info("Gen. Daily PVs")
 
         # --- OPERATION 5: DELETE FILE ---
-
         with col5:
-
-
-            confirm_delete = st.checkbox("Confirm Delete", key="check_del")
-            if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
-                try:
-                    os.remove(file_path)
-                    st.toast(f"Deleted {selected_file}")
-                    clear_downloads_func()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-
-
+             c1, c2 = st.columns([1,2])
+            with c1:
+                confirm_delete = st.checkbox("", key="check_del")
+            with c2:
+                confirm_delete = st.checkbox("Confirm Delete", key="check_del")
+                if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
+                    try:
+                        os.remove(file_path)
+                        st.toast(f"Deleted {selected_file}")
+                        clear_downloads_func()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
         # 3. DYNAMIC DOWNLOAD BUTTON
         if "active_download" in st.session_state and st.session_state.active_download:
