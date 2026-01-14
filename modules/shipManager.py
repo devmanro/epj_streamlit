@@ -84,6 +84,19 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             st.success(f"PV Generated in folder: {os.path.basename(file_path)}")
             st.info("Gen. Daily PVs")
 
+        # --- OPERATION 5: DELETE FILE ---
+        if col5.button("🗑️ Delete File", key="btn_delete"):
+            try:
+                os.remove(file_path)
+                st.toast(f"Deleted {selected_file}")
+                # Clear session state so it doesn't try to look for the file
+                clear_downloads_func()
+                # Rerun to refresh the file list dropdown
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error deleting file: {e}")
+
+
         # 3. DYNAMIC DOWNLOAD BUTTON
         if "active_download" in st.session_state and st.session_state.active_download:
             st.divider()
