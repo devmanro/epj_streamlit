@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import datetime
+from assets.constants.constants import FIXED_STAFF_PATH ,WORKFORCE_DB
+import os
 import io
 
-from assets.constants.constants import FIXED_STAFF_PATH ,WORKFORCE_DB
 
 # --- Configuration ---
 # Ensure these global paths are defined in your main app
@@ -66,6 +66,7 @@ def staff_m():
             start_d, end_d = date_filter
             filtered_df = filtered_df[(filtered_df["Date"] >= start_d) & (filtered_df["Date"] <= end_d)]
 
+
         st.info(f"Showing {len(filtered_df)} records.")
         
         # View / Light Edit History
@@ -85,6 +86,18 @@ def staff_m():
             st.session_state["workforce_data"].update(edited_history)
             st.session_state["workforce_data"].to_excel(WORKFORCE_DB, index=False)
             st.success("History updated successfully.")
+
+        # Print / Export History
+        if not edited_history.empty:
+            towrap = io.BytesIO()
+            edited_history.to_excel(towrap, index=False, engine='xlsxwriter')
+            st.download_button(
+                label="🖨️ Print / Export History",
+                data=towrap.getvalue(),
+                file_name=f"history_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
 
     # ==========================================
     # TAB 2: CREATE / IMPORT NEW SHIFT
@@ -143,7 +156,7 @@ def staff_m():
                 )
                 
                 # Merge Logic
-                col_btn_1, col_btn_2 = st.columns(2)
+                col_btn_1, col_btn_2, col_btn_3 = st.columns(3)
                 with col_btn_1:
                     if st.button("✅ Merge to Master DB", type="primary"):
                         # Append new data to master
@@ -168,3 +181,13 @@ def staff_m():
                     if st.button("🗑️ Clear Staging"):
                         st.session_state["new_shift_stage"] = pd.DataFrame(columns=required_cols)
                         st.rerun()
+
+                with col_btn_3:
+                    towrap_new = io.BytesIO()
+                    edited_stage.to_excel(towrap_new, index=False, engine='xlsxwriter')
+                    st.download_button(
+                        label="🖨️ Print / Export Staging",
+                        data=towrap_new.getvalue(),
+                        file_name=f"new_shift_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )

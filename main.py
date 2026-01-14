@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import time
 
-
 from assets.constants.constants import UPLOAD_DIR,DB_PATH
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
@@ -12,13 +11,9 @@ from modules.genPv import generate_daily_pv
 from modules.utilities import utilities
 from modules.staff_manager import staff_m
 
-
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
-
-
-
 
 # from modules.genPvs import generate_pv
 
@@ -50,7 +45,6 @@ if "active_download" not in st.session_state:
 # Callback to clear state
 def clear_downloads():
     st.session_state.active_download = None
-
 
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
@@ -124,7 +118,6 @@ elif choice == "Logistics Tools":
     st.header("🧮 Calculation Tools")
     utilities(st)
    
-
 # ---------------------------------------------------------
 # 9. WORKFORCE TRACKING
 # ---------------------------------------------------------
