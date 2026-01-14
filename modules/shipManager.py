@@ -85,7 +85,22 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             st.info("Gen. Daily PVs")
 
         # --- OPERATION 5: DELETE FILE ---
-        if col5.button("🗑️ Delete File", key="btn_delete"):
+        with col5:
+            confirm_delete = st.checkbox("Confirm Delete", key="confirm_delete")
+            delete_clicked = st.button("🗑️ Delete", key="delete_btn")
+            if delete_clicked:
+                if not confirm_delete:
+                    st.warning("Check to confirm first")
+                else:
+                    try:
+                        os.remove(file_path)
+                        st.toast(f"Deleted {selected_file}")
+                        clear_downloads_func()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        
+            # if col5.button("🗑️ Delete File", key="btn_delete"):
             confirm_delete = st.checkbox("Confirm Delete", key="check_del")
             if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
                 try:
