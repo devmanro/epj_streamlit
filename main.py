@@ -54,7 +54,7 @@ def clear_downloads():
 if choice == "Dashboard":
     # Simply call the function imported from modules.Dashboard
     # Pass UPLOAD_DIR if your dashboard needs to scan the files for stats
-    dashboard(UPLOAD_DIR)
+    dashboard()
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
 # ---------------------------------------------------------
