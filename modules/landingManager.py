@@ -19,6 +19,10 @@ def render_global_manager(db_path):
         st.error(f"Error reading database: {e}")
         return
 
+      # ---- Add row selection checkbox ----
+    if "_select" not in df.columns:
+        df.insert(0, "_select", False)
+
     # 3. Dynamic Filtering Section
     st.write("### 🔍 Advanced Filters")
     
@@ -32,6 +36,8 @@ def render_global_manager(db_path):
         
         # Logic to automatically create filters for every column
         for i, column in enumerate(df.columns):
+            if column == "_select":
+                continue
             # Alternate widgets across the 3 columns
             with cols[i % 3]:
                 unique_values = df[column].unique().tolist()
@@ -50,12 +56,21 @@ def render_global_manager(db_path):
     # Users can also use the built-in magnifying glass icon on the table to search
     st.write(f"Showing {len(filtered_df)} of {len(df)} records")
     
+    # edited_df = st.data_editor(
+    #     filtered_df,
+    #     use_container_width=True,
+    #     num_rows="dynamic",
+    #     key="global_db_editor"
+    # )
     edited_df = st.data_editor(
-        filtered_df,
-        use_container_width=True,
-        num_rows="dynamic",
-        key="global_db_editor"
-    )
+            filtered_df,
+            use_container_width=True,
+            num_rows="dynamic",
+            key="global_db_editor",
+            column_config={
+                "_select": st.column_config.CheckboxColumn("Select")
+            }
+        )
 
     # 5. Save/Export Logic
     col_a, col_b = st.columns(2)
