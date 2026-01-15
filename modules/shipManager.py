@@ -18,13 +18,15 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
     )
 
     if uploaded_file:
-        save_path = os.path.join(upload_dir, uploaded_file.name)
         # Handle JSON conversion
         if uploaded_file.name.endswith('.json'):
+            excel_name = uploaded_file.name.replace('.json', '.xlsx')
+            save_path = os.path.join(upload_dir, excel_name)
             # Convert JSON to Excel using your helper
             excel_path = gen_excel(uploaded_file, save_path,st_upload=True)
             st.success(f"JSON converted and saved as: {os.path.basename(excel_path)}")
         else:
+            save_path = os.path.join(upload_dir, uploaded_file.name)
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
         st.success(f"Saved {uploaded_file.name}")
