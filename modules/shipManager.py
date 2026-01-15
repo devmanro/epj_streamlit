@@ -50,7 +50,14 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
-        edited_df = st.data_editor(df, num_rows="dynamic", key="single_file_editor") 
+        edited_df = st.data_editor(
+            df,
+            num_rows="dynamic",
+            key="single_file_editor",
+            column_config={
+                "_index": st.column_config.CheckboxColumn("Select")
+            },
+            ) 
 
         col1, col2, col3, col4, col5 = st.columns(5)
 

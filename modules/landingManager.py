@@ -19,9 +19,7 @@ def render_global_manager(db_path):
         st.error(f"Error reading database: {e}")
         return
 
-      # ---- Add row selection checkbox ----
-    if "_select" not in df.columns:
-        df.insert(0, "_select", False)
+      
 
     # 3. Dynamic Filtering Section
     st.write("### 🔍 Advanced Filters")
@@ -68,8 +66,8 @@ def render_global_manager(db_path):
             num_rows="dynamic",
             key="global_db_editor",
             column_config={
-                "_select": st.column_config.CheckboxColumn("Select")
-            }
+                "_index": st.column_config.CheckboxColumn("Select")
+            },
         )
 
     # 5. Save/Export Logic
