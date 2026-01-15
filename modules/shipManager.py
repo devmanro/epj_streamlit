@@ -8,16 +8,22 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
     
     # 1. Upload Logic
     uploaded_file = st.file_uploader(
-        "Upload XLS/CSV Ship Data",
-        type=["xlsx", "csv"],
+        "Upload XLSX/CSV/JSON Ship Data",
+        type=["xlsx", "csv", "json"], # Added json
         on_change=clear_downloads_func,
         key="file_uploader_widget"
     )
 
     if uploaded_file:
         save_path = os.path.join(upload_dir, uploaded_file.name)
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        # Handle JSON conversion
+        if uploaded_file.name.endswith('.json'):
+            # Convert JSON to Excel using your helper
+            excel_path = gen_excel(True,uploaded_file, save_path)
+            st.success(f"JSON converted and saved as: {os.path.basename(excel_path)}")
+        else:
+            with open(save_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
         st.success(f"Saved {uploaded_file.name}")
 
     # 2. List and Select Files

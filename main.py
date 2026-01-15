@@ -6,7 +6,6 @@ import time
 from assets.constants.constants import UPLOAD_DIR,DB_PATH
 # Import your specific scripts
 from modules.genBorderaux import generate_brd
-from modules.genDebarq import gen_table
 from modules.genPv import generate_daily_pv
 from modules.utilities import utilities
 from modules.staff_manager import staff_m

@@ -1,10 +1,14 @@
 import json
 import pandas as pd
 
-def extract_to_excel_flattened(json_path, output_path):
-    # Load JSON
-    with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+def extract_to_excel_flattened(st_upload=False,json_path, output_path):
+    if st_upload:
+        # Load JSON directly from the Streamlit UploadedFile object
+        data = json.load(uploaded_file)
+    else:        
+        # Load JSON
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
     # The manifest data is in the first element of the root list
     connaissements = data[0].get('connaissements', [])
@@ -59,12 +63,13 @@ def extract_to_excel_flattened(json_path, output_path):
     # df['Weight (Tons)'] = pd.to_numeric(df['Weight (Tons)'], errors='coerce').round(3)
 
     df.to_excel(output_path, index=False)
+    return output_path
     
-    print(f"Extraction finished.")
-    print(f"Total rows generated: {len(df)}")
-    print(f"Weights have been converted to Tons.")
-    print(f"Saved to: {output_path}")
+    # print(f"Extraction finished.")
+    # print(f"Total rows generated: {len(df)}")
+    # print(f"Weights have been converted to Tons.")
+    # print(f"Saved to: {output_path}")
 
-if __name__ == "__main__":
-    # Ensure this matches your actual filename
-    extract_to_excel_flattened('input.json', 'Manifest_Full_Detail.xlsx')
+# if __name__ == "__main__":
+#     # Ensure this matches your actual filename
+#     extract_to_excel_flattened('input.json', 'Manifest_Full_Detail.xlsx')
