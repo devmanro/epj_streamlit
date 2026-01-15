@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 
-def extract_to_excel_flattened(st_upload=False,json_path, output_path):
+def extract_to_excel_flattened(json_path, output_path,st_upload=False):
     if st_upload:
         # Load JSON directly from the Streamlit UploadedFile object
         data = json.load(uploaded_file)
