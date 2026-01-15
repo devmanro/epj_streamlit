@@ -11,6 +11,7 @@ from modules.genPv import generate_daily_pv
 from modules.utilities import utilities
 from modules.staff_manager import staff_m
 
+from modules.Dashboard import  dashboard
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
@@ -46,6 +47,14 @@ if "active_download" not in st.session_state:
 def clear_downloads():
     st.session_state.active_download = None
 
+
+# ---------------------------------------------------------
+# 0. DASHBOARD
+# ---------------------------------------------------------
+if choice == "Dashboard":
+    # Simply call the function imported from modules.Dashboard
+    # Pass UPLOAD_DIR if your dashboard needs to scan the files for stats
+    dashboard(UPLOAD_DIR)
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
 # ---------------------------------------------------------
