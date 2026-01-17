@@ -18,7 +18,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         key="file_uploader_widget"
     )
 
-    if uploaded_file:
+    if uploaded_file and not st.session_state.trigger_mapping: 
         filename = uploaded_file.name
         # Handle JSON conversion
         if uploaded_file.name.endswith('.json'):
@@ -32,7 +32,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
-        st.session_state.trigger_mapping = False
+        st.session_state.trigger_mapping = True
         
 
     # 2. List and Select Files
