@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from tools.tools import getDB
+from tools.tools import getDB 
 from assets.constants.constants import DB_PATH
 
 def render_global_manager():

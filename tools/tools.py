@@ -28,3 +28,36 @@ def getDB():
         st.error(f"Error reading database: {e}")
         return NULL
 
+
+
+
+
+def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
+    st.write("### Map Imported Columns to Database Columns")
+    mapping = {}
+    
+    # Create a dropdown for every required column
+    for req_col in required_columns:
+        mapping[req_col] = st.selectbox(
+            f"Select the source for: **{req_col}**",
+            options=[None] + list(uploaded_df.columns),
+            key=f"map_{req_col}"
+        )
+    return mapping
+
+
+
+
+def align_data(uploaded_df, mapping, required_columns):
+    # 1. Create a new dataframe with the correct headings
+    processed_df = pd.DataFrame(columns=required_columns)
+    
+    for req_col, user_col in mapping.items():
+        if user_col:
+            # Move data from uploaded column to the required column
+            processed_df[req_col] = uploaded_df[user_col]
+        else:
+            # Fill with empty values if no match was selected
+            processed_df[req_col] = None
+            
+    return processed_df

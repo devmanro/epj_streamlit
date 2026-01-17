@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
 from assets.constants.constants import DB_PATH
-from tools.tools import getDB
+from tools.tools import getDB ,align_data ,create_mapping_ui
 
 
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
@@ -47,13 +47,19 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         file_path = os.path.join(upload_dir, selected_file)
 
         # Load Data
-        df = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
+        df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
 
+        user_mapping = create_mapping_ui(df_raw, COLUMNS)
+    
+        if st.button("Finalize and Import"):
+            final_df = align_data(df_raw, user_mapping, COLUMNS)
+            st.success("Data aligned!")
+            
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(
-            df,
+            df_raw,
             num_rows="dynamic",
             key="single_file_editor",
             use_container_width=True,
