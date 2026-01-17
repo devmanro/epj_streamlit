@@ -20,7 +20,6 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
     if uploaded_file and not st.session_state.get("mapping_shown", False):
         st.session_state.mapping_shown = True
-
         filename = uploaded_file.name
         # Handle JSON conversion
         if uploaded_file.name.endswith('.json'):
@@ -72,7 +71,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
-            st.rerun()
+            # st.rerun()
 
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")

@@ -95,6 +95,7 @@ def show_mapping_dialog(uploaded_df):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
         st.session_state.trigger_mapping = False 
+        
         # 2. Force a rerun to close the dialog and update the main app
         st.rerun()
         
