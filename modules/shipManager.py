@@ -66,9 +66,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
             st.success("Data Aligned Successfully!")
 
-            # Clear mapping after use
+            # Clean up state
             del st.session_state.final_mapping
-            
+            if "trigger_mapping" in st.session_state:
+                del st.session_state.trigger_mapping
             
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
