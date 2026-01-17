@@ -61,3 +61,28 @@ def align_data(uploaded_df, mapping, required_columns):
             processed_df[req_col] = None
             
     return processed_df
+
+
+
+
+@st.dialog("Map Your Columns")
+def show_mapping_dialog(uploaded_df):
+    st.write("Match your file columns to the database headings:")
+    
+    mapping = {}
+    # Create horizontal headers
+    cols = st.columns(len(COLUMNS))
+    
+    for i, req_col in enumerate(COLUMNS):
+        with cols[i]:
+            st.info(f"**{req_col}**")
+            mapping[req_col] = st.selectbox(
+                "Source:",
+                options=[None] + list(uploaded_df.columns),
+                key=f"map_{req_col}"
+            )
+
+    if st.button("Confirm and Import"):
+        # Save mapping to session state and reload
+        st.session_state.final_mapping = mapping
+        st.rerun()

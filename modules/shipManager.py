@@ -49,12 +49,26 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # Load Data
         df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
 
-        user_mapping = create_mapping_ui(df_raw, COLUMNS)
-    
-        if st.button("Finalize and Import"):
-            final_df = align_data(df_raw, user_mapping, COLUMNS)
-            st.success("Data aligned!")
+        show_mapping_dialog(df_raw)
+
+        # Process data if mapping is confirmed
+        if "final_mapping" in st.session_state:
+            mapping = st.session_state.final_mapping
             
+            # Create aligned dataframe
+            final_df = pd.DataFrame(columns=COLUMNS)
+            for req_col, user_col in mapping.items():
+                if user_col:
+                    final_df[req_col] = df_raw[user_col]
+                    
+            st.success("Data Aligned Successfully!")
+            st.dataframe(final_df)
+            
+            # Clear mapping after use
+            if st.button("Clear Import"):
+                del st.session_state.final_mapping
+                st.rerun()
+
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
