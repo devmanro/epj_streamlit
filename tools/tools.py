@@ -64,25 +64,33 @@ def align_data(uploaded_df, mapping, required_columns):
 
 
 
-
 @st.dialog("Map Your Columns")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
     
     mapping = {}
-    # Create horizontal headers
-    cols = st.columns(len(COLUMNS))
+    # Define how many mapping boxes you want per row
+    COLS_PER_ROW = 3 
     
-    for i, req_col in enumerate(COLUMNS):
-        with cols[i]:
-            st.info(f"**{req_col}**")
-            mapping[req_col] = st.selectbox(
-                "Source:",
-                options=[None] + list(uploaded_df.columns),
-                key=f"map_{req_col}"
-            )
+    # Iterate through COLUMNS in chunks to create rows
+    for i in range(0, len(COLUMNS), COLS_PER_ROW):
+        row_cols = st.columns(COLS_PER_ROW)
+        
+        # Get the subset of columns for this specific row
+        batch = COLUMNS[i : i + COLS_PER_ROW]
+        
+        for j, req_col in enumerate(batch):
+            with row_cols[j]:
+                # Using a container or border for better visual separation
+                with st.container(border=True):
+                    st.markdown(f"**{req_col}**")
+                    mapping[req_col] = st.selectbox(
+                        "Source column:",
+                        options=[None] + list(uploaded_df.columns),
+                        key=f"map_{req_col}",
+                        label_visibility="collapsed" # Hide label to save space
+                    )
 
-    if st.button("Confirm and Import"):
-        # Save mapping to session state and reload
+    if st.button("Confirm and Import", type="primary", use_container_width=True):
         st.session_state.final_mapping = mapping
         st.rerun()
