@@ -5,6 +5,7 @@ from assets.constants.constants import DB_PATH,COLUMNS
 
  
  def getDB():
+    
  # 1. Check if the database file exists
     dir_name = os.path.dirname(DB_PATH)
     if not os.path.exists(dir_name):
