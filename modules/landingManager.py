@@ -1,26 +1,14 @@
 import streamlit as st
 import pandas as pd
 import os
+from tools.tools import 
+from assets.constants.constants import DB_PATH
 
-def render_global_manager(db_path):
+def render_global_manager():
     st.subheader("🌍 Global Loading Dashboard")
     
-    # 1. Check if the database file exists
-    if not os.path.exists(db_path):
-        st.error(f"Database file not found at: {db_path}")
-        st.info("Please ensure the master database file exists in the data folder.")
-        return
-
-    # 2. Load the Master Data
-    try:
-        # We read from the single constant path now
-        df = pd.read_excel(db_path)
-    except Exception as e:
-        st.error(f"Error reading database: {e}")
-        return
-
-      
-
+    df= getDB()
+    
     # 3. Dynamic Filtering Section
     st.write("### 🔍 Advanced Filters")
     
@@ -76,7 +64,7 @@ def render_global_manager(db_path):
         if st.button("💾 Save Global Changes to Database"):
             try:
                 # This saves the edited table back to your constant DB_PATH
-                edited_df.to_excel(db_path, index=False)
+                edited_df.to_excel(DB_PATH, index=False)
                 st.success("Database updated successfully!")
             except Exception as e:
                 st.error(f"Save failed: {e}")

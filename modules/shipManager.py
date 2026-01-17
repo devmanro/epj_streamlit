@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
 
+
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
 def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
     st.subheader("📂 Single Ship Operations")
@@ -40,6 +41,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
+
         file_path = os.path.join(upload_dir, selected_file)
 
         # Load Data
@@ -58,13 +60,25 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             },
         )
 
-
         col1, col2, col3, col4, col5 = st.columns(5)
 
         # --- SAVE CHANGES ---
         if col1.button("💾 Save Changes", key="btn_save"):
+            # 2. Merge with Global DB
             edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
+
+            global_db = getDB()
+            # Combine current edited data with the master database
+            updated_global = pd.concat([global_db, edited_df], ignore_index=True)
+            
+            # Optional: Remove exact duplicate rows
+            updated_global = updated_global.drop_duplicates()
+            
+            # 3. Save the master database back to DB_PATH
+            updated_global.to_excel(DB_PATH, index=False)
+            
+            st.toast("File and Global Database Updated!")
             clear_downloads_func()
 
         # --- OPERATION 2 ---
