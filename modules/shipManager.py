@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
-from assets.constants.constants import DB_PATH
+from assets.constants.constants import DB_PATH,COLUMNS
 from tools.tools import getDB ,align_data ,create_mapping_ui
 
 
