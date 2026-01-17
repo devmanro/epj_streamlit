@@ -93,10 +93,9 @@ def show_mapping_dialog(uploaded_df):
 
     if st.button("Confirm and Import", type="primary", use_container_width=True):
         st.session_state.final_mapping = mapping
-         # Clean up state
-        del st.session_state.final_mapping
-        st.session_state.trigger_mapping = False
-        if "trigger_mapping" in st.session_state:
-            del st.session_state.trigger_mapping
+        
+        # 1. Clear the trigger immediately so it doesn't re-open
+        st.session_state.trigger_mapping = False 
+        # 2. Force a rerun to close the dialog and update the main app
         st.rerun()
         

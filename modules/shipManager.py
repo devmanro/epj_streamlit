@@ -65,11 +65,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             #         final_df[req_col] = df_raw[user_col]
 
             # align_data(uploaded_df, mapping, required_columns)
-            st.success("Data Aligned Successfully!")
-
-           
+            st.success("Data Aligned Successfully!   ....---------")
+            # Clean up to prevent repeated processing
+            del st.session_state.final_mapping
             st.rerun()
-            
 
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
