@@ -64,13 +64,16 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                 if user_col:
                     final_df[req_col] = df_raw[user_col]
 
+            # align_data(uploaded_df, mapping, required_columns)
             st.success("Data Aligned Successfully!")
 
             # Clean up state
             del st.session_state.final_mapping
             if "trigger_mapping" in st.session_state:
                 del st.session_state.trigger_mapping
+            st.rerun()
             
+
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1

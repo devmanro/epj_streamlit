@@ -93,4 +93,5 @@ def show_mapping_dialog(uploaded_df):
 
     if st.button("Confirm and Import", type="primary", use_container_width=True):
         st.session_state.final_mapping = mapping
-        st.rerun()
+
+        
