@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
 import os 
-from assets.constants.constants import DB_PATH,COLUMNS
+from assets.constants.constants import DB_PATH , COLUMNS
+
 
  
- def getDB():
-    
- # 1. Check if the database file exists
+def getDB():
+    # 1. Check if the database file exists
     dir_name = os.path.dirname(DB_PATH)
     if not os.path.exists(dir_name):
         st.info(f"Database file creation at: {DB_PATH}")
