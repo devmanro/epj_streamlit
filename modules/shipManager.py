@@ -18,7 +18,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         key="file_uploader_widget"
     )
 
-    if uploaded_file and not st.session_state.get("trigger_mapping", False): 
+    if uploaded_file and not st.session_state.get("mapping_shown", False):
         filename = uploaded_file.name
         # Handle JSON conversion
         if uploaded_file.name.endswith('.json'):
