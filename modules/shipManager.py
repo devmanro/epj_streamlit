@@ -32,6 +32,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
+        st.session_state.trigger_mapping = True
         
 
     # 2. List and Select Files
@@ -49,7 +50,9 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # Load Data
         df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
 
-        show_mapping_dialog(df_raw)
+        # TRIGGER DIALOG ONLY ON NEW UPLOAD
+        if st.session_state.get("trigger_mapping"):
+            show_mapping_dialog(df_raw)
 
         # Process data if mapping is confirmed
         if "final_mapping" in st.session_state:
