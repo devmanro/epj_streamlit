@@ -67,11 +67,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # align_data(uploaded_df, mapping, required_columns)
             st.success("Data Aligned Successfully!")
 
-            # Clean up state
-            del st.session_state.final_mapping
-            st.session_state.trigger_mapping = False
-            if "trigger_mapping" in st.session_state:
-                del st.session_state.trigger_mapping
+           
             st.rerun()
             
 
