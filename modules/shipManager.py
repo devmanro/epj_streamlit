@@ -60,15 +60,13 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             for req_col, user_col in mapping.items():
                 if user_col:
                     final_df[req_col] = df_raw[user_col]
-                    
-            st.success("Data Aligned Successfully!")
-            st.dataframe(final_df)
-            
-            # Clear mapping after use
-            if st.button("Clear Import"):
-                del st.session_state.final_mapping
-                st.rerun()
 
+            st.success("Data Aligned Successfully!")
+
+            # Clear mapping after use
+            del st.session_state.final_mapping
+            
+            
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
