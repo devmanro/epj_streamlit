@@ -51,11 +51,13 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
 
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
-        if st.session_state.get("trigger_mapping"):
+        if st.session_state.get("trigger_mapping", False):
+
             show_mapping_dialog(df_raw)
 
         # Process data if mapping is confirmed
-        if "final_mapping" in st.session_state:
+        # if "final_mapping" in st.session_state:
+        if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
             
             # # Create aligned dataframe
@@ -67,7 +69,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # align_data(uploaded_df, mapping, required_columns)
             st.success("Data Aligned Successfully!   ....---------")
             # Clean up to prevent repeated processing
-            del st.session_state.final_mapping
+            st.session_state.final_mapping = False
+            st.session_state.trigger_mapping = False  # Clear the trigger
             st.rerun()
 
         # CRUD Operations
