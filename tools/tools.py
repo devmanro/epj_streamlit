@@ -70,7 +70,7 @@ def align_data(uploaded_df, mapping, required_columns):
 @st.dialog("Map Your Columns")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
-    
+    st.session_state.trigger_mapping = False 
     mapping = {}
     # Define how many mapping boxes you want per row
     COLS_PER_ROW = 3 
@@ -97,8 +97,7 @@ def show_mapping_dialog(uploaded_df):
     if st.button("Confirm and Import", type="primary", use_container_width=True):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
-        st.session_state.trigger_mapping = False 
-        
+        st.session_state.mapping_shown = True
+      
         # 2. Force a rerun to close the dialog and update the main app
-        st.rerun()
-        
+        st.rerun()        

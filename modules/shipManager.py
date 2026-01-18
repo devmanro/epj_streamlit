@@ -18,9 +18,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         key="file_uploader_widget"
     )
 
-    if uploaded_file and not st.session_state.get("final_mapping", False):
-    # if uploaded_file and not st.session_state.get("mapping_shown", False):
-        st.session_state.mapping_shown = True
+    # if uploaded_file and not st.session_state.get("final_mapping", False):
+    if uploaded_file and not st.session_state.get("mapping_shown", False):
         filename = uploaded_file.name
         # Handle JSON conversion
         if uploaded_file.name.endswith('.json'):
@@ -34,7 +33,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
+
+        st.session_state.mapping_shown = True
         st.session_state.trigger_mapping = True
+        st.session_state.file_uploader_widget = None
         
     # 2. List and Select Files
     files = os.listdir(upload_dir)
@@ -67,6 +69,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             #         final_df[req_col] = df_raw[user_col]
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
+            
             if success:
                 st.success("Data Aligned Successfully!")
             else:
