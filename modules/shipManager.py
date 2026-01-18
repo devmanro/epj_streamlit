@@ -9,7 +9,7 @@ from tools.tools import getDB ,align_data ,create_mapping_ui,show_mapping_dialog
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
 def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
     st.subheader("📂 Single Ship Operations")
-    
+    st.session_state.uploader_key = 0
     # 1. Upload Logic
     uploaded_file = st.file_uploader(
         "Upload XLSX/CSV/JSON Ship Data",
