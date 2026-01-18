@@ -15,7 +15,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         "Upload XLSX/CSV/JSON Ship Data",
         type=["xlsx", "csv", "json"], # Added json
         on_change=clear_downloads_func,
-        key="file_uploader_widget"
+        key=f"uploader_{st.session_state.uploader_key}"
     )
 
     # if uploaded_file and not st.session_state.get("final_mapping", False):
@@ -36,7 +36,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         st.session_state.mapping_shown = True
         st.session_state.trigger_mapping = True
-        st.session_state.file_uploader_widget = None
+        st.session_state.uploader_key = 1
         
     # 2. List and Select Files
     files = os.listdir(upload_dir)
@@ -69,7 +69,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             #         final_df[req_col] = df_raw[user_col]
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
-            
+
             if success:
                 st.success("Data Aligned Successfully!")
             else:

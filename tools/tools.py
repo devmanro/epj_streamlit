@@ -70,7 +70,8 @@ def align_data(uploaded_df, mapping, required_columns):
 @st.dialog("Map Your Columns")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
-    st.session_state.trigger_mapping = False 
+    st.session_state.trigger_mapping = False
+    st.session_state.uploader_key = 0
     mapping = {}
     # Define how many mapping boxes you want per row
     COLS_PER_ROW = 3 
