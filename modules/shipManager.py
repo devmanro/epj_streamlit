@@ -66,8 +66,12 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             #     if user_col:
             #         final_df[req_col] = df_raw[user_col]
 
-            # align_data(uploaded_df, mapping, required_columns)
-            st.success("Data Aligned Successfully!   ....---------")
+            df_raw, success=align_data(df_raw, mapping, COLUMNS)
+            if success:
+                st.success("Data Aligned Successfully!")
+            else:
+                st.error("Alignment failed. Keeping original data format.")
+
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger

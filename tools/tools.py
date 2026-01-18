@@ -49,19 +49,22 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 
 
 def align_data(uploaded_df, mapping, required_columns):
-    # 1. Create a new dataframe with the correct headings
-    processed_df = pd.DataFrame(columns=required_columns)
-    
-    for req_col, user_col in mapping.items():
-        if user_col:
+    try:
+        # 1. Create a new dataframe with the correct headings
+        processed_df = pd.DataFrame(columns=required_columns)
+        
+        for req_col, user_col in mapping.items():
+            if user_col in uploaded_df.columns:
             # Move data from uploaded column to the required column
-            processed_df[req_col] = uploaded_df[user_col]
-        else:
+                processed_df[req_col] = uploaded_df[user_col]
+            else:
             # Fill with empty values if no match was selected
-            processed_df[req_col] = None
-            
-    return processed_df
-
+                processed_df[req_col] = None
+        
+        return processed_df, True # Success
+    except Exception as e:
+        print(f"Alignment failed: {e}")
+        return uploaded_df, False # Return original on failure
 
 
 @st.dialog("Map Your Columns")
