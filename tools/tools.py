@@ -93,6 +93,11 @@ def show_mapping_dialog(uploaded_df):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
         st.session_state.mapping_shown = True
-      
+        # Print to the terminal window
+        print("-" * 20)
+        print("FINAL MAPPING CAPTURED:")
+        print(mapping)
+        print("-" * 20)
+        
         # 2. Force a rerun to close the dialog and update the main app
         st.rerun()        
