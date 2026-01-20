@@ -29,9 +29,6 @@ def getDB():
         return NULL
 
 
-
-
-
 def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
     st.write("### Map Imported Columns to Database Columns")
     mapping = {}

@@ -61,7 +61,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # if "final_mapping" in st.session_state:
         if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
-            
+            st.success(f"alignement ")
             # # Create aligned dataframe
             # final_df = pd.DataFrame(columns=COLUMNS)
             # for req_col, user_col in mapping.items():
