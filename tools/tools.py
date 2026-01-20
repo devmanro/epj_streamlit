@@ -45,9 +45,6 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
         )
     return mapping
 
-
-
-
 def align_data(uploaded_df, mapping, required_columns):
     try:
         # 1. Create a new dataframe with the correct headings

@@ -68,7 +68,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             #     if user_col:
             #         final_df[req_col] = df_raw[user_col]
 
-            df_raw, success=align_data(df_raw, mapping, COLUMNS)
+            molded_df, success=align_data(df_raw, mapping, COLUMNS)
 
             if success:
                 st.success("Data Aligned Successfully!")
@@ -84,7 +84,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(
-            df_raw,
+            molded_df,
             num_rows="dynamic",
             key="single_file_editor",
             use_container_width=True,
