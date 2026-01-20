@@ -58,6 +58,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             show_mapping_dialog(df_raw) 
 
         # Process data if mapping is confirmed
+        print(st.session_state.final_mapping)
         # if "final_mapping" in st.session_state:
         if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
