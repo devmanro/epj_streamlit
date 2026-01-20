@@ -52,7 +52,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # Load Data
         df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
-
+        molded_df=None
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
         if st.session_state.get("trigger_mapping", False):
             show_mapping_dialog(df_raw) 
@@ -79,7 +79,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
             st.rerun()
-
+        
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
