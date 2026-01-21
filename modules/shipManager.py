@@ -53,23 +53,20 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # Load Data
         df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
         molded_df=None
+
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
         if st.session_state.get("trigger_mapping", False):
             show_mapping_dialog(df_raw) 
 
         # Process data if mapping is confirmed
-        
-        # if "final_mapping" in st.session_state:
-        if st.session_state.get("final_mapping",False):
+
+        if "final_mapping" in st.session_state:
+        # if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
             st.success(f"alignement ")
-            # # Create aligned dataframe
-            # final_df = pd.DataFrame(columns=COLUMNS)
-            # for req_col, user_col in mapping.items():
-            #     if user_col:
-            #         final_df[req_col] = df_raw[user_col]
+           
 
-            molded_df, success=align_data(df_raw, mapping, COLUMNS)
+            df_raw, success=align_data(df_raw, mapping, COLUMNS)
 
             if success:
                 st.success("Data Aligned Successfully!")
@@ -85,7 +82,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(
-            molded_df,
+            df_raw,
             num_rows="dynamic",
             key="single_file_editor",
             use_container_width=True,
