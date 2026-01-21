@@ -155,7 +155,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         with col5:
             c1, c2 = st.columns([1,2])
             with c1:
-                confirm_delete = st.checkbox("", key="check_del")
+                confirm_delete = st.checkbox("Confirmer la suppression", key="check_del", label_visibility="collapsed")
             with c2:
                 if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
                     try:
