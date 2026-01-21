@@ -67,7 +67,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
            
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
-
+            print("First row of df_raw:")
+            print(df_raw.head(1))
             if success:
                 st.success("Data Aligned Successfully!")
             else:
