@@ -63,7 +63,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         if "final_mapping" in st.session_state:
         # if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
-            st.success(f"alignement ")
+            st.success(f"final_mapping exist ")
            
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
@@ -77,7 +77,9 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
             st.rerun()
-        
+        else:
+            st.error(f"final_mapping n'est pas encore défini ")
+            
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
@@ -85,7 +87,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             df_raw,
             num_rows="dynamic",
             key="single_file_editor",
-            use_container_width=True,
+            width='stretch',
             column_config={
                 "_index": st.column_config.CheckboxColumn("Select")
             },

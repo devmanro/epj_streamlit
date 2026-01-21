@@ -44,13 +44,13 @@ def render_global_manager():
     
     # edited_df = st.data_editor(
     #     filtered_df,
-    #     use_container_width=True,
+    #     width='stretch',
     #     num_rows="dynamic",
     #     key="global_db_editor"
     # )
     edited_df = st.data_editor(
             filtered_df,
-            use_container_width=True,
+            width='stretch',
             num_rows="dynamic",
             key="global_db_editor",
             column_config={

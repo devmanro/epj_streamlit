@@ -89,7 +89,7 @@ def show_mapping_dialog(uploaded_df):
                         label_visibility="collapsed" # Hide label to save space
                     )
 
-    if st.button("Confirm and Import", type="primary", use_container_width=True):
+    if st.button("Confirm and Import", type="primary", width='stretch'):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
         st.session_state.mapping_shown = True

@@ -248,7 +248,7 @@ def show_map():
             edited_df = st.data_editor(
                 display_df[final_cols],
                 num_rows="dynamic",
-                use_container_width=True,
+                width='stretch',
                 key="table_editor_v2",
                 disabled=['Icon', 'Dock', 'Berth', 'Zone', 'item_id'],
                 hide_index=True
@@ -380,7 +380,7 @@ def show_map():
                 # )
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             if not df_viz.empty:
                 # 5. Summary Table for View Mode  -----------
@@ -398,7 +398,7 @@ def show_map():
                         'client', 'type', 'qty', 'size', 'item_id']
 
                 st.dataframe(
-                    df_viz[cols], use_container_width=True, hide_index=True)
+                    df_viz[cols], width='stretch', hide_index=True)
 
             else:
                 st.warning(

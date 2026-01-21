@@ -115,7 +115,7 @@ elif choice == "Port Map":
     # fig.update_xaxes(showgrid=False, range=[0, 1000])
     # fig.update_yaxes(showgrid=False, range=[0, 500])
 
-    # st.plotly_chart(fig, use_container_width=True)
+    # st.plotly_chart(fig, width='stretch')
 
     st.write("### Manage Positions")
     # Add form here to update x, y coordinates for specific ships

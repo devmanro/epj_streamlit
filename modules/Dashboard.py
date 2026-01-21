@@ -38,7 +38,7 @@ def show_details_popup(title, df):
     st.subheader(f"{title}")
     st.dataframe(
         df, 
-        use_container_width=True, 
+        width='stretch', 
         hide_index=True,
         column_config={
             "Stopover": st.column_config.TextColumn("Stopover ID", help="Unique Stopover Number"),
@@ -73,17 +73,17 @@ def dashboard():
     
     with col_m1:
         st.metric("Ships in Port", f"{len(port_data['ships_in_port'])}", delta="Active")
-        if st.button("🔍 View In-Port List", use_container_width=True):
+        if st.button("🔍 View In-Port List", width='stretch'):
             show_details_popup("Ships Currently in Port", pd.DataFrame(port_data["ships_in_port"]))
 
     with col_m2:
         st.metric("At Anchor", f"{len(port_data['ships_at_anchor'])}", delta="-1 vs yesterday", delta_color="inverse")
-        if st.button("⚓ View Anchor List", use_container_width=True):
+        if st.button("⚓ View Anchor List", width='stretch'):
             show_details_popup("Ships at Anchor", pd.DataFrame(port_data["ships_at_anchor"]))
 
     with col_m3:
         st.metric("Expected", f"{len(port_data['ships_expected'])}", delta="+2 New")
-        if st.button("📅 View Expected List", use_container_width=True):
+        if st.button("📅 View Expected List", width='stretch'):
             show_details_popup("Expected Arrivals", pd.DataFrame(port_data["ships_expected"]))
 
     st.divider()
@@ -95,7 +95,7 @@ def dashboard():
         st.subheader("⬇️ Débarquement (Landing)")
         df_land = pd.DataFrame(port_data["landing_ops"])
         if not df_land.empty:
-            st.dataframe(df_land, use_container_width=True, hide_index=True,
+            st.dataframe(df_land, width='stretch', hide_index=True,
                 column_config={"Progress": st.column_config.ProgressColumn("Status", format="%d%%", min_value=0, max_value=100)})
         else:
             st.info("No landing operations active.")
@@ -104,7 +104,7 @@ def dashboard():
         st.subheader("⬆️ Embarquement (Loading)")
         df_load = pd.DataFrame(port_data["loading_ops"])
         if not df_load.empty:
-            st.dataframe(df_load, use_container_width=True, hide_index=True,
+            st.dataframe(df_load, width='stretch', hide_index=True,
                 column_config={"Progress": st.column_config.ProgressColumn("Status", format="%d%%", min_value=0, max_value=100)})
         else:
             st.info("No loading operations active.")
@@ -117,7 +117,7 @@ def dashboard():
     with t1:
         st.caption("Daily Tonnage Movements")
         fig = px.bar(get_cargo_metrics(), x="Date", y="Tonnage", color="Type", barmode="group", color_discrete_sequence=["#FFD700", "#1f77b4"])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with t2:
         c1, c2 = st.columns(2)

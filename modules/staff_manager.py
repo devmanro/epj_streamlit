@@ -73,7 +73,7 @@ def staff_m():
         edited_history = st.data_editor(
             filtered_df,
             num_rows="fixed",
-            use_container_width=True,
+            width='stretch',
             key="history_editor",
             disabled=["Date", "Shift"] # Lock key columns if desired
         )
@@ -151,7 +151,7 @@ def staff_m():
                 edited_stage = st.data_editor(
                     st.session_state["new_shift_stage"],
                     num_rows="dynamic",
-                    use_container_width=True,
+                    width='stretch',
                     key="stage_editor"
                 )
                 
