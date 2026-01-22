@@ -45,10 +45,6 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 def align_data(uploaded_df, mapping, required_columns):
     try:
 
-        st.write("mapped CAPTURED:--------------")
-        st.error(mapping)
-        st.write("mapped CAPTURED:--------------")
-
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
         st.write("mapped CAPTURED:")
@@ -56,13 +52,14 @@ def align_data(uploaded_df, mapping, required_columns):
 
         # Check if all required columns are present after remapping
         min_columns = [col for col in required_columns if col  in df_mapped.columns]
-        if min_columns < 2 : 
+        if len(min_columns) < 2 : 
             # st.write("FINAL MAPPING CAPTURED:")
             # st.error(missing_columns)
             return uploaded_df, False  # Return original DataFrame if required columns are missing
 
         # Keep only the required columns
         df_aligned = df_mapped[required_columns]
+        st.info(df_mapped)
         st.write("only required columns: kept")
 
         return df_aligned, True

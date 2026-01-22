@@ -72,7 +72,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
-            st.error(df_raw)
+            
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
