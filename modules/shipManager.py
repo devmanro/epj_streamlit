@@ -64,16 +64,15 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
             st.success(f"final_mapping exist ")
-           
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
-            
+
             if success:
                 st.success("Data Aligned Successfully!")
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
-            st.error(df_raw.head(1))
+            st.error(df_raw)
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger

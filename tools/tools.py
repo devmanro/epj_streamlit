@@ -44,20 +44,29 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 
 def align_data(uploaded_df, mapping, required_columns):
     try:
+
+        st.write("mapped CAPTURED:--------------")
+        st.error(mapping)
+        st.write("mapped CAPTURED:--------------")
+
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
+        st.write("mapped CAPTURED:")
+        st.info(df_mapped)
 
         # Check if all required columns are present after remapping
-        missing_columns = [col for col in required_columns if col not in df_mapped.columns]
-        if missing_columns:
-            st.write("FINAL MAPPING CAPTURED:")
-            st.error(missing_columns)
-            return {}, False  # Return original DataFrame if required columns are missing
+        min_columns = [col for col in required_columns if col  in df_mapped.columns]
+        if min_columns < 2 : 
+            # st.write("FINAL MAPPING CAPTURED:")
+            # st.error(missing_columns)
+            return uploaded_df, False  # Return original DataFrame if required columns are missing
 
         # Keep only the required columns
         df_aligned = df_mapped[required_columns]
+        st.write("only required columns: kept")
 
         return df_aligned, True
+    
     except Exception as e:
         print(f"Error during alignment: {e}")
         return uploaded_df, False
@@ -96,10 +105,7 @@ def show_mapping_dialog(uploaded_df):
         st.session_state.final_mapping = mapping
         st.session_state.mapping_shown = True
         # Print to the terminal window
-        print("-" * 20)
-        print("FINAL MAPPING CAPTURED:")
-        print(mapping)
-        print("-" * 20)
+     
         
         # 2. Force a rerun to close the dialog and update the main app
         st.rerun()        
