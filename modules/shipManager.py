@@ -67,17 +67,17 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
            
 
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
-            print("First row of df_raw:")
-            print(df_raw.head(1))
+            
             if success:
                 st.success("Data Aligned Successfully!")
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
+            st.error(df_raw.head(1))
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
-            st.rerun()
+            # st.rerun()
         else:
             st.error(f"final_mapping n'est pas encore défini ")
             

@@ -50,7 +50,9 @@ def align_data(uploaded_df, mapping, required_columns):
         # Check if all required columns are present after remapping
         missing_columns = [col for col in required_columns if col not in df_mapped.columns]
         if missing_columns:
-            return uploaded_df, False  # Return original DataFrame if required columns are missing
+            st.write("FINAL MAPPING CAPTURED:")
+            st.error(missing_columns)
+            return {}, False  # Return original DataFrame if required columns are missing
 
         # Keep only the required columns
         df_aligned = df_mapped[required_columns]
