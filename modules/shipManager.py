@@ -10,6 +10,8 @@ from tools.tools import getDB ,align_data ,create_mapping_ui,show_mapping_dialog
 def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
     st.subheader("📂 Single Ship Operations")
     st.session_state.uploader_key = 0
+    st.session_state.selected_file= None
+
     # 1. Upload Logic
     uploaded_file = st.file_uploader(
         "Upload XLSX/CSV/JSON Ship Data",
@@ -28,12 +30,14 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # Convert JSON to Excel using your helper
             excel_path = gen_excel(uploaded_file, save_path,st_upload=True)
             st.success(f"JSON converted and saved as: {excel_name}")
+            st.session_state.selected_file = excel_name
         else:
             save_path = os.path.join(upload_dir, filename)
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
-
+            st.session_state.selected_file = filename 
+        
         st.session_state.mapping_shown = True
         st.session_state.trigger_mapping = True
         st.session_state.uploader_key = 1
@@ -41,17 +45,17 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
     # 2. List and Select Files
     files = os.listdir(upload_dir)
     if files:
-        selected_file = st.selectbox(
+        st.session_state.selected_file = st.selectbox(
             "Select a ship file to operate on:",
             files,
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
 
-        file_path = os.path.join(upload_dir, selected_file)
+        file_path = os.path.join(upload_dir, st.session_state.selected_file)
 
         # Load Data
-        df_raw = pd.read_excel(file_path) if selected_file.endswith('.xlsx') else pd.read_csv(file_path)
+        df_raw = pd.read_excel(file_path) if st.session_state.selected_file.endswith('.xlsx') else pd.read_csv(file_path)
         molded_df=None
 
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
@@ -80,7 +84,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         #     st.error(f"final_mapping n'est pas encore défini ")
             
         # CRUD Operations
-        st.write(f"**Editing:** `{selected_file}`")
+        st.write(f"**Editing:** `{st.session_state.selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(
             df_raw,
@@ -159,7 +163,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                 if st.button("🗑️ Delete", key="btn_delete", type="secondary", disabled=not confirm_delete):
                     try:
                         os.remove(file_path)
-                        st.toast(f"Deleted {selected_file}")
+                        st.toast(f"Deleted {st.session_state.selected_file}")
                         clear_downloads_func()
                         st.rerun()
                     except Exception as e:

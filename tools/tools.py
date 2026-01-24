@@ -102,6 +102,5 @@ def show_mapping_dialog(uploaded_df):
         st.session_state.mapping_shown = True
         # Print to the terminal window
      
-        
         # 2. Force a rerun to close the dialog and update the main app
         st.rerun()        
