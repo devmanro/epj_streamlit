@@ -60,25 +60,24 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # Process data if mapping is confirmed
 
-        if "final_mapping" in st.session_state:
-        # if st.session_state.get("final_mapping",False):
+        # if "final_mapping" in st.session_state:
+        if st.session_state.get("final_mapping",False):
             mapping = st.session_state.final_mapping
-            st.success(f"final_mapping exist ")
-
+            
             df_raw, success=align_data(df_raw, mapping, COLUMNS)
 
             if success:
                 st.success("Data Aligned Successfully!")
+                df_raw = df_raw.reindex(columns=COLUMNS)
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
-            
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
             st.session_state.trigger_mapping = False  # Clear the trigger
             # st.rerun()
-        else:
-            st.error(f"final_mapping n'est pas encore défini ")
+        # else:
+        #     st.error(f"final_mapping n'est pas encore défini ")
             
         # CRUD Operations
         st.write(f"**Editing:** `{selected_file}`")

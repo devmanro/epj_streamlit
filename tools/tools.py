@@ -1,10 +1,10 @@
+from pyarrow import null
 import streamlit as st
 import pandas as pd
 import os 
 from assets.constants.constants import DB_PATH , COLUMNS
 
 
- 
 def getDB():
     # 1. Check if the database file exists
     dir_name = os.path.dirname(DB_PATH)
@@ -26,8 +26,7 @@ def getDB():
         return df
     except Exception as e:
         st.error(f"Error reading database: {e}")
-        return NULL
-
+        return null
 
 def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
     st.write("### Map Imported Columns to Database Columns")
@@ -44,23 +43,20 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 
 def align_data(uploaded_df, mapping, required_columns):
     try:
+        # st.write("mappe*ing:")
+        valid_mappings_count = sum(1 for value in mapping.values() if value is not None)
+     
+        if valid_mappings_count <= 2 : 
+            return uploaded_df, False  # Return original DataFrame if required columns are missing
 
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
-        st.write("mapped CAPTURED:")
-        st.info(df_mapped)
 
-        # Check if all required columns are present after remapping
-        min_columns = [col for col in required_columns if col  in df_mapped.columns]
-        if len(min_columns) < 2 : 
-            # st.write("FINAL MAPPING CAPTURED:")
-            # st.error(missing_columns)
-            return uploaded_df, False  # Return original DataFrame if required columns are missing
+        final_cols = [value for key, value in mapping.items() if value is not None]
 
         # Keep only the required columns
-        df_aligned = df_mapped[required_columns]
-        st.info(df_mapped)
-        st.write("only required columns: kept")
+        df_aligned = df_mapped[final_cols]
+        
 
         return df_aligned, True
     
@@ -68,15 +64,14 @@ def align_data(uploaded_df, mapping, required_columns):
         print(f"Error during alignment: {e}")
         return uploaded_df, False
 
-
-@st.dialog("Map Your Columns")
+@st.dialog("Map Your Columns", width="large")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
     st.session_state.trigger_mapping = False
     st.session_state.uploader_key = 0
     mapping = {}
     # Define how many mapping boxes you want per row
-    COLS_PER_ROW = 3 
+    COLS_PER_ROW = 4
     
     # Iterate through COLUMNS in chunks to create rows
     for i in range(0, len(COLUMNS), COLS_PER_ROW):
@@ -90,12 +85,16 @@ def show_mapping_dialog(uploaded_df):
                 # Using a container or border for better visual separation
                 with st.container(border=True):
                     st.markdown(f"**{req_col}**")
-                    mapping[req_col] = st.selectbox(
+                    
+                    selected_source_column = st.selectbox(
                         "Source column:",
                         options=[None] + list(uploaded_df.columns),
                         key=f"map_{req_col}",
                         label_visibility="collapsed" # Hide label to save space
                     )
+                    if selected_source_column: # Only add to mapping if a column was selected
+                        mapping[selected_source_column] = req_col
+                        
 
     if st.button("Confirm and Import", type="primary", width='stretch'):
         # 1. Clear the trigger immediately so it doesn't re-open
