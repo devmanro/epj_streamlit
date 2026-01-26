@@ -73,10 +73,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             if success:
                 st.success("Data Aligned Successfully!")
                 df_raw = df_raw.reindex(columns=COLUMNS)
-                df_aligned = df_aligned.reindex(columns=COLUMNS)
-
                 # Save the aligned DataFrame to the original file path
-                df_aligned.to_excel(save_path, index=False)
+                df_raw.to_excel(save_path, index=False)
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
