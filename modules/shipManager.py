@@ -73,6 +73,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             if success:
                 st.success("Data Aligned Successfully!")
                 df_raw = df_raw.reindex(columns=COLUMNS)
+                df_aligned = df_aligned.reindex(columns=COLUMNS)
+
+                # Save the aligned DataFrame to the original file path
+                df_aligned.to_excel(save_path, index=False)
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
@@ -95,16 +99,19 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                 "_index": st.column_config.CheckboxColumn("Select")
             },
         )
+        
 
         col1, col2, col3, col4, col5 = st.columns(5)
 
         # --- SAVE CHANGES ---
         if col1.button("💾 Save Changes", key="btn_save"):
             # 2. Merge with Global DB
-            edited_df.to_excel(file_path, index=False)
+            # edited_df = edited_df.reindex(columns=COLUMNS)
+            # edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
 
             global_db = getDB()
+            global_db = global_db.reindex(columns=COLUMNS)
             # Combine current edited data with the master database
             updated_global = pd.concat([global_db, edited_df], ignore_index=True)
             
