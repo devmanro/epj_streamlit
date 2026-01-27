@@ -53,9 +53,6 @@
                 st.success("Sync Complete!")
                 st.rerun()
 -----------------------------
-
-
-
         if st.session_state.mapping_shown:
                 # df_raw will be the uploaded dataframe after mapping
                 df_raw, success = align_data(df_raw, st.session_state.final_mapping, COLUMNS)

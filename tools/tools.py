@@ -49,6 +49,7 @@ def align_data(uploaded_df, mapping, required_columns):
         if valid_mappings_count <= 2 : 
             return uploaded_df, False  # Return original DataFrame if required columns are missing
 
+
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
 
@@ -68,7 +69,10 @@ def align_data(uploaded_df, mapping, required_columns):
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
     st.session_state.trigger_mapping = False
-    st.session_state.uploader_key = 0
+
+    
+    st.info(list(uploaded_df.columns))
+    
     mapping = {}
     # Define how many mapping boxes you want per row
     COLS_PER_ROW = 4
@@ -100,8 +104,8 @@ def show_mapping_dialog(uploaded_df):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
         st.session_state.mapping_shown = True
+        st.session_state.uploaded_file=None
         # Print to the terminal window
      
-        
         # 2. Force a rerun to close the dialog and update the main app
         st.rerun()        
