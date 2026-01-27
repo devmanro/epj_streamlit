@@ -56,8 +56,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         if st.session_state.uploaded_file and st.session_state.selected_file in files:
             default_index = files.index(st.session_state.selected_file)
         
+        
         st.toast(f" {st.session_state.selected_file}")
-
         st.session_state.selected_file = st.selectbox(
             "Select a ship file to operate on:",
             files,
