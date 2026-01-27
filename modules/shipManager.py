@@ -5,49 +5,63 @@ from modules.json_to_excel import extract_to_excel_flattened as gen_excel
 from assets.constants.constants import DB_PATH,COLUMNS
 from tools.tools import getDB ,align_data ,create_mapping_ui,show_mapping_dialog
 
-
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
 def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
+
     st.subheader("📂 Single Ship Operations")
-    st.session_state.uploader_key = 0
-    st.session_state.selected_file= None
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+    if "selected_file" not in st.session_state:
+        st.session_state.selected_file = None
 
     # 1. Upload Logic
-    uploaded_file = st.file_uploader(
+    st.session_state.uploaded_file = st.file_uploader(
         "Upload XLSX/CSV/JSON Ship Data",
         type=["xlsx", "csv", "json"], # Added json
         on_change=clear_downloads_func,
         key=f"uploader_{st.session_state.uploader_key}"
     )
 
-    # if uploaded_file and not st.session_state.get("final_mapping", False):
-    if uploaded_file and not st.session_state.get("mapping_shown", False):
-        filename = uploaded_file.name
+    if st.session_state.uploaded_file and not st.session_state.get("final_mapping", False):
+    # if st.session_state.uploaded_file and not st.session_state.uploaded_file_processed:
+    # if uploaded_file and not st.session_state.get("mapping_shown", False):
+        filename = st.session_state.uploaded_file.name
         # Handle JSON conversion
-        if uploaded_file.name.endswith('.json'):
+        if st.session_state.uploaded_file.name.endswith('.json'):
             excel_name = filename.replace('.json', '.xlsx')
             save_path = os.path.join(upload_dir, excel_name)
             # Convert JSON to Excel using your helper
-            excel_path = gen_excel(uploaded_file, save_path,st_upload=True)
+            excel_path = gen_excel(st.session_state.uploaded_file, save_path,st_upload=True)
             st.success(f"JSON converted and saved as: {excel_name}")
             st.session_state.selected_file = excel_name
         else:
             save_path = os.path.join(upload_dir, filename)
             with open(save_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+                f.write(st.session_state.uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
             st.session_state.selected_file = filename 
         
         st.session_state.mapping_shown = True
         st.session_state.trigger_mapping = True
-        st.session_state.uploader_key = 1
+        st.session_state.uploader_key += 1
+        st.session_state.uploaded_file = None # Reset uploader
         
+    
+    
     # 2. List and Select Files
     files = os.listdir(upload_dir)
     if files:
+
+        default_index = 0
+        if st.session_state.uploaded_file and st.session_state.selected_file in files:
+            default_index = files.index(st.session_state.selected_file)
+        
+        st.toast(f" {st.session_state.selected_file}")
+
         st.session_state.selected_file = st.selectbox(
             "Select a ship file to operate on:",
             files,
+            index=default_index,
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
@@ -56,7 +70,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # Load Data
         df_raw = pd.read_excel(file_path) if st.session_state.selected_file.endswith('.xlsx') else pd.read_csv(file_path)
-        molded_df=None
+        molded_df=df_raw
 
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
         if st.session_state.get("trigger_mapping", False):
@@ -66,15 +80,16 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         # if "final_mapping" in st.session_state:
         if st.session_state.get("final_mapping",False):
+          
             mapping = st.session_state.final_mapping
-            
-            df_raw, success=align_data(df_raw, mapping, COLUMNS)
 
+            molded_df, success=align_data(df_raw, mapping, COLUMNS)
+            
             if success:
                 st.success("Data Aligned Successfully!")
-                df_raw = df_raw.reindex(columns=COLUMNS)
+                molded_df = molded_df.reindex(columns=COLUMNS)
                 # Save the aligned DataFrame to the original file path
-                df_raw.to_excel(save_path, index=False)
+                molded_df.to_excel(file_path, index=False)
             else:
                 st.error("Alignment failed. Keeping original data format.")
 
@@ -84,12 +99,14 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # st.rerun()
         # else:
         #     st.error(f"final_mapping n'est pas encore défini ")
-            
+        del df_raw 
+        
+
         # CRUD Operations
         st.write(f"**Editing:** `{st.session_state.selected_file}`")
         # IMPORTANT: Key must be unique from Tab 1
         edited_df = st.data_editor(
-            df_raw,
+            molded_df,
             num_rows="dynamic",
             key="single_file_editor",
             width='stretch',
@@ -97,7 +114,6 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                 "_index": st.column_config.CheckboxColumn("Select")
             },
         )
-        
 
         col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -107,6 +123,8 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # edited_df = edited_df.reindex(columns=COLUMNS)
             # edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
+          
+            st.session_state.uploaded_file = None
 
             global_db = getDB()
             global_db = global_db.reindex(columns=COLUMNS)
