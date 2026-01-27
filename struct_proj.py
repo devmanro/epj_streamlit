@@ -53,4 +53,10 @@ def create_structure():
     print("Next step: Navigate to 'logistics_app' and run 'pip install -r requirements.txt'")
 
 if __name__ == "__main__":
-    create_structure()
+    print("are you sure you want to create the project structure? (y/n) this will delete all existing files and folders in the project")
+    answer = input()
+    if answer == "y":
+        create_structure()
+    else:
+        print("exiting...")
+        exit()

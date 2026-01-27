@@ -41,7 +41,7 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
         )
     return mapping
 
-def align_data(uploaded_df, mapping, required_columns):
+def align_data(uploaded_df, mapping):
     try:
         # st.write("mappe*ing:")
         valid_mappings_count = sum(1 for value in mapping.values() if value is not None)
@@ -68,12 +68,11 @@ def align_data(uploaded_df, mapping, required_columns):
 @st.dialog("Map Your Columns", width="large")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
-    st.session_state.trigger_mapping = False
-
-    
-    st.info(list(uploaded_df.columns))
+    # st.info(list(uploaded_df.columns))
     
     mapping = {}
+    # st.session_state.trigger_mapping = False
+    st.session_state.final_mapping = mapping
     # Define how many mapping boxes you want per row
     COLS_PER_ROW = 4
     
@@ -103,7 +102,7 @@ def show_mapping_dialog(uploaded_df):
     if st.button("Confirm and Import", type="primary", width='stretch'):
         # 1. Clear the trigger immediately so it doesn't re-open
         st.session_state.final_mapping = mapping
-        st.session_state.mapping_shown = True
+        # st.session_state.mapping_shown = True
         st.session_state.uploaded_file=None
         # Print to the terminal window
      

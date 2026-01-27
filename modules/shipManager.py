@@ -11,8 +11,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
     st.subheader("📂 Single Ship Operations")
     if "uploader_key" not in st.session_state:
         st.session_state.uploader_key = 0
-    if "selected_file" not in st.session_state:
-        st.session_state.selected_file = None
+    if "inserted_file" not in st.session_state:
+        st.session_state.inserted_file = None
+    if "final_mapping" not in st.session_state:
+        st.session_state.final_mapping = {}        
 
     # 1. Upload Logic
     st.session_state.uploaded_file = st.file_uploader(
@@ -33,18 +35,18 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # Convert JSON to Excel using your helper
             excel_path = gen_excel(st.session_state.uploaded_file, save_path,st_upload=True)
             st.success(f"JSON converted and saved as: {excel_name}")
-            st.session_state.selected_file = excel_name
+            st.session_state.inserted_file = excel_name
         else:
             save_path = os.path.join(upload_dir, filename)
             with open(save_path, "wb") as f:
                 f.write(st.session_state.uploaded_file.getbuffer())
             st.success(f"Saved {filename}")
-            st.session_state.selected_file = filename 
+            st.session_state.inserted_file = filename 
         
-        st.session_state.mapping_shown = True
+        # st.session_state.mapping_shown = True
         st.session_state.trigger_mapping = True
         st.session_state.uploader_key += 1
-        st.session_state.uploaded_file = None # Reset uploader
+        
         
     
     
@@ -53,11 +55,11 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
     if files:
 
         default_index = 0
-        if st.session_state.uploaded_file and st.session_state.selected_file in files:
-            default_index = files.index(st.session_state.selected_file)
+        if st.session_state.uploaded_file and st.session_state.inserted_file in files:
+            st.session_state.uploaded_file = None # Reset uploader
+            default_index = files.index(st.session_state.inserted_file)
         
         
-        st.toast(f" {st.session_state.selected_file}")
         st.session_state.selected_file = st.selectbox(
             "Select a ship file to operate on:",
             files,
@@ -65,6 +67,7 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
+        st.toast(f" {st.session_state.selected_file}")
 
         file_path = os.path.join(upload_dir, st.session_state.selected_file)
 
@@ -73,25 +76,33 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         molded_df=df_raw
 
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
-        if st.session_state.get("trigger_mapping", False):
-            show_mapping_dialog(df_raw) 
+        # if st.session_state.get("trigger_mapping", False):
+        #     show_mapping_dialog(df_raw) 
 
         # Process data if mapping is confirmed
 
         # if "final_mapping" in st.session_state:
-        if st.session_state.get("final_mapping",False):
-          
+        if st.session_state.get("trigger_mapping",False):
+            show_mapping_dialog(df_raw) 
+            st.toast("inside final mapping")
             mapping = st.session_state.final_mapping
+            molded_df, success=align_data(df_raw, mapping)
+            st.session_state.trigger_mapping = False # clear the trigger
 
-            molded_df, success=align_data(df_raw, mapping, COLUMNS)
-            
             if success:
                 st.success("Data Aligned Successfully!")
                 molded_df = molded_df.reindex(columns=COLUMNS)
+                # delete first row that contain headers in the molded_df
+                molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
+
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
             else:
-                st.error("Alignment failed. Keeping original data format.")
+                os.remove(file_path)
+                st.toast("inside final mapping failed to align data")
+                st.error(f"Alignment failed. Keeping original data format.{file_path}")
+            # elif st.session_state.get("final_mapping",False): 
+                
 
             # Clean up to prevent repeated processing
             st.session_state.final_mapping = False
