@@ -110,3 +110,19 @@
                     st.rerun() # Rerun to refresh the app state
                 else:
                     st.error("Could not load existing database to save data.")
+
+
+
+
+
+                     if st.session_state.brd_generated_path:
+            st.divider()
+            with open(st.session_state.brd_generated_path, "rb") as f:
+                btn = st.download_button(
+                    label="📥 Download Generated Word Doc",
+                    data=f.read(),
+                    file_name=os.path.basename(st.session_state.brd_generated_path),
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    type="primary" # Makes the button stand out
+                )
+
