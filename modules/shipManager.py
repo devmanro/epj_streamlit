@@ -56,8 +56,9 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
 
         default_index = 0
         if st.session_state.uploaded_file and st.session_state.inserted_file in files:
-            st.session_state.uploaded_file = None # Reset uploader
+            # st.session_state.uploaded_file = None # Reset uploader
             default_index = files.index(st.session_state.inserted_file)
+            # st.session_state.inserted_file=None
         
         
         st.session_state.selected_file = st.selectbox(
@@ -68,7 +69,6 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             key="file_selector_widget"
         )
         st.toast(f" {st.session_state.selected_file}")
-
         file_path = os.path.join(upload_dir, st.session_state.selected_file)
 
         # Load Data
@@ -76,41 +76,44 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         molded_df=df_raw
 
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
-        # if st.session_state.get("trigger_mapping", False):
-        #     show_mapping_dialog(df_raw) 
+        if st.session_state.inserted_file and st.session_state.get("trigger_mapping", False):
+            show_mapping_dialog(df_raw)
 
         # Process data if mapping is confirmed
-
         # if "final_mapping" in st.session_state:
-        if st.session_state.get("trigger_mapping",False):
-            show_mapping_dialog(df_raw) 
+        # st.session_state.get("final_mapping", False)
+        len_finalmp = st.session_state.get("final_mapping", {})
+
+        if len_finalmp and st.session_state.inserted_file:
             st.toast("inside final mapping")
             mapping = st.session_state.final_mapping
             molded_df, success=align_data(df_raw, mapping)
             st.session_state.trigger_mapping = False # clear the trigger
-
+            st.session_state.inserted_file=None # clear the inserted file after processing
+            st.session_state.final_mapping = {}
+            
             if success:
                 st.success("Data Aligned Successfully!")
                 molded_df = molded_df.reindex(columns=COLUMNS)
                 # delete first row that contain headers in the molded_df
                 molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
-
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
+
+                
             else:
-                os.remove(file_path)
+                # os.remove(file_path)
                 st.toast("inside final mapping failed to align data")
                 st.error(f"Alignment failed. Keeping original data format.{file_path}")
             # elif st.session_state.get("final_mapping",False): 
                 
 
-            # Clean up to prevent repeated processing
-            st.session_state.final_mapping = False
-            st.session_state.trigger_mapping = False  # Clear the trigger
+            
+            
             # st.rerun()
         # else:
         #     st.error(f"final_mapping n'est pas encore défini ")
-        del df_raw 
+        del df_raw
         
 
         # CRUD Operations
@@ -135,7 +138,10 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
             # edited_df.to_excel(file_path, index=False)
             st.toast("File Updated!")
           
-            st.session_state.uploaded_file = None
+            st.session_state.uploaded_file = None           
+            st.session_state.trigger_mapping = False # clear the trigger
+            st.session_state.inserted_file=None # clear the inserted file after processing
+            st.session_state.final_mapping = {}
 
             global_db = getDB()
             global_db = global_db.reindex(columns=COLUMNS)
