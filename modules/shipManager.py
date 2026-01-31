@@ -82,12 +82,14 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # Process data if mapping is confirmed
         # if "final_mapping" in st.session_state:
         # st.session_state.get("final_mapping", False)
-        len_finalmp = st.session_state.get("final_mapping", {})
+        final_mp = st.session_state.get("final_mapping", {})
 
-        if len_finalmp and st.session_state.inserted_file:
+        if  st.session_state.inserted_file:
             st.toast("inside final mapping")
-            mapping = st.session_state.final_mapping
-            molded_df, success=align_data(df_raw, mapping)
+            success=False
+            if len(final_mp):
+                molded_df, success=align_data(df_raw, final_mp)
+
             st.session_state.trigger_mapping = False # clear the trigger
             st.session_state.inserted_file=None # clear the inserted file after processing
             st.session_state.final_mapping = {}
@@ -99,16 +101,14 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                 molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
-
-                
             else:
-                # os.remove(file_path)
-                st.toast("inside final mapping failed to align data")
+                os.remove(file_path)
                 st.error(f"Alignment failed. Keeping original data format.{file_path}")
-            # elif st.session_state.get("final_mapping",False): 
-                
 
-            
+            st.rerun()
+            # elif st.session_state.get("final_mapping",False): 
+        else:
+            os.remove(file_path)
             
             # st.rerun()
         # else:
