@@ -71,7 +71,7 @@ def show_mapping_dialog(uploaded_df):
     # st.info(list(uploaded_df.columns))
     
     mapping = {}
-    # st.session_state.trigger_mapping = False
+    st.session_state.trigger_mapping = False
     st.session_state.final_mapping = mapping
     # Define how many mapping boxes you want per row
     COLS_PER_ROW = 4

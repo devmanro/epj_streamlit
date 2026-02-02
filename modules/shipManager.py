@@ -74,45 +74,35 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
         # Load Data
         df_raw = pd.read_excel(file_path) if st.session_state.selected_file.endswith('.xlsx') else pd.read_csv(file_path)
         molded_df=df_raw
-
+        trigger=st.session_state.get("trigger_mapping", False)
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
-        if st.session_state.inserted_file and st.session_state.get("trigger_mapping", False):
+        if st.session_state.inserted_file and trigger:
             show_mapping_dialog(df_raw)
 
-        # Process data if mapping is confirmed
-        # if "final_mapping" in st.session_state:
-        # st.session_state.get("final_mapping", False)
         final_mp = st.session_state.get("final_mapping", {})
 
-        if  st.session_state.inserted_file:
+        if  not trigger and st.session_state.inserted_file  :
             st.toast("inside final mapping")
-            success=False
-            if len(final_mp):
-                molded_df, success=align_data(df_raw, final_mp)
-
-            st.session_state.trigger_mapping = False # clear the trigger
+            # success=False
+            molded_df, success=align_data(df_raw, final_mp)
             st.session_state.inserted_file=None # clear the inserted file after processing
-            st.session_state.final_mapping = {}
-            
-            if success:
+            st.session_state.trigger_mapping = False # clear the trigger
+
+            if len(final_mp) and success:
+            # if success :
                 st.success("Data Aligned Successfully!")
                 molded_df = molded_df.reindex(columns=COLUMNS)
                 # delete first row that contain headers in the molded_df
                 molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
+                st.session_state.final_mapping = {}
             else:
                 os.remove(file_path)
-                st.error(f"Alignment failed. Keeping original data format.{file_path}")
+                st.toast(f"no mapping arranged so file uplodade was rejected {file_path}")
+                st.rerun()
 
-            st.rerun()
-            # elif st.session_state.get("final_mapping",False): 
-        else:
-            os.remove(file_path)
-            
-            # st.rerun()
-        # else:
-        #     st.error(f"final_mapping n'est pas encore défini ")
+
         del df_raw
         
 
