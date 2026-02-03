@@ -13,13 +13,3 @@ def utilities(st):
 
 
 
-
-
-
-
-
-
-
-
-
-    

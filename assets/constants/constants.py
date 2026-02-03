@@ -1,13 +1,13 @@
-PATH_BRDX="reports/bordereaux"
-PATH_PVS="reports/pvs"
-PATH_TEMPLATES="assets/templates"
-FIXED_STAFF_PATH="assets/templates/staff_template.csv"
+PATH_BRDX = "reports/bordereaux"
+PATH_PVS = "reports/pvs"
+PATH_TEMPLATES = "assets/templates"
+FIXED_STAFF_PATH = "assets/templates/staff_template.csv"
 
 WORKFORCE_DB = "data/workforce1.xlsx"
 
 PATH_DEBRQ = "data/debarqs"
 UPLOAD_DIR = "data/uploads"
-DB_PATH="data/database.xlsx"
+DB_PATH = "data/database.xlsx"
 MAP_IMAGE_PATH = "assets/map/port_map.png"
 
 COLUMNS = [
@@ -30,5 +30,25 @@ COLUMNS = [
     "DATE ENLEV"
 ]
 
+COMMODITY_TYPES = ["CTP", "BIGBAG", "TUBE", "BOBINE",
+                   "BEAMS", "FIL MACHINE", "COIL", "OTHERS"]
 
-
+(
+    COL_NAVIRE,
+    COL_DATE,
+    COL_BL,
+    COL_DESIGNATION,
+    COL_QUANTITE,
+    COL_TONAGE,
+    COL_CLIENT,
+    COL_RESTE_TP,
+    COL_TYPE,
+    COL_SITUATION,
+    COL_OBSERVATION,
+    COL_POSITION,
+    COL_TRANSIT,
+    COL_CLES,
+    COL_SURFACE,
+    COL_DRB_TYPE,
+    COL_DATE_ENLEV,
+) = COLUMNS
