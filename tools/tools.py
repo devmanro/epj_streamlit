@@ -320,44 +320,30 @@ def _shorten_bl_code(bl: str) -> str:
 
 
 def group_sourcefile_by_client(input_excel: str, sheet_name: int | str = 0) -> pd.DataFrame:
-    """
-    - Read the Excel file.
-    - Group rows by client.
-    - Sum QUANTITE, TONAGE (and optionally VALUES).
-    - Concatenate transformed B/L codes (e.g. 'LDJD4520','LYLDJ360' -> 'JD520,DJ360').
-    """
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
 
-    # Ensure numeric columns
+    # Ensure numeric
     for col in [COL_QUANTITE, COL_TONAGE]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # OPTIONAL: if you have a VALUES column, add it here:
-    # from assets.constants.constants import COL_VALUES
-    # if COL_VALUES in df.columns:
-    #     df[COL_VALUES] = pd.to_numeric(df[COL_VALUES], errors="coerce").fillna(0)
-
-    # Build shortened B/L codes
+    # Short B/L into the same column
     if COL_BL in df.columns:
         df[COL_BL] = df[COL_BL].apply(_shorten_bl_code)
-    else:
-        df[COL_BL] = ""
 
+    # Base aggregation
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
         COL_BL: lambda s: ",".join([x for x in s if isinstance(x, str) and x]),
     }
 
-    # OPTIONAL: include VALUES in aggregation
-    # if COL_VALUES in df.columns:
-    #     agg_dict[COL_VALUES] = "sum"
+    # For all other columns, keep first non-null value
+    for col in COLUMNS:
+        if col in [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL]:
+            continue
+        if col in df.columns:
+            agg_dict[col] = lambda s: next((x for x in s if pd.notna(x)), None)
 
-    grouped = (
-        df.groupby(COL_CLIENT, as_index=False)
-        .agg(agg_dict)
-        # .rename(columns={"BL_SHORT": COL_BL})
-    )
-
+    grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
     return grouped
