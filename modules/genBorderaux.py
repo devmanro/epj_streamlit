@@ -15,8 +15,10 @@ from assets.constants.constants import (
     COL_RESTE_TP,
     # add more if you need them
 )
-from tools.tools import _compute_commodity_and_received_lines, _fill_entry_table
 
+import streamlit as st
+
+from tools.tools import _compute_commodity_and_received_lines, _fill_entry_table, group_sourcefile_by_client
 
 if not os.path.exists(PATH_BRDX):
     os.makedirs(PATH_BRDX)
@@ -33,12 +35,9 @@ def clean_excel_val(val):
 
 
 def format_entry_docx(doc, row):
-
     client = str(row.get(COL_CLIENT, "")).strip()
     # Initial commodity from excel
-
     raw_commodity = str(row.get(COL_TYPE, "")).strip().upper()
-
     # nb_colis =   0     if pd.notna(row.get("nb_colis")) else  row.get("nb_colis")
     # tonnage  =   0.0   if pd.notna(row.get("tonnage"))  else  row.get("tonnage")
     # rec_qty  =0 if pd.notna(row.get("rec_qty"))  else  row.get("rec_qty")
@@ -86,8 +85,17 @@ def format_entry_docx(doc, row):
 def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx=None):
     if not output_docx:
         return
-    df = pd.read_excel(input_excel, sheet_name=sheet_name,
-                       engine="openpyxl", header=0)
+    
+    # Accept either a path or a DataFrame
+    if isinstance(input_excel, str):
+        df = pd.read_excel(input_excel, sheet_name=sheet_name,
+                           engine="openpyxl", header=0)
+    else:
+        df = input_excel  # already a DataFrame
+
+    # df = pd.read_excel(input_excel, sheet_name=sheet_name,
+    #                    engine="openpyxl", header=0)
+
     doc = Document(template_path) if template_path else Document()
 
     style = doc.styles["Normal"]
@@ -114,7 +122,10 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     file_name_only = os.path.splitext(base_name)[0]
     output_docx = f"{PATH_BRDX}/{file_name_only}.docx"
     template_path = f"{PATH_TEMPLATES}/{template_name}"
-    excel_to_docx_custom(sourcefile, sheet_name, template_path, output_docx)
+
+    grouped_df = group_sourcefile_by_client(sourcefile)
+    st.dataframe(grouped_df)      # nicer interactive table
+    excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
     return output_docx
 
 # if __name__ == "__main__":

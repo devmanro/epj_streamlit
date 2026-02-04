@@ -1,12 +1,25 @@
-from pyarrow import null
 import streamlit as st
-import pandas as pd
+import re
 import os
+import pandas as pd
+from pyarrow import null
 
 from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
+
+
+
+from assets.constants.constants import (
+    COL_CLIENT,
+    COL_QUANTITE,
+    COL_TONAGE,
+    COL_BL,
+    # add COL_VALUES here if you have such a column name
+)
+
+
 
 from assets.constants.constants import DB_PATH, COLUMNS
 
@@ -130,7 +143,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
     received_lines = []
     total_rec_str = rec_str
 
-    if "BIG BAG" in raw_commodity:
+    if "BAG" in raw_commodity or "BIGBAG" in raw_commodity:
         commodity = "Big Bags"
         total_rec_str = f"{rec_str}  Big Bags"
         received_lines = [
@@ -289,3 +302,62 @@ def _fill_entry_table(
     p_sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_sep = p_sep.add_run("=*"*29)
     run_sep.bold = True
+
+
+
+
+def _shorten_bl_code(bl: str) -> str:
+    """
+    Take a B/L like 'LDJD4520' and return 'JD520'
+    Rule: keep the last 3 digits and the 2 letters immediately before them.
+    If pattern is not found, return the original string.
+    """
+    if bl is None:
+        return ""
+    s = str(bl).strip()
+    m = re.search(r"([A-Za-z]{2}\d{3})$", s)
+    return m.group(1) if m else s
+
+
+def group_sourcefile_by_client(input_excel: str, sheet_name: int | str = 0) -> pd.DataFrame:
+    """
+    - Read the Excel file.
+    - Group rows by client.
+    - Sum QUANTITE, TONAGE (and optionally VALUES).
+    - Concatenate transformed B/L codes (e.g. 'LDJD4520','LYLDJ360' -> 'JD520,DJ360').
+    """
+    df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
+
+    # Ensure numeric columns
+    for col in [COL_QUANTITE, COL_TONAGE]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    # OPTIONAL: if you have a VALUES column, add it here:
+    # from assets.constants.constants import COL_VALUES
+    # if COL_VALUES in df.columns:
+    #     df[COL_VALUES] = pd.to_numeric(df[COL_VALUES], errors="coerce").fillna(0)
+
+    # Build shortened B/L codes
+    if COL_BL in df.columns:
+        df[COL_BL] = df[COL_BL].apply(_shorten_bl_code)
+    else:
+        df[COL_BL] = ""
+
+    agg_dict = {
+        COL_QUANTITE: "sum",
+        COL_TONAGE: "sum",
+        COL_BL: lambda s: ",".join([x for x in s if isinstance(x, str) and x]),
+    }
+
+    # OPTIONAL: include VALUES in aggregation
+    # if COL_VALUES in df.columns:
+    #     agg_dict[COL_VALUES] = "sum"
+
+    grouped = (
+        df.groupby(COL_CLIENT, as_index=False)
+        .agg(agg_dict)
+        # .rename(columns={"BL_SHORT": COL_BL})
+    )
+
+    return grouped
