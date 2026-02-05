@@ -10,15 +10,16 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 
 
-
 from assets.constants.constants import (
     COL_CLIENT,
     COL_QUANTITE,
     COL_TONAGE,
     COL_BL,
-    # add COL_VALUES here if you have such a column name
-)
 
+    # add COL_VALUES here if you have such a column name
+    COL_TYPE,
+    COMMODITY_TYPES,
+)
 
 
 from assets.constants.constants import DB_PATH, COLUMNS
@@ -304,8 +305,6 @@ def _fill_entry_table(
     run_sep.bold = True
 
 
-
-
 def _shorten_bl_code(bl: str) -> str:
     """
     Take a B/L like 'LDJD4520' and return 'JD520'
@@ -319,8 +318,19 @@ def _shorten_bl_code(bl: str) -> str:
     return m.group(1) if m else s
 
 
-def group_sourcefile_by_client(input_excel: str, sheet_name: int | str = 0) -> pd.DataFrame:
+def group_sourcefile_by_client(
+    input_excel: str,
+    sheet_name: int | str = 0,
+    skip_unknown_commodities: bool = False,
+) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
+
+    # --- Skip rows with unknown / unwanted TYPE before grouping ---
+    if skip_unknown_commodities and COL_TYPE in df.columns:
+        df = df[
+            df[COL_TYPE].isin(COMMODITY_TYPES) &  # only known types
+            (df[COL_TYPE] != "OTHERS")           # but not "OTHERS"
+        ]
 
     # Ensure numeric
     for col in [COL_QUANTITE, COL_TONAGE]:
@@ -339,11 +349,15 @@ def group_sourcefile_by_client(input_excel: str, sheet_name: int | str = 0) -> p
     }
 
     # For all other columns, keep first non-null value
+    # Fix: Use a helper function to avoid closure issues
+    def first_non_null(series):
+        return next((x for x in series if pd.notna(x)), None)
+
     for col in COLUMNS:
         if col in [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL]:
             continue
         if col in df.columns:
-            agg_dict[col] = lambda s: next((x for x in s if pd.notna(x)), None)
+            agg_dict[col] = first_non_null
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
     return grouped

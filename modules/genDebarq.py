@@ -12,6 +12,7 @@ from assets.constants.constants import (
     COL_QUANTITE,
     COL_BL,
 )
+from tools.tools import group_sourcefile_by_client
 
 
 def get_manual_color(product_name):
@@ -244,6 +245,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
 
 def gen_table(filepath=None):
+
     # --- MAIN EXECUTION ---
     if not filepath:
         return False
@@ -251,7 +253,16 @@ def gen_table(filepath=None):
     base_name = os.path.basename(filepath)
     file_name_only = os.path.splitext(base_name)[0]
 
-    source_df = pd.read_excel(filepath)
+    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=True)
+    
+    # Accept either a path or a DataFrame
+    # if isinstance(filepath, str):
+    #     # df = pd.read_excel(input_excel, sheet_name=sheet_name,
+    #     #                    engine="openpyxl", header=0)
+    #     df = pd.read_excel(filepath)
+    # else:
+    #     df = filepath  # already a DataFrame
+
 
     # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
