@@ -15,7 +15,7 @@ from modules.Dashboard import  dashboard
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
-
+from modules.Bl_tracking import render_bl_tracking
 # from modules.genPvs import generate_pv
 
 # st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
@@ -66,7 +66,7 @@ if choice == "State Manager":
         st.session_state.active_download = None
 
     # Create the Tabs
-    tab1, tab2 = st.tabs(["🌍 Global Loading Manager", "📂 Single File Manager"])
+    tab1, tab2,tab3 = st.tabs(["🌍 Global Loading Manager", "📂 Single File Manager","Landing / Stock tracking"])
 
     # TAB 1: Global View (The new feature)
     with tab1:
@@ -85,6 +85,11 @@ if choice == "State Manager":
             generate_brd,
             generate_daily_pv
         )
+    with tab3:
+        st.subheader("📊 Landing / Stock Tracking")
+        # You can reuse the same function or create a new one for this tab
+        # For now, let's just call the same function to demonstrate
+        render_bl_tracking(None, None)
 
 # ---------------------------------------------------------
 # 6. PORT MAP MODULE (Interactive Overlay)

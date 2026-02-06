@@ -4,9 +4,12 @@ import os
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
 from assets.constants.constants import DB_PATH,COLUMNS
 from tools.tools import getDB ,align_data ,create_mapping_ui,show_mapping_dialog
+from modules.Bl_tracking import render_tracking_ui
 
 # Note: Pass in your helper functions (gen_table, etc) or ensure they are global
 def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func, generate_brd_func,generate_daily_pv):
+
+    tab_old, tab_track = st.tabs(["My current view", "Landing / Stock tracking"])
 
     st.subheader("📂 Single Ship Operations")
     if "uploader_key" not in st.session_state:
@@ -198,6 +201,9 @@ def render_single_file_manager(upload_dir, clear_downloads_func, gen_table_func,
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error: {e}")
+
+        
+        
 
         # 3. DYNAMIC DOWNLOAD BUTTON
         if "active_download" in st.session_state and st.session_state.active_download:
