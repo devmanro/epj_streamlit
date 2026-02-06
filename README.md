@@ -46,9 +46,9 @@ to this "N° BL	,Marchandise,	qte	,client	,poids	,type	,rec_qty"
 
 ---------------------------
 i need to finish :
--add select checkbox to workforce manager 
--add functionality to convert json to xlsx/csv table, when uploaded single file manager in statemanager  --done
--add feature to delete/rename columns in all tables 
+-add select checkbox to workforce manager    *****done
+-add functionality to convert json to xlsx/csv table, when uploaded single file manager in statemanager  *****done
+-add feature to delete/rename columns in all tables  
 -add copy/past feature to facilitate editing multiple cells.
 -create tool for calculating surface ,in logistic tools,
 -get started in making ui for handling template 
