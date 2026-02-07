@@ -11,6 +11,9 @@ from typing import Optional, List
 import pandas as pd
 import streamlit as st
 
+import os
+from assets.constants.constants import UPLOAD_DIR
+
 
 # -----------------------------
 # Configuration
@@ -60,7 +63,8 @@ def _ensure_ops_log(ops_log_path: Path) -> None:
             "NAVIRE", "B/L", "OP_DATE", "OPERATION", "LOCATION",
             "QUANTITE", "TONAGE", "CHASSIS/SERIAL", "REMARKS", "CREATED_AT"
         ]
-        pd.DataFrame(columns=cols).to_csv(ops_log_path, index=False, encoding="utf-8-sig")
+        pd.DataFrame(columns=cols).to_csv(
+            ops_log_path, index=False, encoding="utf-8-sig")
 
 
 def read_ops_log(ops_log_path: Path = DEFAULT_OPS_LOG_PATH) -> pd.DataFrame:
@@ -158,14 +162,19 @@ def build_summary(manifest_df: pd.DataFrame, ops_df: pd.DataFrame, navire: str) 
         "TONAGE": "sum"
     }).rename(columns={"QUANTITE": "RECEIVED_QTY", "TONAGE": "RECEIVED_TON"})
 
-    out = agg.merge(landed, on="B/L", how="left").merge(received, on="B/L", how="left")
+    out = agg.merge(landed, on="B/L",
+                    how="left").merge(received, on="B/L", how="left")
     for c in ["LANDED_QTY", "LANDED_TON", "RECEIVED_QTY", "RECEIVED_TON"]:
         out[c] = out[c].fillna(0)
 
-    out["TO_LAND_QTY"] = (out["MANIFEST_QTY"] - out["LANDED_QTY"]).clip(lower=0)
-    out["TO_LAND_TON"] = (out["MANIFEST_TON"] - out["LANDED_TON"]).clip(lower=0)
-    out["TO_RECEIVE_QTY"] = (out["LANDED_QTY"] - out["RECEIVED_QTY"]).clip(lower=0)
-    out["TO_RECEIVE_TON"] = (out["LANDED_TON"] - out["RECEIVED_TON"]).clip(lower=0)
+    out["TO_LAND_QTY"] = (out["MANIFEST_QTY"] -
+                          out["LANDED_QTY"]).clip(lower=0)
+    out["TO_LAND_TON"] = (out["MANIFEST_TON"] -
+                          out["LANDED_TON"]).clip(lower=0)
+    out["TO_RECEIVE_QTY"] = (
+        out["LANDED_QTY"] - out["RECEIVED_QTY"]).clip(lower=0)
+    out["TO_RECEIVE_TON"] = (
+        out["LANDED_TON"] - out["RECEIVED_TON"]).clip(lower=0)
 
     return out[[
         "B/L", "CLIENT", "DESIGNATION",
@@ -200,6 +209,7 @@ def render_tracking_ui(
     """
     Render the Landing / Received tracking UI inside your app.
     - manifest_df: the DataFrame you already loaded (must contain REQUIRED_COLUMNS).
+                   If None, will load from selected file in UPLOAD_DIR.
     - default_navire: optional navire pre-selection.
     - ops_log_path: CSV file used to store operations.
     - locations: optional list of location names (falls back to DEFAULT_LOCATIONS).
@@ -208,10 +218,49 @@ def render_tracking_ui(
     Returns: dict with "ops_df", "summary_df", "selected_navire".
     """
 
+    # File selection dropdown (similar to genDocs.py)
+    files = os.listdir(UPLOAD_DIR) if os.path.exists(UPLOAD_DIR) else []
+
+    if not files:
+        st.warning(
+            "No files found in upload directory. Please upload a file first.")
+        return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+
+    # Get default index if there's a selected file in session state
+    default_index = 0
+    if st.session_state.get("selected_file") and st.session_state.selected_file in files:
+        default_index = files.index(st.session_state.selected_file)
+
+    selected_file = st.selectbox(
+        "Select a ship file to operate on:",
+        files,
+        index=default_index,
+        key=f"{key_prefix}file_selector"
+    )
+
+    # Update session state
+    st.session_state.selected_file = selected_file
+    file_path = os.path.join(UPLOAD_DIR, selected_file)
+
+    # Load manifest_df from file if not provided
+    manifest_df=None
+    try:
+        if selected_file.endswith('.xlsx'):
+            manifest_df = pd.read_excel(file_path)
+        elif selected_file.endswith('.csv'):
+            manifest_df = pd.read_csv(file_path)
+        else:
+            st.error(f"Unsupported file format: {selected_file}")
+            return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+
     # Validate and prep manifest
     missing = _validate_manifest_df(manifest_df)
     if missing:
-        st.error(f"Tracking disabled. Manifest missing required columns: {missing}")
+        st.error(
+            f"Tracking disabled. Manifest missing required columns: {missing}")
         return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
 
     manifest_df = _prep_manifest_df(manifest_df)
@@ -238,7 +287,8 @@ def render_tracking_ui(
 
     # B/L list for selected NAVIRE
     bls = sorted(
-        manifest_df[manifest_df["NAVIRE"] == selected_navire]["B/L"].dropna().astype(str).unique()
+        manifest_df[manifest_df["NAVIRE"] ==
+                    selected_navire]["B/L"].dropna().astype(str).unique()
     )
 
     # Tabs within the tracking UI
@@ -249,22 +299,31 @@ def render_tracking_ui(
         with st.form(key=f"{key_prefix}op_form", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
-                selected_bl = st.selectbox("B/L", bls, key=f"{key_prefix}bl_select")
-                op_type = st.radio("Operation", ["Landed", "Received"], horizontal=True, key=f"{key_prefix}op_type")
+                selected_bl = st.selectbox(
+                    "B/L", bls, key=f"{key_prefix}bl_select")
+                op_type = st.radio("Operation", [
+                                   "Landed", "Received"], horizontal=True, key=f"{key_prefix}op_type")
             with c2:
-                op_date = st.date_input("Operation date", value=date.today(), key=f"{key_prefix}op_date")
-                qty = st.number_input("Quantity", min_value=0, step=1, value=0, key=f"{key_prefix}qty")
+                op_date = st.date_input(
+                    "Operation date", value=date.today(), key=f"{key_prefix}op_date")
+                qty = st.number_input(
+                    "Quantity", min_value=0, step=1, value=0, key=f"{key_prefix}qty")
             with c3:
-                ton = st.number_input("Tonnage", min_value=0.0, step=0.001, value=0.0, format="%.3f", key=f"{key_prefix}ton")
-                loc = st.selectbox("Location", locations, key=f"{key_prefix}loc")
+                ton = st.number_input(
+                    "Tonnage", min_value=0.0, step=0.001, value=0.0, format="%.3f", key=f"{key_prefix}ton")
+                loc = st.selectbox("Location", locations,
+                                   key=f"{key_prefix}loc")
 
             if loc == "Other":
-                loc_other = st.text_input("Enter custom location", key=f"{key_prefix}loc_other")
+                loc_other = st.text_input(
+                    "Enter custom location", key=f"{key_prefix}loc_other")
                 if loc_other.strip():
                     loc = loc_other.strip()
 
-            chs = st.text_input("Chassis/Serial (optional)", value="", key=f"{key_prefix}chs")
-            remarks = st.text_area("Remarks (optional)", value="", height=60, key=f"{key_prefix}remarks")
+            chs = st.text_input("Chassis/Serial (optional)",
+                                value="", key=f"{key_prefix}chs")
+            remarks = st.text_area(
+                "Remarks (optional)", value="", height=60, key=f"{key_prefix}remarks")
 
             submitted = st.form_submit_button("Save operation")
             if submitted:
@@ -285,7 +344,8 @@ def render_tracking_ui(
                 ops_df = read_ops_log(ops_log_path)  # refresh after save
 
         st.subheader("Today's follow-up")
-        daily_date = st.date_input("Select day", value=date.today(), key=f"{key_prefix}daily_pick")
+        daily_date = st.date_input(
+            "Select day", value=date.today(), key=f"{key_prefix}daily_pick")
         daily_ops = _filter_ops_by_day(ops_df, selected_navire, daily_date)
 
         if daily_ops.empty:
@@ -295,16 +355,20 @@ def render_tracking_ui(
             c3.metric("Balance (landed - received)", 0)
             st.info("No operations for the selected day.")
         else:
-            landed_qty = daily_ops[daily_ops["OPERATION"] == "Landed"]["QUANTITE"].sum()
-            received_qty = daily_ops[daily_ops["OPERATION"] == "Received"]["QUANTITE"].sum()
+            landed_qty = daily_ops[daily_ops["OPERATION"]
+                                   == "Landed"]["QUANTITE"].sum()
+            received_qty = daily_ops[daily_ops["OPERATION"]
+                                     == "Received"]["QUANTITE"].sum()
             balance_qty = landed_qty - received_qty
             c1, c2, c3 = st.columns(3)
             c1.metric("Landed qty", int(landed_qty))
             c2.metric("Received qty", int(received_qty))
             c3.metric("Balance (landed - received)", int(balance_qty))
 
-            show_cols = ["OP_DATE", "OPERATION", "LOCATION", "B/L", "QUANTITE", "TONAGE", "CHASSIS/SERIAL", "REMARKS", "CREATED_AT"]
-            st.dataframe(daily_ops[show_cols].sort_values(["OP_DATE", "OPERATION", "B/L"]), use_container_width=True)
+            show_cols = ["OP_DATE", "OPERATION", "LOCATION", "B/L",
+                         "QUANTITE", "TONAGE", "CHASSIS/SERIAL", "REMARKS", "CREATED_AT"]
+            st.dataframe(daily_ops[show_cols].sort_values(
+                ["OP_DATE", "OPERATION", "B/L"]), use_container_width=True)
 
     with tab2:
         st.subheader("Summary by B/L for selected NAVIRE")

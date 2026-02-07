@@ -244,7 +244,7 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     return last_col_idx
 
 
-def gen_table(filepath=None):
+def gen_table_deb(filepath=None):
 
     # --- MAIN EXECUTION ---
     if not filepath:
