@@ -11,6 +11,14 @@ from assets.constants.constants import UPLOAD_DIR,DB_PATH,COLUMNS
 
 
 def docGeneration(clear_downloads_func):
+
+    if "inserted_file" not in st.session_state:
+        st.session_state.inserted_file = None
+    if "final_mapping" not in st.session_state:
+        st.session_state.final_mapping = {}
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+
      # 1. Upload Logic
     st.session_state.uploaded_file = st.file_uploader(
         "Upload XLSX/CSV/JSON Ship Data",

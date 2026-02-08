@@ -16,12 +16,9 @@ def render_single_file_manager(clear_downloads_func):
         ["My current view", "Landing / Stock tracking"])
 
     
-    if "uploader_key" not in st.session_state:
-        st.session_state.uploader_key = 0
-    if "inserted_file" not in st.session_state:
-        st.session_state.inserted_file = None
-    if "final_mapping" not in st.session_state:
-        st.session_state.final_mapping = {}
+    
+   
+   
 
     with tab_old:
         st.subheader("📂 Single Ship Operations")
