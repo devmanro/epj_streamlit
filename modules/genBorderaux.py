@@ -38,6 +38,7 @@ def format_entry_docx(doc, row):
     client = str(row.get(COL_CLIENT, "")).strip()
     # Initial commodity from excel
     raw_commodity = str(row.get(COL_TYPE, "")).strip().upper()
+    
     # nb_colis =   0     if pd.notna(row.get("nb_colis")) else  row.get("nb_colis")
     # tonnage  =   0.0   if pd.notna(row.get("tonnage"))  else  row.get("tonnage")
     # rec_qty  =0 if pd.notna(row.get("rec_qty"))  else  row.get("rec_qty")

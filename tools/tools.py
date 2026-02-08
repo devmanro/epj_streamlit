@@ -144,7 +144,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
     received_lines = []
     total_rec_str = rec_str
 
-    if "BAG" in raw_commodity or "BIGBAG" in raw_commodity:
+    if "BAG" in raw_commodity or "BAG" in raw_commodity:
         commodity = "Big Bags"
         total_rec_str = f"{rec_str}  Big Bags"
         received_lines = [
@@ -162,23 +162,23 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         ]
         total_rec_str = f"{rec_str}  Crates of {commodity}"
 
-    elif "PIPES" in raw_commodity:
-        commodity = "Pipes"
-        received_lines = ["Pipes.", "Pipes Damaged on board"]
+    elif any(x in raw_commodity for x in ["PIPE", "TUBE"]):
+        commodity = "TUBES"
+        received_lines = ["TUBES.", "TUBES Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
     elif "BEAMS" in raw_commodity:
-        commodity = "Bundles of Beams"
-        received_lines = ["Bundles of Beams.",
-                          "Bundles of Beams Found Dismembered on board"]
+        commodity = "Bundles of BEAMS"
+        received_lines = ["Bundles of BEAMS.",
+                          "Bundles of BEAMS Found Dismembered on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif "FIL MACHINE" in raw_commodity:
+    elif any(x in raw_commodity for x in ["FILE MACHINE", "FIL"]):
         commodity = "FIL MACHINE"
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif "COIL" in raw_commodity:
+    elif "COIL" in raw_commodity or "BOB" in raw_commodity:
         commodity = "Coils"
         received_lines = ["Coils Found Rusty on board",
                           "Coils Packaging damaged on board"]
@@ -192,22 +192,23 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
             f"Bundles of {raw_commodity} moldy on board (Packing and/or Contents)",
         ]
         total_rec_str = f"{rec_str}  Bundles of {raw_commodity}"
-
-    elif "UNIT" in raw_commodity or "PACKAGE" in raw_commodity:
-        commodity = "Units + Packages"
-        received_lines = ["Units", "Units Damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
-
-    elif not raw_commodity:
+   
+    elif "COLI" in raw_commodity and "PACKAGE" in raw_commodity:
         commodity = "Units + Package"
-        received_lines = ["Packaging damaged on board"]
+        received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-
+    elif "COLI" in raw_commodity :
+        commodity = "Units"
+        received_lines = [commodity, f"{commodity} Damaged on board"]
+        total_rec_str = f"{rec_str}  {commodity}"
+    # elif not raw_commodity:
+    #     commodity = "Units + Package"
+    #     received_lines = ["Packaging damaged on board"]
+    #     total_rec_str = f"{rec_str}  {commodity}"
     else:
         commodity = raw_commodity if raw_commodity else "General Cargo"
         received_lines = ["Packaging damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-
     return commodity, received_lines, total_rec_str
 
 
@@ -332,6 +333,7 @@ def group_sourcefile_by_client(
             (df[COL_TYPE] != "OTHERS")           # but not "OTHERS"
         ]
 
+    allowed_types = {"COIL", "UNITS", "PACKAGES", "OTHERS"}
     # Ensure numeric
     for col in [COL_QUANTITE, COL_TONAGE]:
         if col in df.columns:
@@ -352,12 +354,16 @@ def group_sourcefile_by_client(
     # Fix: Use a helper function to avoid closure issues
     def first_non_null(series):
         return next((x for x in series if pd.notna(x)), None)
-
+    
     for col in COLUMNS:
         if col in [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL]:
             continue
         if col in df.columns:
-            agg_dict[col] = first_non_null
+            # Special handling for COL_TYPE: join only specific commodity types
+            if col == COL_TYPE:
+                agg_dict[col] = lambda s: ",".join([x for x in s.unique() if pd.notna(x) and x in allowed_types])
+            else:
+                agg_dict[col] = first_non_null
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
     return grouped

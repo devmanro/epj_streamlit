@@ -31,8 +31,8 @@ COLUMNS = [
     "DATE ENLEV"
 ]
 
-COMMODITY_TYPES = ["CTP", "BIGBAG", "TUBE", "BOBINE",
-                   "BEAMS", "FIL MACHINE", "COIL", "OTHERS"]
+COMMODITY_TYPES = ["PLYWOOD", "BIGBAG", "TUBE", 
+                   "BEAMS", "FIL MACHINE", "COIL","UNITS", "PACKAGES", "OTHERS"]
 
 (
     COL_NAVIRE,
