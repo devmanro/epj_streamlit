@@ -15,14 +15,13 @@ from assets.constants.constants import (
     COL_QUANTITE,
     COL_TONAGE,
     COL_BL,
-
+    DB_PATH, COLUMNS,
     # add COL_VALUES here if you have such a column name
     COL_TYPE,
     COMMODITY_TYPES,
+    UNITS_TYPES,
+    PACKAGES_TYPES
 )
-
-
-from assets.constants.constants import DB_PATH, COLUMNS
 
 
 def getDB():
@@ -140,12 +139,15 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
       - list of 'received' description lines
       - total_rec_str string to be displayed under 'Total Received'
     """
+    # capital_comodity=raw_commodity.upper()
     commodity = raw_commodity
     received_lines = []
     total_rec_str = rec_str
 
-    if "BAG" in raw_commodity or "BAG" in raw_commodity:
-        commodity = "Big Bags"
+
+    
+    if matches_any_constant(raw_commodity, {"BAG", "BIG"}):
+        commodity = "BIG BAGS"
         total_rec_str = f"{rec_str}  Big Bags"
         received_lines = [
             "BIG BAGS FOUND TORN ON BOARD",
@@ -153,8 +155,8 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
             "EMPTY BAG ON BOARD",
         ]
 
-    elif any(x in raw_commodity for x in ["PLYWOOD", "MDF", "CTP"]):
-        commodity = raw_commodity
+    elif matches_any_constant(raw_commodity, {"PLYWOOD", "MDF", "CTP"}):
+        commodity = raw_commodity.upper()
         received_lines = [
             f"Crates of {commodity} Found Dismembered on board",
             f"Crates of {commodity} wet on board (Packing and/or Contents)",
@@ -162,30 +164,30 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         ]
         total_rec_str = f"{rec_str}  Crates of {commodity}"
 
-    elif any(x in raw_commodity for x in ["PIPE", "TUBE"]):
+    elif matches_any_constant(raw_commodity, {"PIPE", "TUBE"}):
         commodity = "TUBES"
         received_lines = ["TUBES.", "TUBES Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif "BEAMS" in raw_commodity:
+    elif matches_any_constant(raw_commodity, {"BEAMS"}):
         commodity = "Bundles of BEAMS"
         received_lines = ["Bundles of BEAMS.",
                           "Bundles of BEAMS Found Dismembered on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif any(x in raw_commodity for x in ["FILE MACHINE", "FIL"]):
+    elif matches_any_constant(raw_commodity, {"FILE MACHINE", "FIL"}):
         commodity = "FIL MACHINE"
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif "COIL" in raw_commodity or "BOB" in raw_commodity:
-        commodity = "Coils"
+    elif matches_any_constant(raw_commodity, {"COIL", "BOB","BOBINE"}):
+        commodity = "COILS"
         received_lines = ["Coils Found Rusty on board",
                           "Coils Packaging damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif any(wood in raw_commodity for wood in ["WHITE WOOD", "BEECH WOOD", "RED WOOD"]):
-        commodity = "Bundles"
+    elif matches_any_constant(raw_commodity, {"WHITE WOOD", "BEECH WOOD", "RED WOOD"}):
+        commodity = "BUNDLES"
         received_lines = [
             f"Bundles of {raw_commodity} Found Dismembered on board",
             f"Bundles of {raw_commodity} wet on board (Packing and/or Contents)",
@@ -193,11 +195,12 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         ]
         total_rec_str = f"{rec_str}  Bundles of {raw_commodity}"
    
-    elif "COLI" in raw_commodity and "PACKAGE" in raw_commodity:
+    elif matches_any_constant(raw_commodity, {"COLI"}) and matches_any_constant(raw_commodity, {"PACKAGE"}):
         commodity = "Units + Package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-    elif "COLI" in raw_commodity :
+
+    elif matches_any_constant(raw_commodity, {"COLI"}):
         commodity = "Units"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
@@ -308,15 +311,81 @@ def _fill_entry_table(
 
 def _shorten_bl_code(bl: str) -> str:
     """
-    Take a B/L like 'LDJD4520' and return 'JD520'
-    Rule: keep the last 3 digits and the 2 letters immediately before them.
-    If pattern is not found, return the original string.
+    Shorten B/L codes like '25030TJD0701-17' or '25030TJD0101/01'
+    Rule: Find 3 consecutive letters, then take those 3 letters and everything after them.
+    Examples:
+        '25030TJD0701-17' -> 'TJD0701-17'
+        '25030TJD0101/01' -> 'TJD0101/01'
     """
     if bl is None:
         return ""
     s = str(bl).strip()
-    m = re.search(r"([A-Za-z]{2}\d{3})$", s)
-    return m.group(1) if m else s
+    
+    # Find 3 consecutive letters
+    m = re.search(r"([A-Za-z]{3})(.*)$", s)
+    if m:
+        # Return the 3 letters + everything after them
+        return m.group(1) + m.group(2)
+    
+    return s
+
+# Helper function to check if type matches any constant (partial/substring matching)
+def matches_any_constant(type_str, constants_set):
+    """
+    Check if type_str contains any constant from constants_set (or vice versa).
+    Handles partial matches like "ENGINS" matching "ENGIN" or "grue lourd" matching "GRUE".
+    """
+    type_str_upper = type_str.upper()
+    # Check if any constant is a substring of the type, or type is a substring of constant
+    for constant in constants_set:
+        constant_upper = constant.upper()
+        # Check if constant is contained in type (e.g., "ENGIN" in "ENGINS")
+        if constant_upper in type_str_upper:
+            return True
+        # Check if type is contained in constant (e.g., "GRU" in "GRUE")
+        if type_str_upper in constant_upper:
+            return True
+    return False
+
+
+
+def aggregate_type_column(series):
+    # Get unique non-null values and convert to uppercase for comparison
+    unique_types = [str(x).strip().upper() for x in series.unique() if pd.notna(x) and str(x).strip()]
+
+    # Filter types into units and packages using partial matching
+    filtered_units = [t for t in unique_types if matches_any_constant(t, UNITS_TYPES)]
+    filtered_packages = [t for t in unique_types if matches_any_constant(t, PACKAGES_TYPES)]
+
+    # Check if we have any units or packages
+    has_units = len(filtered_units) > 0
+    has_packages = len(filtered_packages) > 0
+    
+    # Determine result based on what's present
+    if has_units and has_packages:
+        return "UNITS + PACKAGES"
+    elif has_units:
+        return "UNITS"
+    elif has_packages:
+        return "PACKAGES"
+    else:
+        # If no units or packages found, return joined unique types
+        return ",".join(unique_types) if unique_types else None
+
+
+ # Fix: Use a helper function to avoid closure issues
+def first_non_null(series):
+    return next((x for x in series if pd.notna(x)), None)
+
+
+
+# Helper function for B/L aggregation
+def aggregate_bl(series):
+    bl_values = [str(x).strip() for x in series if pd.notna(x) and str(x).strip()]
+    if not bl_values:
+        return ""
+    unique_bls = list(pd.Series(bl_values).unique())
+    return ",".join(unique_bls)
 
 
 def group_sourcefile_by_client(
@@ -327,13 +396,15 @@ def group_sourcefile_by_client(
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
 
     # --- Skip rows with unknown / unwanted TYPE before grouping ---
-    if skip_unknown_commodities and COL_TYPE in df.columns:
-        df = df[
-            df[COL_TYPE].isin(COMMODITY_TYPES) &  # only known types
-            (df[COL_TYPE] != "OTHERS")           # but not "OTHERS"
-        ]
-
-    allowed_types = {"COIL", "UNITS", "PACKAGES", "OTHERS"}
+    if COL_TYPE in df.columns:
+        if skip_unknown_commodities :
+            df = df[
+                df[COL_TYPE].isin(COMMODITY_TYPES) &  # only known types
+                (df[COL_TYPE] != "OTHERS")           # but not "OTHERS"
+            ]
+    else:
+        return df
+    
     # Ensure numeric
     for col in [COL_QUANTITE, COL_TONAGE]:
         if col in df.columns:
@@ -347,13 +418,11 @@ def group_sourcefile_by_client(
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
-        COL_BL: lambda s: ",".join([x for x in s if isinstance(x, str) and x]),
+        COL_BL: aggregate_bl,  # Fixed: use helper function instead of lambda
+        # COL_BL: lambda s: ",".join([x for x in s if isinstance(x, str) and x]),
     }
 
     # For all other columns, keep first non-null value
-    # Fix: Use a helper function to avoid closure issues
-    def first_non_null(series):
-        return next((x for x in series if pd.notna(x)), None)
     
     for col in COLUMNS:
         if col in [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL]:
@@ -361,9 +430,11 @@ def group_sourcefile_by_client(
         if col in df.columns:
             # Special handling for COL_TYPE: join only specific commodity types
             if col == COL_TYPE:
-                agg_dict[col] = lambda s: ",".join([x for x in s.unique() if pd.notna(x) and x in allowed_types])
+                agg_dict[col] = aggregate_type_column
+                # agg_dict[col] = lambda s: ",".join([x for x in s.unique() if pd.notna(x) and x in units_types])
             else:
                 agg_dict[col] = first_non_null
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
-    return grouped
+    sorted_grouped = grouped.sort_values(by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
+    return sorted_grouped
