@@ -144,8 +144,6 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
     received_lines = []
     total_rec_str = rec_str
 
-
-    
     if matches_any_constant(raw_commodity, {"BAG", "BIG"}):
         commodity = "BIG BAGS"
         total_rec_str = f"{rec_str}  Big Bags"
@@ -180,7 +178,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif matches_any_constant(raw_commodity, {"COIL", "BOB","BOBINE"}):
+    elif matches_any_constant(raw_commodity, {"COIL", "BOB", "BOBINE"}):
         commodity = "COILS"
         received_lines = ["Coils Found Rusty on board",
                           "Coils Packaging damaged on board"]
@@ -194,7 +192,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
             f"Bundles of {raw_commodity} moldy on board (Packing and/or Contents)",
         ]
         total_rec_str = f"{rec_str}  Bundles of {raw_commodity}"
-   
+
     elif matches_any_constant(raw_commodity, {"COLI"}) and matches_any_constant(raw_commodity, {"PACKAGE"}):
         commodity = "Units + Package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
@@ -320,16 +318,18 @@ def _shorten_bl_code(bl: str) -> str:
     if bl is None:
         return ""
     s = str(bl).strip()
-    
+
     # Find 3 consecutive letters
     m = re.search(r"([A-Za-z]{3})(.*)$", s)
     if m:
         # Return the 3 letters + everything after them
         return m.group(1) + m.group(2)
-    
+
     return s
 
 # Helper function to check if type matches any constant (partial/substring matching)
+
+
 def matches_any_constant(type_str, constants_set):
     """
     Check if type_str contains any constant from constants_set (or vice versa).
@@ -348,19 +348,21 @@ def matches_any_constant(type_str, constants_set):
     return False
 
 
-
 def aggregate_type_column(series):
     # Get unique non-null values and convert to uppercase for comparison
-    unique_types = [str(x).strip().upper() for x in series.unique() if pd.notna(x) and str(x).strip()]
+    unique_types = [str(x).strip().upper()
+                    for x in series.unique() if pd.notna(x) and str(x).strip()]
 
     # Filter types into units and packages using partial matching
-    filtered_units = [t for t in unique_types if matches_any_constant(t, UNITS_TYPES)]
-    filtered_packages = [t for t in unique_types if matches_any_constant(t, PACKAGES_TYPES)]
+    filtered_units = [
+        t for t in unique_types if matches_any_constant(t, UNITS_TYPES)]
+    filtered_packages = [
+        t for t in unique_types if matches_any_constant(t, PACKAGES_TYPES)]
 
     # Check if we have any units or packages
     has_units = len(filtered_units) > 0
     has_packages = len(filtered_packages) > 0
-    
+
     # Determine result based on what's present
     if has_units and has_packages:
         return "UNITS + PACKAGES"
@@ -372,16 +374,17 @@ def aggregate_type_column(series):
         # If no units or packages found, return joined unique types
         return ",".join(unique_types) if unique_types else None
 
-
  # Fix: Use a helper function to avoid closure issues
+
+
 def first_non_null(series):
     return next((x for x in series if pd.notna(x)), None)
 
 
-
 # Helper function for B/L aggregation
 def aggregate_bl(series):
-    bl_values = [str(x).strip() for x in series if pd.notna(x) and str(x).strip()]
+    bl_values = [str(x).strip()
+                 for x in series if pd.notna(x) and str(x).strip()]
     if not bl_values:
         return ""
     unique_bls = list(pd.Series(bl_values).unique())
@@ -392,19 +395,22 @@ def group_sourcefile_by_client(
     input_excel: str,
     sheet_name: int | str = 0,
     skip_unknown_commodities: bool = False,
+    bl_aggregation: bool = False,
+
 ) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
 
-    # --- Skip rows with unknown / unwanted TYPE before grouping ---
-    if COL_TYPE in df.columns:
-        if skip_unknown_commodities :
-            df = df[
-                df[COL_TYPE].isin(COMMODITY_TYPES) &  # only known types
-                (df[COL_TYPE] != "OTHERS")           # but not "OTHERS"
-            ]
-    else:
-        return df
-    
+      # Skip rows whose commodity type is in UNITS_TYPES or PACKAGES_TYPES
+    if skip_unknown_commodities and COL_TYPE in df.columns:
+        skip_types = UNITS_TYPES | PACKAGES_TYPES
+        df = df[
+            ~df[COL_TYPE]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .isin(skip_types)
+        ].reset_index(drop=True)
+
     # Ensure numeric
     for col in [COL_QUANTITE, COL_TONAGE]:
         if col in df.columns:
@@ -418,23 +424,29 @@ def group_sourcefile_by_client(
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
-        COL_BL: aggregate_bl,  # Fixed: use helper function instead of lambda
-        # COL_BL: lambda s: ",".join([x for x in s if isinstance(x, str) and x]),
+        COL_BL:aggregate_bl,
     }
 
-    # For all other columns, keep first non-null value
+    skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL]
     
+    if bl_aggregation is False :
+        skip_cols.remove(COL_BL)
+        agg_dict.pop(COL_BL, None)
+
+    # For all other columns, keep first non-null value
     for col in COLUMNS:
-        if col in [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL]:
+        if col in skip_cols:
             continue
+        
         if col in df.columns:
             # Special handling for COL_TYPE: join only specific commodity types
-            if col == COL_TYPE:
+            if col == COL_TYPE :
                 agg_dict[col] = aggregate_type_column
                 # agg_dict[col] = lambda s: ",".join([x for x in s.unique() if pd.notna(x) and x in units_types])
             else:
                 agg_dict[col] = first_non_null
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
-    sorted_grouped = grouped.sort_values(by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
+    sorted_grouped = grouped.sort_values(
+        by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
     return sorted_grouped

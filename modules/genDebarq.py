@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
@@ -11,6 +12,7 @@ from assets.constants.constants import (
     COL_TYPE,
     COL_QUANTITE,
     COL_BL,
+    GOODS__TYPES
 )
 from tools.tools import group_sourcefile_by_client
 
@@ -18,15 +20,23 @@ from tools.tools import group_sourcefile_by_client
 def get_manual_color(product_name):
     """Maps product names to specific hex colors as requested."""
     name = str(product_name).upper()
-    colors = {
-        "CTP": "92D050",      # Green
-        "BIGBAG": "00B0F0",   # Blue
-        "TUBE": "C65911",     # Brown
-        "BOBINE": "FF9999",   # Light Red
-        "BEAMS": "A11039",    # RED
+    
+    # Group products by color
+    color_groups = {
+        "92D050": ["CTP", "PLYWOOD"],      # Green
+        "538DD5": ["BIG BAG","BAG"],             # Blue
+        "C65911": ["TUBE"],                # Brown
+        "948A54": ["BOB", "COIL"],         # Light Red
+        "DDD9C4": ["BEAMS", "FIL M"],      # RED
     }
+    
+    # Find which group the product belongs to
+    for color, products in color_groups.items():
+        if name in products:
+            return color
+    
     # Returns None (White) if not found or for 'Others'
-    return colors.get(name, None)
+    return None
 
 
 def create_product_table(ws, product_name, product_data, start_col, is_others=False):
@@ -199,18 +209,15 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
         ws[f"{get_column_letter(start_col + 1)}{r}"].border = border
         summary_rows.append(r)
 
-    # Per‑client + INC summary, using constants for quantity col
-    for client, col in list(col_mapping.items()) + [(None, extra_cols[0])]:
+
+    # for client, col in list(col_mapping.items()) + [(None, extra_cols[0])]:
+    for client, col in col_mapping.items():
         # TOTAL DECHARGER
         ws[f"{col}{summary_rows[0]}"].value = (
             f"=SUM({col}{data_start_row}:{col}{curr_data_row-1})"
         )
 
-        target_data = (
-            product_data[product_data[client_col] == client]
-            if client is not None
-            else product_data
-        )
+        target_data = product_data[product_data[client_col] == client]
         q_manifest = pd.to_numeric(
             target_data[qty_col_name], errors="coerce"
         ).sum()
@@ -227,22 +234,38 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
             ws[f"{col}{r}"].border = border
             ws[f"{col}{r}"].alignment = center
 
+    # handling the INC COLS
+    # INC column summary (separate handling)
+    inc_col = extra_cols[0]
+    # TOTAL DECHARGER for INC
+    ws[f"{inc_col}{summary_rows[0]}"].value = (
+        f"=SUM({inc_col}{data_start_row}:{inc_col}{curr_data_row-1})"
+    )
+    
+    # QUANTITE MANIFEST for INC (total of all product data)
+    ws[f"{inc_col}{summary_rows[1]}"].value = 0
+    
+    # RESTE A BORD for INC
+    ws[f"{inc_col}{summary_rows[2]}"].value = (
+        f"={inc_col}{summary_rows[1]}-{inc_col}{summary_rows[0]}"
+    )
+    for r in summary_rows:
+        ws[f"{inc_col}{r}"].font = Font(bold=True)
+        ws[f"{inc_col}{r}"].border = border
+        ws[f"{inc_col}{r}"].alignment = center
+
+
     # Global totals columns (TOTAL / TOTAL/J)
     for r in summary_rows:
-        ws[f"{extra_cols[1]}{r}"].value = (
-            f"=SUM({get_column_letter(start_col+2)}{r}:{extra_cols[0]}{r})"
-        )
+        ws[f"{extra_cols[1]}{r}"].value = (f"=SUM({get_column_letter(start_col+2)}{r}:{extra_cols[0]}{r})"
+)
         ws[f"{extra_cols[1]}{r}"].font = Font(bold=True)
         ws[f"{extra_cols[1]}{r}"].border = border
         ws[f"{extra_cols[1]}{r}"].alignment = center
 
-        ws[f"{extra_cols[2]}{r}"].value = f"={extra_cols[1]}{r}"
-        ws[f"{extra_cols[2]}{r}"].font = Font(bold=True)
-        ws[f"{extra_cols[2]}{r}"].border = border
-        ws[f"{extra_cols[2]}{r}"].alignment = center
 
-    return last_col_idx
-
+    # return last_col_idx
+    return last_col_idx, summary_rows, extra_cols[1] 
 
 def gen_table_deb(filepath=None):
 
@@ -253,17 +276,9 @@ def gen_table_deb(filepath=None):
     base_name = os.path.basename(filepath)
     file_name_only = os.path.splitext(base_name)[0]
 
-    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=True)
+    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=True,bl_aggregation=False)
+    st.dataframe(source_df)      # nicer interactive table
     
-    # Accept either a path or a DataFrame
-    # if isinstance(filepath, str):
-    #     # df = pd.read_excel(input_excel, sheet_name=sheet_name,
-    #     #                    engine="openpyxl", header=0)
-    #     df = pd.read_excel(filepath)
-    # else:
-    #     df = filepath  # already a DataFrame
-
-
     # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
 
@@ -277,32 +292,107 @@ def gen_table_deb(filepath=None):
     ws["A1"].font = Font(bold=True, size=14)
 
     # Use COMMODITY_TYPES from constants
-    specific_keywords = COMMODITY_TYPES
+    specific_keywords = GOODS__TYPES
 
     start_col = 1
     all_matched_indices = pd.Index([])
-
-    # Use COL_TYPE constant as the type column
-    # type_col_name = COL_TYPE.upper()
+    
+    # Track summary information for all tables
+    all_summary_info = []  # List of (summary_rows, total_col_letter) tuples
 
     for keyword in specific_keywords:
+ 
         mask = source_df[COL_TYPE].astype(str).str.contains(
             keyword, case=False, na=False
         )
+
         p_data = source_df[mask]
+
         if not p_data.empty:
             all_matched_indices = all_matched_indices.union(p_data.index)
-            last_col_idx = create_product_table(
+            last_col_idx, summary_rows, total_col = create_product_table(
                 ws, keyword.upper(), p_data, start_col, is_others=False
             )
+            all_summary_info.append((summary_rows, total_col))
             start_col = last_col_idx + 3
 
     # Everything not matched by COMMODITY_TYPES goes into "UNITS + PACKAGES"
     others_data = source_df.drop(all_matched_indices)
     if not others_data.empty:
-        create_product_table(
+        last_col_idx, summary_rows, total_col = create_product_table(
             ws, "UNITS + PACKAGES", others_data, start_col, is_others=True
         )
+        all_summary_info.append((summary_rows, total_col))
+
+    # Add global sum sub-table below all tables
+    if all_summary_info:
+        # Find the maximum row number from all tables to place global summary below
+        max_row = max(max(rows) for rows, _ in all_summary_info)
+        global_summary_start_row = max_row + 3  # Add some spacing
+        
+        # Define styles for global summary
+        border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        bold_font = Font(bold=True, size=11)
+        header_fill = PatternFill(
+            start_color="FFC000",  # Orange color for global summary header
+            end_color="FFC000",
+            fill_type="solid"
+        )
+        
+        # Create header row
+        header_row = global_summary_start_row
+        ws[f"A{header_row}"].value = "GLOBAL SUMMARY"
+        ws[f"B{header_row}"].value = "TOTAL DECHARGER"
+        ws[f"C{header_row}"].value = "QUANTITE MANIFEST"
+        ws[f"D{header_row}"].value = "RESTE A BORD"
+        
+        # Style header row
+        for col_idx in range(1, 5):
+            cell = ws.cell(row=header_row, column=col_idx)
+            cell.fill = header_fill
+            cell.font = bold_font
+            cell.border = border
+            cell.alignment = center
+        
+        # Create data row with formulas
+        data_row = global_summary_start_row + 1
+        
+        # Sum of all TOTAL DECHARGER (summary_rows[0] from all tables)
+        total_decharger_formula = "+".join([
+            f"{total_col}{rows[0]}" for rows, total_col in all_summary_info
+        ])
+        ws[f"B{data_row}"].value = f"=SUM({total_decharger_formula})" if len(all_summary_info) > 1 else f"={total_decharger_formula}"
+        
+        # Sum of all QUANTITE MANIFEST (summary_rows[1] from all tables)
+        quantite_manifest_formula = "+".join([
+            f"{total_col}{rows[1]}" for rows, total_col in all_summary_info
+        ])
+        ws[f"C{data_row}"].value = f"=SUM({quantite_manifest_formula})" if len(all_summary_info) > 1 else f"={quantite_manifest_formula}"
+        
+        # Sum of all RESTE A BORD (summary_rows[2] from all tables)
+        reste_bord_formula = "+".join([
+            f"{total_col}{rows[2]}" for rows, total_col in all_summary_info
+        ])
+        ws[f"D{data_row}"].value = f"=SUM({reste_bord_formula})" if len(all_summary_info) > 1 else f"={reste_bord_formula}"
+        
+        # Style data row
+        for col_idx in range(1, 5):
+            cell = ws.cell(row=data_row, column=col_idx)
+            cell.font = bold_font
+            cell.border = border
+            cell.alignment = center
+        
+        # Set column widths
+        ws.column_dimensions['A'].width = 20
+        ws.column_dimensions['B'].width = 22
+        ws.column_dimensions['C'].width = 22
+        ws.column_dimensions['D'].width = 22
 
     output_xlsx = f"{PATH_DEBRQ}/{file_name_only}.xlsx"
     wb.save(output_xlsx)

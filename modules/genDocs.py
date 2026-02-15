@@ -68,7 +68,7 @@ def docGeneration(clear_downloads_func):
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
-        st.toast(f" {st.session_state.selected_file}")
+        # st.toast(f" {st.session_state.selected_file}")
         file_path = os.path.join(UPLOAD_DIR, st.session_state.selected_file)
 
         # Load Data

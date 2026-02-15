@@ -125,6 +125,7 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     template_path = f"{PATH_TEMPLATES}/{template_name}"
 
     grouped_df = group_sourcefile_by_client(sourcefile)
+    
     st.dataframe(grouped_df)      # nicer interactive table
     excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
     return output_docx

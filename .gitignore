@@ -3,4 +3,5 @@ data/*
 .vscode/
 __pycache__/
 .streamlit/
-*.pyc
+*.pycreports/*
+reports/**
