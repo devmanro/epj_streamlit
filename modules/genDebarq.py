@@ -287,6 +287,23 @@ def gen_table_deb(filepath=None):
     ws.title = f"{file_name_only}"
 
     ship_name_placeholder = f"SHIP NAME:{file_name_only}"
+
+    list_bl_sheet_name = f"LIST_BL_{file_name_only}"
+    ws_bl = wb.create_sheet(title=list_bl_sheet_name)
+
+     # Write source_df to the new sheet
+    for r_idx, row in enumerate(source_df.itertuples(index=False), start=1):
+        for c_idx, value in enumerate(row, start=1):
+            ws_bl.cell(row=r_idx, column=c_idx).value = value
+    
+    # Write headers
+    for c_idx, col_name in enumerate(source_df.columns, start=1):
+        ws_bl.cell(row=1, column=c_idx).value = col_name
+        ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
+
+
+
+
     ws.merge_cells("A1:G1")
     ws["A1"].value = ship_name_placeholder
     ws["A1"].font = Font(bold=True, size=14)
