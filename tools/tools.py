@@ -447,6 +447,8 @@ def group_sourcefile_by_client(
                 agg_dict[col] = first_non_null
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
+    
     sorted_grouped = grouped.sort_values(
         by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
+
     return sorted_grouped

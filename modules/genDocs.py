@@ -93,7 +93,7 @@ def docGeneration(clear_downloads_func):
                 st.success("Data Aligned Successfully!")
                 molded_df = molded_df.reindex(columns=COLUMNS)
                 # delete first row that contain headers in the molded_df
-                molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
+                # molded_df = molded_df.iloc[1:].copy() # This line deletes the first row
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
                 st.session_state.final_mapping = {}

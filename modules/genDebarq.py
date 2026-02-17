@@ -301,9 +301,6 @@ def gen_table_deb(filepath=None):
         ws_bl.cell(row=1, column=c_idx).value = col_name
         ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
 
-
-
-
     ws.merge_cells("A1:G1")
     ws["A1"].value = ship_name_placeholder
     ws["A1"].font = Font(bold=True, size=14)
