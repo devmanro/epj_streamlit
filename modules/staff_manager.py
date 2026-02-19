@@ -184,7 +184,7 @@ def staff_m():
 
                 with col_btn_3:
                     towrap_new = io.BytesIO()
-                    edited_stage.to_excel(towrap_new, index=False, engine='xlsxwriter')
+                    gitedited_stage.to_excel(towrap_new, index=False, engine='xlsxwriter')
                     st.download_button(
                         label="🖨️ Print / Export Staging",
                         data=towrap_new.getvalue(),
