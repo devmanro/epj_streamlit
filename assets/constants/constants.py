@@ -1,9 +1,14 @@
+
+from pathlib import Path
+
 PATH_BRDX = "reports/bordereaux"
 PATH_PVS = "reports/pvs"
 PATH_TEMPLATES = "assets/templates"
 FIXED_STAFF_PATH = "assets/templates/staff_template.csv"
 
 WORKFORCE_DB = "data/workforce1.xlsx"
+
+DEFAULT_OPS_LOG_PATH = Path("data/ops_log.csv")
 
 PATH_DEBRQ = "data/debarqs"
 UPLOAD_DIR = "data/uploads"
@@ -64,3 +69,13 @@ PACKAGES_TYPES = {"COLI", "UNITS", "PACKAGE", "CAISSE"}
 
 
 
+DEFAULT_LOCATIONS = [
+    "Quay",
+    "Hangar",
+    "Air area",
+    "Yard A",
+    "Yard B",
+    "Warehouse 1",
+    "Warehouse 2",
+    "Other"
+]

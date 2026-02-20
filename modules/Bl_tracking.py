@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 import os
-from assets.constants.constants import UPLOAD_DIR
+from assets.constants.constants import UPLOAD_DIR, DEFAULT_LOCATIONS, DEFAULT_OPS_LOG_PATH
 
 
 # -----------------------------
@@ -39,19 +39,6 @@ REQUIRED_COLUMNS = [
     "DATE ENLEV"
 ]
 
-DEFAULT_LOCATIONS = [
-    "Quay",
-    "Hangar",
-    "Air area",
-    "Yard A",
-    "Yard B",
-    "Warehouse 1",
-    "Warehouse 2",
-    "Other"
-]
-
-DEFAULT_OPS_LOG_PATH = Path("data/ops_log.csv")
-
 
 # -----------------------------
 # Storage helpers
@@ -60,7 +47,7 @@ def _ensure_ops_log(ops_log_path: Path) -> None:
     ops_log_path.parent.mkdir(parents=True, exist_ok=True)
     if not ops_log_path.exists():
         cols = [
-            "NAVIRE", "B/L", "OP_DATE", "OPERATION", "LOCATION",
+            "NAVIRE", "B/L", "OP_DATE",  "LOCATION",
             "QUANTITE", "TONAGE", "CHASSIS/SERIAL", "REMARKS", "CREATED_AT"
         ]
         pd.DataFrame(columns=cols).to_csv(
@@ -199,6 +186,9 @@ def _filter_ops_by_day(ops_df: pd.DataFrame, navire: str, the_date: date) -> pd.
 # -----------------------------
 # Main render function (call from your app)
 # -----------------------------
+# -----------------------------
+# Main render function (call from your app)
+# -----------------------------
 def render_tracking_ui(
     manifest_df: pd.DataFrame,
     default_navire: Optional[str] = None,
@@ -208,76 +198,104 @@ def render_tracking_ui(
 ):
     """
     Render the Landing / Received tracking UI inside your app.
-    - manifest_df: the DataFrame you already loaded (must contain REQUIRED_COLUMNS).
-                   If None, will load from selected file in UPLOAD_DIR.
-    - default_navire: optional navire pre-selection.
-    - ops_log_path: CSV file used to store operations.
-    - locations: optional list of location names (falls back to DEFAULT_LOCATIONS).
-    - key_prefix: streamlit key prefix to avoid collisions.
 
-    Returns: dict with "ops_df", "summary_df", "selected_navire".
+    Workflow
+    --------
+    1.  Select file → NAVIRE → B/L.
+    2.  Choosing B/L or toggling Landed / Received **auto-fills** Quantity
+        and Tonnage from the manifest (editable before adding).
+    3.  Click **Add to pending** → row goes into a virtual temporary table
+        shown as an editable ``st.data_editor``.
+    4.  Edit / delete rows freely in the temp table.
+    5.  Click **Update – Save all to log** → every pending row is appended
+        to the operations CSV and the temp table is cleared.
+
+    Returns
+    -------
+    dict  with keys ``ops_df``, ``summary_df``, ``selected_navire``.
     """
 
-    # File selection dropdown (similar to genDocs.py)
+    # Columns used by the virtual temp table
+    TEMP_COLS = [
+        "NAVIRE", "B/L", "OP_DATE",
+        "LANDED_QTY",
+        "RECEIVED_QTY",
+        "LANDED_TON",
+        "LOCATION", "CHASSIS/SERIAL", "REMARKS",
+    ]
+
+    # ── session-state initialisation ────────────────────────────────
+    temp_key = f"{key_prefix}temp_ops"
+    editor_ver_key = f"{key_prefix}editor_ver"
+    prev_nav_key = f"{key_prefix}prev_navire"
+    prev_file_key = f"{key_prefix}prev_file"
+
+    if temp_key not in st.session_state:
+        st.session_state[temp_key] = pd.DataFrame(columns=TEMP_COLS)
+    if editor_ver_key not in st.session_state:
+        st.session_state[editor_ver_key] = 0
+
+    _empty = {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(),
+              "selected_navire": None}
+
+    # ── File selection ──────────────────────────────────────────────
     files = os.listdir(UPLOAD_DIR) if os.path.exists(UPLOAD_DIR) else []
-
     if not files:
-        st.warning(
-            "No files found in upload directory. Please upload a file first.")
-        return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+        st.warning("No files found in upload directory. "
+                   "Please upload a file first.")
+        return _empty
 
-    # Get default index if there's a selected file in session state
     default_index = 0
-    if st.session_state.get("selected_file") and st.session_state.selected_file in files:
+    if (st.session_state.get("selected_file")
+            and st.session_state.selected_file in files):
         default_index = files.index(st.session_state.selected_file)
 
     selected_file = st.selectbox(
         "Select a ship file to operate on:",
         files,
         index=default_index,
-        key=f"{key_prefix}file_selector"
+        key=f"{key_prefix}file_selector",
     )
-
-    # Update session state
     st.session_state.selected_file = selected_file
     file_path = os.path.join(UPLOAD_DIR, selected_file)
 
-    # Load manifest_df from file if not provided
-    manifest_df=None
+    # Reset temp table when the file changes
+    if st.session_state.get(prev_file_key) != selected_file:
+        st.session_state[prev_file_key] = selected_file
+        st.session_state[temp_key] = pd.DataFrame(columns=TEMP_COLS)
+        st.session_state[editor_ver_key] += 1
+
+    # ── Load manifest ───────────────────────────────────────────────
+    manifest_df = None
     try:
-        if selected_file.endswith('.xlsx'):
+        if selected_file.endswith(".xlsx"):
             manifest_df = pd.read_excel(file_path)
-        elif selected_file.endswith('.csv'):
+        elif selected_file.endswith(".csv"):
             manifest_df = pd.read_csv(file_path)
         else:
             st.error(f"Unsupported file format: {selected_file}")
-            return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+            return _empty
     except Exception as e:
         st.error(f"Error loading file: {e}")
-        return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+        return _empty
 
-    # Validate and prep manifest
     missing = _validate_manifest_df(manifest_df)
     if missing:
-        st.error(
-            f"Tracking disabled. Manifest missing required columns: {missing}")
-        return {"ops_df": pd.DataFrame(), "summary_df": pd.DataFrame(), "selected_navire": None}
+        st.error(f"Tracking disabled – manifest missing columns: {missing}")
+        return _empty
 
     manifest_df = _prep_manifest_df(manifest_df)
     ops_df = read_ops_log(ops_log_path)
     locations = locations or DEFAULT_LOCATIONS
 
-    # NAVIRE selection
+    # ── NAVIRE selection ────────────────────────────────────────────
     navires = sorted(manifest_df["NAVIRE"].dropna().astype(str).unique())
     if not navires:
         st.warning("No NAVIRE values found in the manifest.")
-        return {"ops_df": ops_df, "summary_df": pd.DataFrame(), "selected_navire": None}
+        return {"ops_df": ops_df, "summary_df": pd.DataFrame(),
+                "selected_navire": None}
 
-    if default_navire in navires:
-        nav_idx = navires.index(default_navire)
-    else:
-        nav_idx = 0
-
+    nav_idx = navires.index(default_navire) if default_navire in navires else 0
     selected_navire = st.selectbox(
         "Select NAVIRE (ship)",
         navires,
@@ -285,100 +303,281 @@ def render_tracking_ui(
         key=f"{key_prefix}navire_select",
     )
 
-    # B/L list for selected NAVIRE
+    # B/L list for chosen navire
     bls = sorted(
-        manifest_df[manifest_df["NAVIRE"] ==
-                    selected_navire]["B/L"].dropna().astype(str).unique()
+        manifest_df[manifest_df["NAVIRE"] == selected_navire]["B/L"]
+        .dropna().astype(str).unique()
     )
 
-    # Tabs within the tracking UI
+    # ── helper: manifest qty & ton for a given B/L ──────────────────
+    def _get_manifest_MV(bl_number: str, manifested: bool = False):
+        rows = manifest_df[
+            (manifest_df["NAVIRE"] == selected_navire)
+            & (manifest_df["B/L"] == str(bl_number))
+        ]
+
+        if manifested:
+            qty = int(rows.get("QUANTITE", pd.Series()).sum() or 0)
+            ton = float(rows.get("TONAGE", pd.Series()).sum() or 0.0)
+        else:
+            qty = int(rows.get("LANDED_QTY", pd.Series()).sum() or 0)
+            ton = int(rows.get("LANDED_TON", pd.Series()).sum() or 0.0)
+
+        return qty, ton
+
+    def _clear_item_fields():
+        st.session_state[f"{key_prefix}chs_in"] = ""
+        st.session_state[f"{key_prefix}remarks"] = ""
+
+    # ── callback: auto-populate qty / ton from manifest ─────────────
+    def _on_bl_or_op_change():
+        bl = st.session_state.get(f"{key_prefix}bl_select")
+        if bl:
+            q, t = _get_manifest_MV(bl)
+            st.session_state[f"{key_prefix}landed_qty"] = q
+            st.session_state[f"{key_prefix}received_qty"] = 0
+            st.session_state[f"{key_prefix}ton"] = t
+
+    # ── detect NAVIRE change → reset qty / ton ──────────────────────
+    if st.session_state.get(prev_nav_key) != selected_navire:
+        st.session_state[prev_nav_key] = selected_navire
+        if bls:
+            q, t = _get_manifest_MV(bls[0])
+            st.session_state[f"{key_prefix}landed_qty"] = q
+            st.session_state[f"{key_prefix}received_qty"] = 0
+            st.session_state[f"{key_prefix}ton"] = t
+        else:
+            st.session_state[f"{key_prefix}landed_qty"] = 0
+            st.session_state[f"{key_prefix}received_qty"] = 0
+            st.session_state[f"{key_prefix}ton"] = 0.0
+
+    # ── Tabs ────────────────────────────────────────────────────────
     tab1, tab2 = st.tabs(["Daily follow-up", "Summary / Export"])
 
+    # ================================================================
+    # TAB 1 – input widgets  +  temp table  +  daily log
+    # ================================================================
     with tab1:
-        st.subheader("Add operation")
-        with st.form(key=f"{key_prefix}op_form", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                selected_bl = st.selectbox(
-                    "B/L", bls, key=f"{key_prefix}bl_select")
-                op_type = st.radio("Operation", [
-                                   "Landed", "Received"], horizontal=True, key=f"{key_prefix}op_type")
-            with c2:
-                op_date = st.date_input(
-                    "Operation date", value=date.today(), key=f"{key_prefix}op_date")
-                qty = st.number_input(
-                    "Quantity", min_value=0, step=1, value=0, key=f"{key_prefix}qty")
-            with c3:
-                ton = st.number_input(
-                    "Tonnage", min_value=0.0, step=0.001, value=0.0, format="%.3f", key=f"{key_prefix}ton")
-                loc = st.selectbox("Location", locations,
-                                   key=f"{key_prefix}loc")
 
-            if loc == "Other":
-                loc_other = st.text_input(
-                    "Enter custom location", key=f"{key_prefix}loc_other")
-                if loc_other.strip():
-                    loc = loc_other.strip()
+        # -------- reactive input widgets (no form) ------------------
+        st.subheader("➕ Add operation")
 
-            chs = st.text_input("Chassis/Serial (optional)",
-                                value="", key=f"{key_prefix}chs")
-            remarks = st.text_area(
-                "Remarks (optional)", value="", height=60, key=f"{key_prefix}remarks")
+        c1, c2, c3 = st.columns(3)
 
-            submitted = st.form_submit_button("Save operation")
-            if submitted:
-                row = {
-                    "NAVIRE": selected_navire,
-                    "B/L": str(selected_bl),
-                    "OP_DATE": datetime.combine(op_date, datetime.min.time()).isoformat(),
-                    "OPERATION": op_type,
-                    "LOCATION": loc,
-                    "QUANTITE": int(qty),
-                    "TONAGE": float(ton),
+        with c1:
+            selected_bl = st.selectbox(
+                "B/L", bls,
+                key=f"{key_prefix}bl_select",
+                on_change=_on_bl_or_op_change,
+            )
+            landed_qty = st.number_input(
+                "Landed Quantity", min_value=0, step=1,
+                key=f"{key_prefix}landed_qty",
+            )
+
+        with c2:
+            op_date = st.date_input(
+                "Operation date",
+                value=date.today(),
+                key=f"{key_prefix}op_date",
+            )
+
+            received_qty = st.number_input(
+                "Received Quantity", min_value=0, step=1,
+                key=f"{key_prefix}received_qty",
+            )
+
+        with c3:
+            ton = st.number_input(
+                "Tonnage", min_value=0.0, step=0.001, format="%.3f",
+                key=f"{key_prefix}ton",
+            )
+            loc = st.selectbox(
+                "Location", locations,
+                key=f"{key_prefix}loc",
+            )
+
+        if loc == "Other":
+            loc_other = st.text_input(
+                "Enter custom location",
+                key=f"{key_prefix}loc_other",
+            )
+            if loc_other.strip():
+                loc = loc_other.strip()
+
+        chs = st.text_input(
+            "Chassis / Serial (optional)",
+            key=f"{key_prefix}chs_in",
+        )
+        remarks = st.text_area(
+            "Remarks (optional)", height=60,
+            key=f"{key_prefix}remarks",
+        )
+
+        # Show manifest reference so the user sees what the source says
+        if selected_bl:
+            mq, mt = _get_manifest_MV(selected_bl, True)
+
+            st.caption(
+                f"📦 Manifest reference for **{selected_bl}**: "
+                f"Qty = **{mq}**,  Tonnage = **{mt:.3f}**"
+            )
+
+        def _add_pending():
+            if not selected_bl:
+                st.warning("No B/L selected.")
+            elif loc == "Other":
+                st.warning("Please type a custom location name.")
+            else:
+                new_row = {
+                    "NAVIRE":         selected_navire,
+                    "B/L":            str(selected_bl),
+                    "OP_DATE":        op_date.isoformat(),
+                    "LANDED_QTY":     int(landed_qty),
+                    "RECEIVED_QTY":   int(received_qty),
+                    "LANDED_TON":         float(ton),
+                    "LOCATION":       loc,
                     "CHASSIS/SERIAL": chs,
-                    "REMARKS": remarks,
-                    "CREATED_AT": datetime.now().isoformat(timespec="seconds"),
+                    "REMARKS":        remarks,
                 }
-                append_op_row(row, ops_log_path=ops_log_path)
-                st.success("Operation saved.")
-                ops_df = read_ops_log(ops_log_path)  # refresh after save
+                st.session_state[temp_key] = pd.concat(
+                    [st.session_state[temp_key], pd.DataFrame([new_row])],
+                    ignore_index=True,
+                )
+            _clear_item_fields()
+            st.session_state[editor_ver_key] += 1
 
-        st.subheader("Today's follow-up")
+        st.button(
+            "➕ Add to pending operations",
+            key=f"{key_prefix}add_pending",
+            on_click=_add_pending,
+        )
+
+        # -------- virtual pending-operations table ------------------
+        st.divider()
+        pending = st.session_state[temp_key]
+
+        if not pending.empty:
+            st.subheader(f"📋 Pending Operations  ({len(pending)} row"
+                         f"{'s' if len(pending) != 1 else ''})")
+            st.caption(
+                "✏️ Edit any cell directly.  Delete rows with the "
+                "checkbox.  Nothing is saved until you click "
+                "**Update – Save all**."
+            )
+
+            edited_df = st.data_editor(
+                pending,
+                num_rows="dynamic",
+                use_container_width=True,
+                key=(f"{key_prefix}temp_editor_"
+                     f"{st.session_state[editor_ver_key]}"),
+            )
+            # Keep session state in sync with editor edits
+            st.session_state[temp_key] = edited_df
+
+            col_save, col_clear = st.columns(2)
+
+            with col_save:
+                if st.button(
+                    "✅ Update – Save all to log",
+                    type="primary",
+                    key=f"{key_prefix}save_all",
+                ):
+                    saved = 0
+                    for _, row in edited_df.iterrows():
+                        op_row = row.to_dict()
+                        # Normalise date to ISO string
+                        try:
+                            op_row["OP_DATE"] = datetime.combine(
+                                pd.to_datetime(op_row["OP_DATE"]).date(),
+                                datetime.min.time(),
+                            ).isoformat()
+                        except Exception:
+                            pass
+                        op_row["CREATED_AT"] = (
+                            datetime.now().isoformat(timespec="seconds")
+                        )
+                        append_op_row(op_row, ops_log_path=ops_log_path)
+                        saved += 1
+
+                    # Clear temp table
+                    st.session_state[temp_key] = pd.DataFrame(
+                        columns=TEMP_COLS
+                    )
+                    st.session_state[editor_ver_key] += 1
+                    st.success(f"✅ {saved} operation(s) committed to log!")
+                    st.rerun()
+
+            with col_clear:
+                if st.button("🗑️ Clear all pending",
+                             key=f"{key_prefix}clear_pending"):
+                    st.session_state[temp_key] = pd.DataFrame(
+                        columns=TEMP_COLS
+                    )
+                    st.session_state[editor_ver_key] += 1
+                    st.rerun()
+        else:
+            st.info(
+                "No pending operations. Use the inputs above to add "
+                "entries, then click **Add to pending operations**."
+            )
+
+        # -------- daily committed log -------------------------------
+        st.divider()
+        st.subheader("📅 Daily follow-up  (committed log)")
+
         daily_date = st.date_input(
-            "Select day", value=date.today(), key=f"{key_prefix}daily_pick")
+            "Select day",
+            value=date.today(),
+            key=f"{key_prefix}daily_pick",
+        )
+
         daily_ops = _filter_ops_by_day(ops_df, selected_navire, daily_date)
 
         if daily_ops.empty:
             c1, c2, c3 = st.columns(3)
             c1.metric("Landed qty", 0)
             c2.metric("Received qty", 0)
-            c3.metric("Balance (landed - received)", 0)
-            st.info("No operations for the selected day.")
+            c3.metric("Balance (landed − received)", 0)
+            st.info("No committed operations for the selected day.")
         else:
-            landed_qty = daily_ops[daily_ops["OPERATION"]
-                                   == "Landed"]["QUANTITE"].sum()
-            received_qty = daily_ops[daily_ops["OPERATION"]
-                                     == "Received"]["QUANTITE"].sum()
+            landed_qty = daily_ops.loc[
+                daily_ops["OPERATION"] == "Landed", "QUANTITE"
+            ].sum()
+            received_qty = daily_ops.loc[
+                daily_ops["OPERATION"] == "Received", "QUANTITE"
+            ].sum()
             balance_qty = landed_qty - received_qty
+
             c1, c2, c3 = st.columns(3)
-            c1.metric("Landed qty", int(landed_qty))
+            c1.metric("Landed qty",  int(landed_qty))
             c2.metric("Received qty", int(received_qty))
-            c3.metric("Balance (landed - received)", int(balance_qty))
+            c3.metric("Balance (landed − received)", int(balance_qty))
 
-            show_cols = ["OP_DATE", "OPERATION", "LOCATION", "B/L",
-                         "QUANTITE", "TONAGE", "CHASSIS/SERIAL", "REMARKS", "CREATED_AT"]
-            st.dataframe(daily_ops[show_cols].sort_values(
-                ["OP_DATE", "OPERATION", "B/L"]), use_container_width=True)
+            show_cols = [
+                "OP_DATE",  "LOCATION", "B/L", "CHASSIS/SERIAL",
+                "REMARKS", "CREATED_AT",
+            ]
+            st.dataframe(
+                daily_ops[show_cols].sort_values(
+                    ["OP_DATE", "OPERATION", "B/L"]
+                ),
+                use_container_width=True,
+            )
 
+    # ================================================================
+    # TAB 2 – Summary / Export  (unchanged logic)
+    # ================================================================
     with tab2:
         st.subheader("Summary by B/L for selected NAVIRE")
         summary_df = build_summary(manifest_df, ops_df, selected_navire)
+
         if summary_df.empty:
             st.info("No summary available yet for this NAVIRE.")
         else:
             st.dataframe(summary_df, use_container_width=True)
 
-            # Downloads (per selected NAVIRE)
             nav_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
             nav_ops_csv = nav_ops.to_csv(index=False).encode("utf-8-sig")
             sum_csv = summary_df.to_csv(index=False).encode("utf-8-sig")
@@ -390,7 +589,7 @@ def render_tracking_ui(
                     data=nav_ops_csv,
                     file_name=f"{selected_navire}_operations.csv",
                     mime="text/csv",
-                    key=f"{key_prefix}dl_ops"
+                    key=f"{key_prefix}dl_ops",
                 )
             with c2:
                 st.download_button(
@@ -398,7 +597,14 @@ def render_tracking_ui(
                     data=sum_csv,
                     file_name=f"{selected_navire}_summary.csv",
                     mime="text/csv",
-                    key=f"{key_prefix}dl_summary"
+                    key=f"{key_prefix}dl_summary",
                 )
 
-    return {"ops_df": ops_df, "summary_df": (build_summary(manifest_df, ops_df, selected_navire) if selected_navire else pd.DataFrame()), "selected_navire": selected_navire}
+    return {
+        "ops_df": ops_df,
+        "summary_df": (
+            build_summary(manifest_df, ops_df, selected_navire)
+            if selected_navire else pd.DataFrame()
+        ),
+        "selected_navire": selected_navire,
+    }

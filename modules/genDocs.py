@@ -79,17 +79,21 @@ def docGeneration(clear_downloads_func):
         if st.session_state.inserted_file and trigger:
             show_mapping_dialog(df_raw)
 
-        final_mp = st.session_state.get("final_mapping", {})
 
         if  not trigger and st.session_state.inserted_file  :
             st.toast("inside final mapping")
-            # success=False
-            molded_df, success=align_data(df_raw, final_mp)
             st.session_state.inserted_file=None # clear the inserted file after processing
             st.session_state.trigger_mapping = False # clear the trigger
 
+            final_mp = st.session_state.get("final_mapping", {})
+
+            # success=False
+            molded_df, success=align_data(df_raw, final_mp)
+            if os.path.exists(file_path):
+                os.remove(file_path)       
+
             if len(final_mp) and success:
-            # if success :
+                # if success :
                 st.success("Data Aligned Successfully!")
                 molded_df = molded_df.reindex(columns=COLUMNS)
                 # delete first row that contain headers in the molded_df
@@ -97,14 +101,16 @@ def docGeneration(clear_downloads_func):
                 # Save the aligned DataFrame to the original file path
                 molded_df.to_excel(file_path, index=False)
                 st.session_state.final_mapping = {}
-            else:
-                os.remove(file_path)
-                st.toast(f"no mapping arranged so file uplodade was rejected {file_path}")
-                st.rerun()
+                                           
+                # st.toast(f"no mapping arranged so file uplodade was rejected {file_path}")
+                # st.rerun()
+       
+            st.rerun()
+        else:
+            pass
+            
 
-
-        del df_raw
-        
+        del df_raw      
 
         # CRUD Operations
         st.write(f"**Editing:** `{st.session_state.selected_file}`")

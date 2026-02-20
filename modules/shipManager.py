@@ -15,17 +15,11 @@ def render_single_file_manager(clear_downloads_func):
     tab_old, tab_track = st.tabs(
         ["My current view", "Landing / Stock tracking"])
 
-    
-    
-   
-   
-
     with tab_old:
         st.subheader("📂 Single Ship Operations")
         docGeneration(clear_downloads_func)
 
     with tab_track:
         st.subheader("📊 Landing / Stock Tracking")
-        # You can reuse the same function or create a new one for this tab
-        # For now, let's just call the same function to demonstrate
+        
         render_tracking_ui(None, None)

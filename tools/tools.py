@@ -63,6 +63,7 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 
 
 def align_data(uploaded_df, mapping):
+    
     try:
         # st.write("mappe*ing:")
         valid_mappings_count = sum(
