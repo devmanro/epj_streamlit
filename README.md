@@ -52,3 +52,8 @@ i need to finish :
 -add copy/past feature to facilitate editing multiple cells.
 -create tool for calculating surface ,in logistic tools,
 -get started in making ui for handling template 
+-IMPLEMENT AN SQL LIGHT DB.
+
+
+in bl tracking
+make sure to include a checker for data where it checks if qty is less or equal to manifest (for landed and received) AND ALSO MAKE SURE TO APPEND THIS OPS_LOGS TO A DATABASE_LOGS WHERE IT SAVES ALL LOGS THERE AND KEEPS THIS AS TEMPORARY FOR EACH FILE

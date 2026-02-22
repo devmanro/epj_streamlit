@@ -78,7 +78,7 @@ def _ensure_ops_log(ops_log_path: Path) -> Path:
             # File exists but has no headers or is corrupted, create with headers only
             pd.DataFrame(columns=required_cols).to_csv(
                 ops_log_path, index=False, encoding="utf-8-sig")
-    
+
     return ops_log_path
 
 
@@ -100,7 +100,7 @@ def read_ops_log(ops_log_path: Path = DEFAULT_OPS_LOG_PATH) -> pd.DataFrame:
 
 
 def append_op_row(row: dict, ops_log_path: Path = DEFAULT_OPS_LOG_PATH) -> None:
-    
+
     df = read_ops_log(ops_log_path)
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
     df.to_csv(ops_log_path, index=False, encoding="utf-8-sig")
@@ -130,16 +130,6 @@ def _prep_manifest_df(manifest_df: pd.DataFrame) -> pd.DataFrame:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce")
     return df
-
-
-def _filter_ops_by_day(ops_df: pd.DataFrame, navire: str, the_date: date) -> pd.DataFrame:
-    if ops_df.empty:
-        return ops_df
-    df = ops_df.copy()
-    df["OP_DATE_ONLY"] = df["OP_DATE"].dt.date
-    if navire:
-        df = df[df["NAVIRE"] == navire]
-    return df[df["OP_DATE_ONLY"] == the_date].drop(columns=["OP_DATE_ONLY"])
 
 
 # -----------------------------
@@ -294,8 +284,8 @@ def render_tracking_ui(
         st.session_state[f"{key_prefix}bl_select"] = bls[0] if bls else ""
         st.session_state[f"{key_prefix}loc_other"] = ""
 
-
     # ── callback: auto-populate qty / ton from manifest ─────────────
+
     def _on_bl_or_op_change():
         bl = st.session_state.get(f"{key_prefix}bl_select")
         if bl:
@@ -434,13 +424,13 @@ def render_tracking_ui(
             on_click=_add_pending,
         )
 
+        
         # -------- virtual pending-operations table ------------------
         st.divider()
         pending = st.session_state[temp_key]
 
         if not pending.empty:
-            st.subheader(
-                "make sure to include a checker for data where it checks if qty is less or equal to manifest (for landed and received) ")
+
             st.subheader(f"📋 Pending Operations  ({len(pending)} row"
                          f"{'s' if len(pending) != 1 else ''})")
             st.caption(
@@ -514,60 +504,46 @@ def render_tracking_ui(
         st.subheader("Summary for selected NAVIRE")
 
         # Filter controls in columns
-        filter_col1, filter_col2, filter_col3 = st.columns(3)
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+            
+        navire_manifest = manifest_df[manifest_df["NAVIRE"]== selected_navire].copy()
+        # Filter operations by navire (no day filter anymore)
+        navire_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
 
         with filter_col1:
             # Get unique client names from manifest for selected navire
-            navire_manifest = manifest_df[manifest_df["NAVIRE"] == selected_navire].copy(
-            )
-            client_options = ["All"]
-            if not navire_manifest.empty and "CLIENT" in navire_manifest.columns:
-                client_options.extend(
-                    sorted(navire_manifest["CLIENT"].dropna().astype(
-                        str).unique().tolist())
-                )
+            client_list = ["All"] + sorted(navire_manifest["CLIENT"].dropna().unique().tolist())
+            selected_client = st.selectbox("Client Name", client_list, key=f"{key_prefix}client")
 
-            selected_client = st.selectbox(
-                "Client Name",
-                client_options,
-                key=f"{key_prefix}client_filter",
-            )
-
-        with filter_col2:
-            # Get unique commodity types from manifest for selected navire
-            navire_manifest = manifest_df[manifest_df["NAVIRE"] == selected_navire].copy(
-            )
-            commodity_types = ["All"]
-            if not navire_manifest.empty and "TYPE" in navire_manifest.columns:
-                commodity_types.extend(
-                    sorted(navire_manifest["TYPE"].dropna().astype(
-                        str).unique().tolist())
-                )
-
-            selected_commodity = st.selectbox(
-                "Commodity Type",
-                commodity_types,
-                key=f"{key_prefix}commodity_filter",
-            )
+        with filter_col2:        
+            # Filter options based on client selection to keep them relevant
+            temp_df = navire_manifest if selected_client == "All" else navire_manifest[navire_manifest["CLIENT"] == selected_client]
+            type_list = ["All"] + sorted(temp_df["TYPE"].dropna().unique().tolist())
+            selected_commodity = st.selectbox("Commodity Type", type_list, key=f"{key_prefix}type")
 
         with filter_col3:
             # Get unique B/Ls from ops for selected navire
-            navire_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
-            bl_options = ["All"]
+            # navire_ops = manifest_df[manifest_df["NAVIRE"] == selected_navire].copy()
+            bl_list = ["All"] + sorted(temp_df["B/L"].dropna().astype(str).unique().tolist())
+            selected_bl = st.selectbox("B/L", bl_list, key=f"{key_prefix}bl")
+
+        with filter_col4:
+            
+            # navire_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
+            # Date Filter
+            date_options = ["All"]
             if not navire_ops.empty:
-                bl_options.extend(
-                    sorted(
-                        navire_ops["B/L"].dropna().astype(str).unique().tolist())
-                )
+                # Ensure OP_DATE is datetime to sort and extract unique dates
+                navire_ops["OP_DATE"] = pd.to_datetime(
+                    navire_ops["OP_DATE"], errors="coerce")
+                dates = sorted(navire_ops["OP_DATE"].dt.date.dropna().unique())
+                date_options.extend([d.strftime("%Y-%m-%d") for d in dates])
 
-            selected_bl_filter = st.selectbox(
-                "B/L",
-                bl_options,
-                key=f"{key_prefix}bl_filter",
-            )
+            selected_date = st.selectbox(
+                "Operation Date", date_options, key=f"{key_prefix}date_filter")
 
-        # Filter operations by navire (no day filter anymore)
-        navire_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
+
+
         daily_ops = navire_ops
 
         # Join with manifest to get commodity type and client information
@@ -593,10 +569,13 @@ def render_tracking_ui(
                 ]
 
             # Apply B/L filter
-            if selected_bl_filter != "All":
+            if selected_bl != "All":
                 daily_ops = daily_ops[
-                    daily_ops["B/L"].astype(str) == str(selected_bl_filter)
+                    daily_ops["B/L"].astype(str) == str(selected_bl)
                 ]
+            if selected_date != "All":
+                daily_ops = daily_ops[daily_ops["OP_DATE"].dt.date.astype(
+                    str) == selected_date]
 
         if daily_ops.empty:
             c1, c2, c3 = st.columns(3)
@@ -605,40 +584,26 @@ def render_tracking_ui(
             c3.metric("Balance (landed - received)", 0)
             st.info("No committed operations for the selected filters.")
         else:
-            # Determine operation type from LANDED_QTY and RECEIVED_QTY if OPERATION column doesn't exist
-            if "OPERATION" not in daily_ops.columns:
-                # Create OPERATION column based on which quantity is non-zero
-                daily_ops["OPERATION"] = daily_ops.apply(
-                    lambda row: "Landed" if row.get("LANDED_QTY", 0) > 0
-                    else ("Received" if row.get("RECEIVED_QTY", 0) > 0 else "Unknown"),
-                    axis=1
-                )
-                # Use QUANTITE if available, otherwise derive from LANDED_QTY/RECEIVED_QTY
-                if "QUANTITE" not in daily_ops.columns:
-                    daily_ops["QUANTITE"] = daily_ops.apply(
-                        lambda row: row.get("LANDED_QTY", 0) if row["OPERATION"] == "Landed"
-                        else row.get("RECEIVED_QTY", 0),
-                        axis=1
-                    )
+           # If no filters are applied, these will show the ship's total
+            total_landed = daily_ops["LANDED_QTY"].fillna(0).sum()
+            total_received = daily_ops["RECEIVED_QTY"].fillna(0).sum()
+            # Manifested Qty (Unique per B/L to avoid double counting if multiple ops exist per B/L)
+            total_manifested = navire_manifest["QUANTITE"].fillna(0).sum()
+            manifest_diff = total_manifested - total_landed  # Global Difference
+            balance_qty = total_landed - total_received
 
-            landed_qty = daily_ops.loc[
-                daily_ops["OPERATION"] == "Landed", "QUANTITE"
-            ].sum()
-            received_qty = daily_ops.loc[
-                daily_ops["OPERATION"] == "Received", "QUANTITE"
-            ].sum()
-            balance_qty = landed_qty - received_qty
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Landed qty",  int(landed_qty))
-            c2.metric("Received qty", int(received_qty))
-            c3.metric("Balance (landed − received)", int(balance_qty))
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Landed qty",  int(total_landed))
+            c2.metric("Received qty", int(total_received))
+            c3.metric("DIFFERENCE (landed − received)", int(balance_qty))
+            c4.metric("Manifest vs Landed", int(manifest_diff),
+                      help="Difference between Manifested Qty and Landed Qty")
 
             show_cols = [
                 "B/L", "OP_DATE",
-                "RECEIVED_QTY",
+                "LANDED_QTY",
                 "LOCATION", "CHASSIS/SERIAL",
-                "REMARKS", "LANDED_QTY", "CREATED_AT",
+                "REMARKS", "RECEIVED_QTY", "CREATED_AT",
             ]
             # Add CLIENT, TYPE and DESIGNATION to display if available
             if "CLIENT" in daily_ops.columns:
@@ -657,13 +622,11 @@ def render_tracking_ui(
                 if not pd.api.types.is_datetime64_any_dtype(daily_ops["OP_DATE"]):
                     daily_ops["OP_DATE"] = pd.to_datetime(
                         daily_ops["OP_DATE"], errors="coerce")
-        
+
                 # Format for display, handling NaT values
                 daily_ops["OP_DATE"] = daily_ops["OP_DATE"].apply(
                     lambda x: x.strftime("%Y-%m-%d") if pd.notna(x) else ""
                 )
-
-
 
             st.dataframe(
                 daily_ops[show_cols].sort_values(

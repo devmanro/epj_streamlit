@@ -37,3 +37,58 @@ placing item should be sufficience (remove button update next drop, leave only t
 
 
 
+# 1. Base Data
+navire_manifest = manifest_df[manifest_df["NAVIRE"] == selected_navire].copy()
+navire_ops = ops_df[ops_df["NAVIRE"] == selected_navire].copy()
+
+# Initialize session state for filters if not exists
+for key in ['client', 'type', 'bl', 'date']:
+    if f"{key_prefix}{key}" not in st.session_state:
+        st.session_state[f"{key_prefix}{key}"] = "All"
+
+# 2. Define a helper to apply "other" filters
+def get_filtered_df(exclude=None):
+    df = navire_manifest.copy()
+    if exclude != 'client' and st.session_state[f"{key_prefix}client"] != "All":
+        df = df[df["CLIENT"] == st.session_state[f"{key_prefix}client"]]
+    if exclude != 'type' and st.session_state[f"{key_prefix}type"] != "All":
+        df = df[df["TYPE"] == st.session_state[f"{key_prefix}type"]]
+    if exclude != 'bl' and st.session_state[f"{key_prefix}bl"] != "All":
+        df = df[df["B/L"].astype(str) == st.session_state[f"{key_prefix}bl"]]
+    return df
+
+# 3. UI Columns
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    # Options are limited by Type and B/L selections
+    opts = ["All"] + sorted(get_filtered_df(exclude='client')["CLIENT"].dropna().unique().tolist())
+    st.selectbox("Client", opts, key=f"{key_prefix}client")
+
+with col2:
+    # Options are limited by Client and B/L selections
+    opts = ["All"] + sorted(get_filtered_df(exclude='type')["TYPE"].dropna().unique().tolist())
+    st.selectbox("Type", opts, key=f"{key_prefix}type")
+
+with col3:
+    # Options are limited by Client and Type selections
+    opts = ["All"] + sorted(get_filtered_df(exclude='bl')["B/L"].dropna().astype(str).unique().tolist())
+    st.selectbox("B/L", opts, key=f"{key_prefix}bl")
+
+with col4:
+    # Date depends on all three above
+    current_filtered_manifest = get_filtered_df()
+    relevant_ops = navire_ops[navire_ops["B/L"].isin(current_filtered_manifest["B/L"])]
+    
+    date_opts = ["All"]
+    if not relevant_ops.empty:
+        relevant_ops["OP_DATE"] = pd.to_datetime(relevant_ops["OP_DATE"])
+        date_opts += [d.strftime("%Y-%m-%d") for d in sorted(relevant_ops["OP_DATE"].dt.date.unique())]
+    
+    st.selectbox("Date", date_opts, key=f"{key_prefix}date")
+
+# 4. Final Data for Display
+final_manifest = get_filtered_df()
+final_ops = navire_ops[navire_ops["B/L"].isin(final_manifest["B/L"])]
+if st.session_state[f"{key_prefix}date"] != "All":
+    final_ops = final_ops[final_ops["OP_DATE"].dt.date.astype(str) == st.session_state[f"{key_prefix}date"]]
