@@ -28,9 +28,6 @@ New features yet to add:
 add to this port status emb/deb in day,week,month or year.
 
 
-
-
-
 17-fix map position when changing from view to edit mode,
 18-refactor the code for better working and even better organisation
 
@@ -52,7 +49,17 @@ i need to finish :
 -add copy/past feature to facilitate editing multiple cells.
 -create tool for calculating surface ,in logistic tools,
 -get started in making ui for handling template 
--IMPLEMENT AN SQL LIGHT DB.
+-IMPLEMENT AN SQL LIGHT DB./or make a new transition to mongodb .
+-MAKE THE DASHBOARD GET DATA FROM DJENDDJEN API,AND MAKE THE LOADED/LANDED QUANTITIES(FOR GOODS TYPES) TAKEN FROM INSERTED DATA MANUALLY PLUS ,IN ADDITION TO THAT SPACE ON PORT,
+-IMPLEMENT A SOLUTION TO FETCH INPUTS FROM OPS AND FROM 
+
+
+
+
+
+
+
+
 
 
 in bl tracking
