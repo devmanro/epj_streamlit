@@ -46,7 +46,9 @@ def format_entry_docx(doc, row):
     # print(f"client------{client}")
     nb_colis = row.get(COL_QUANTITE)
     tonnage = row.get(COL_TONAGE)
-    rec_qty = row.get(COL_RESTE_TP)
+    rec_qty = row.get(COL_RESTE_TP)or 0
+    
+    
 
     nb_colis = clean_excel_val(nb_colis)
     tonnage = clean_excel_val(tonnage)
@@ -136,3 +138,4 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     # column_names = ["type", "client", "qte", "poids", "rec_qty"]
     # names=column_names
 #    generate_brd("source.xlsx", sheet_name=0, template_path="template.docx", output_docx="entries.docx")
+
