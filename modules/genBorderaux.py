@@ -46,7 +46,7 @@ def format_entry_docx(doc, row):
     # print(f"client------{client}")
     nb_colis = row.get(COL_QUANTITE)
     tonnage = row.get(COL_TONAGE)
-    rec_qty = row.get(COL_RESTE_TP) or float(0)
+    rec_qty = row.get(COL_RESTE_TP)
     
     
 
@@ -62,7 +62,8 @@ def format_entry_docx(doc, row):
     tonnage_str = f"{tonnage:.2f}".lstrip(
         "0") if tonnage < 1 else f"{tonnage:.2f}"
     manifest_qty_str = f"{int(nb_colis):02d}"
-    rec_str = f"{int(rec_qty):02d}"
+    
+    rec_str = f"{int(float(rec_qty or 0)):02d}"
     
     # Define lines based on type
     # Logic to adjust Commodity name based on type
@@ -138,5 +139,6 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     # column_names = ["type", "client", "qte", "poids", "rec_qty"]
     # names=column_names
 #    generate_brd("source.xlsx", sheet_name=0, template_path="template.docx", output_docx="entries.docx")
+
 
 
