@@ -25,13 +25,21 @@ if not os.path.exists(PATH_BRDX):
 
 
 def clean_excel_val(val):
-    # Check for None or empty string
-    if val is None or val == "":
-        return 0
-    # Check for NaN (only if val is a number)
-    if isinstance(val, (int, float)) and math.isnan(val):
-        return 0
-    return val
+    # Convert to string and remove whitespace
+    s_val = str(val).strip()
+
+    # Handle common non-numeric Excel markers
+    if s_val in ["", "-", "nan", "None"]:
+        return 0.0
+
+    # Validate if it's a number (handles "10" and "10.0")
+    if s_val.replace('.', '', 1).isdigit():
+        return float(s_val)
+    
+    # Return 0.0 for any other text to prevent crashes
+    return 0.0
+
+
 
 
 def format_entry_docx(doc, row):
