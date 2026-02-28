@@ -128,5 +128,5 @@ elif choice == "Logistics Tools":
 # 9. WORKFORCE TRACKING
 # ---------------------------------------------------------
 elif choice == "Workforce Tracking":
-    st.header("👷 Shift & Tally Follow-up")
+    
     staff_m()
