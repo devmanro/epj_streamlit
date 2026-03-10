@@ -56,7 +56,6 @@ def format_entry_docx(doc, row):
     tonnage = row.get(COL_TONAGE)
     rec_qty = row.get(COL_RESTE_TP)
     
-    
 
     nb_colis = clean_excel_val(nb_colis)
     tonnage = clean_excel_val(tonnage)
