@@ -276,7 +276,7 @@ def gen_table_deb(filepath=None):
     base_name = os.path.basename(filepath)
     file_name_only = os.path.splitext(base_name)[0]
 
-    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=True,bl_aggregation=False)
+    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=False,bl_aggregation=False)
     st.dataframe(source_df)      # nicer interactive table
     
     # Normalize column names to match constants in COLUMNS
@@ -410,5 +410,6 @@ def gen_table_deb(filepath=None):
 
     output_xlsx = f"{PATH_DEBRQ}/{file_name_only}.xlsx"
     wb.save(output_xlsx)
+
 
     return output_xlsx
