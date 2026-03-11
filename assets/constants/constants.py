@@ -79,3 +79,20 @@ DEFAULT_LOCATIONS = [
     "Warehouse 2",
     "Other"
 ]
+
+
+
+# 1. Numeric Group (Must be float/int, handles math)
+numeric_cols = ["QUANTITE", "TONAGE", "RESTE T/P", "SURFACE"]
+
+# 2. Date Group (Must be datetime objects or None)
+date_cols = ["DATE", "DATE ENLEV"]
+
+# 3. Selection Group (Must match your SelectboxColumn options)
+category_cols = ["TYPE", "SITUATION", "CLES"]
+
+# 4. Text Group (Everything else - must be forced to String/Object)
+text_cols = [
+    "NAVIRE", "B/L", "DESIGNATION", "CLIENT", "CHASSIS/SERIAL", 
+    "OBSERVATION", "POSITION", "TRANSIT", "DAEMO BREAKER (DRB) TOP BOX TYPE"
+]

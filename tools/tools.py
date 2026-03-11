@@ -3,12 +3,10 @@ import re
 import os
 import pandas as pd
 from pyarrow import null
-
 from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
-
 
 from assets.constants.constants import (
     COL_CLIENT,
@@ -20,8 +18,61 @@ from assets.constants.constants import (
     COL_TYPE,
     COMMODITY_TYPES,
     UNITS_TYPES,
-    PACKAGES_TYPES
+    PACKAGES_TYPES,
+    numeric_cols,
+    date_cols,
+    category_cols,
+    text_cols,
 )
+
+
+
+
+def clean_dataframe_types(datasource , only_cols=None):
+    """
+    Loops through columns and applies appropriate types and handles None/NaN.
+    """
+    # 1. Define Column Groups
+    # numeric_cols = ["QUANTITE", "TONAGE", "RESTE T/P", "SURFACE"]
+    # text_cols = ["NAVIRE", "B/L", "DESIGNATION", "CLIENT","DATE" ]
+    # category_cols = ["TYPE", "SITUATION", "CLES"]
+
+    cols_to_process = only_cols if only_cols is not None else datasource.columns
+    for col in cols_to_process:
+        if col not in datasource.columns:
+            continue
+        # --- Handle Text Columns (The "FLOAT" Error Fix) ---
+        if col in text_cols:
+            # Force to string first, then clean up the 'nan' strings
+            datasource[col] = datasource[col].astype(str).replace(['nan', 'None', 'NaN', 'null'], '')
+            datasource[col] = datasource[col].str.replace(r'\.0$', '', regex=True) # Removes .0 from IDs
+            
+        # --- Handle Numeric Columns ---
+        elif col in numeric_cols:
+            datasource[col] = pd.to_numeric(datasource[col], errors='coerce').fillna(0.0)
+            if col == "QUANTITE":
+                datasource[col] = datasource[col].astype(int)
+
+        # --- Handle Date Columns ---
+        elif col in date_cols:
+            # Convert to datetime; errors='coerce' turns bad dates into NaT (Accepted by DateColumn)
+            datasource[col] = pd.to_datetime(datasource[col], errors='coerce')
+
+        # --- Handle Category Columns ---
+        elif col in category_cols:
+            default_val = "Divers" if col == "TYPE" else ("En attente" if col == "SITUATION" else "N/A")
+            datasource[col] = datasource[col].astype(str).replace(['nan', 'None', 'NaN'], default_val)
+
+    return datasource
+
+
+
+
+
+
+
+
+
 
 
 def getDB():
