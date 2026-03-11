@@ -16,6 +16,7 @@ DB_PATH = "data/database.xlsx"
 MAP_IMAGE_PATH = "assets/map/port_map.png"
 
 COLUMNS = [
+    "ESCALE",
     "NAVIRE",
     "DATE",
     "B/L",
@@ -33,7 +34,8 @@ COLUMNS = [
     "CLES",
     "SURFACE",
     "DAEMO BREAKER (DRB) TOP BOX TYPE",
-    "DATE ENLEV"
+    "DATE ENLEV",
+    "CARGO_TYPE",
 ]
 
 COMMODITY_TYPES = ["PLYWOOD", "BIGBAG", "TUBE", 
@@ -42,7 +44,7 @@ COMMODITY_TYPES = ["PLYWOOD", "BIGBAG", "TUBE",
 GOODS__TYPES={"PLYWOOD", "BIG BAG", "TUBE","BEAMS", "FIL M", "COIL","BOB","CTP"}
 
 # "OTHERS"
-(
+(   COL_ESCALE,
     COL_NAVIRE,
     COL_DATE,
     COL_BL,
@@ -61,6 +63,7 @@ GOODS__TYPES={"PLYWOOD", "BIG BAG", "TUBE","BEAMS", "FIL M", "COIL","BOB","CTP"}
     COL_SURFACE,
     COL_DRB_TYPE,
     COL_DATE_ENLEV,
+    COL_CARGO_TYPE,
 ) = COLUMNS
 
 # "UNITS", "PACKAGES"

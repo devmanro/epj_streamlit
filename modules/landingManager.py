@@ -35,7 +35,10 @@ def render_global_manager():
                 )
                 if selected_values:
                     filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
-
+    
+    # Reset index after all filters are applied
+    filtered_df = filtered_df.reset_index(drop=True)
+    
     st.divider()
 
     # 4. Display the Filtered Table
@@ -53,8 +56,22 @@ def render_global_manager():
             width='stretch',
             num_rows="dynamic",
             key="global_db_editor",
-            column_config={
-                "_index": st.column_config.CheckboxColumn("Select")
+            hide_index=True,
+             column_config={
+                # "_index": st.column_config.CheckboxColumn("Row"),
+                "NAVIRE": st.column_config.TextColumn("🚢 Navire", width="small"),
+                # "DATE": st.column_config.DateColumn("📄 DATE", width="medium"),
+                "B/L": st.column_config.TextColumn("📄 B/L", width="medium"),
+                "DESIGNATION": st.column_config.TextColumn("📦 Désignation", width="large"),
+                "QUANTITE": st.column_config.NumberColumn("🔢 Quantité", format="%d", width="small"),
+                "TONAGE": st.column_config.NumberColumn("⚖️ Tonnage", format="%.2f T", width="small"),
+                "CLIENT": st.column_config.TextColumn("👤 Client", width="medium"),
+                "CHASSIS/SERIAL": st.column_config.TextColumn("🔧 Chassis/Serial", width="medium"),
+                # "RESTE T/P": st.column_config.NumberColumn("📊 Reste T/P", format="%.2f", width="small"),
+                # "TYPE": st.column_config.TextColumn("📋 Type",  width="medium"),
+                # "SITUATION": st.column_config.TextColumn("🚦 Situation", width="medium"),
+                # "CLES": st.column_config.NumberColumn("🔑 Clés",width="small"),
+                # "SURFACE": st.column_config.NumberColumn("📐 Surface", format="%.2f m²", width="small"),
             },
         )
 

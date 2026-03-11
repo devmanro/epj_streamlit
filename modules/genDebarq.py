@@ -277,10 +277,10 @@ def gen_table_deb(filepath=None):
     file_name_only = os.path.splitext(base_name)[0]
 
     source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=False,bl_aggregation=False)
-    st.dataframe(source_df)      # nicer interactive table
     
     # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
+    st.dataframe(source_df)      # nicer interactive table
 
     wb = Workbook()
     ws = wb.active
@@ -291,15 +291,17 @@ def gen_table_deb(filepath=None):
     list_bl_sheet_name = f"LIST_BL_{file_name_only}"
     ws_bl = wb.create_sheet(title=list_bl_sheet_name)
 
-     # Write source_df to the new sheet
-    for r_idx, row in enumerate(source_df.itertuples(index=False), start=1):
-        for c_idx, value in enumerate(row, start=1):
-            ws_bl.cell(row=r_idx, column=c_idx).value = value
-    
     # Write headers
     for c_idx, col_name in enumerate(source_df.columns, start=1):
         ws_bl.cell(row=1, column=c_idx).value = col_name
         ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
+        
+     # Write source_df to the new sheet
+    for r_idx, row in enumerate(source_df.itertuples(index=False), start=2):
+        for c_idx, value in enumerate(row, start=1):
+            ws_bl.cell(row=r_idx, column=c_idx).value = value
+    
+    
 
     ws.merge_cells("A1:G1")
     ws["A1"].value = ship_name_placeholder

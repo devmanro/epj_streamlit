@@ -244,13 +244,8 @@ def render_tracking_ui(
         return {"ops_df": ops_df, "summary_df": pd.DataFrame(),
                 "selected_navire": None}
 
-    nav_idx = navires.index(default_navire) if default_navire in navires else 0
-    selected_navire = st.selectbox(
-        "Select NAVIRE (ship)",
-        navires,
-        index=nav_idx,
-        key=f"{key_prefix}navire_select",
-    )
+    # Automatically select the first value (index 0) instead of using a selectbox
+    selected_navire = navires[0]
 
     # B/L list for chosen navire
     bls = sorted(

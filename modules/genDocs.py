@@ -80,7 +80,7 @@ def docGeneration(clear_downloads_func):
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
         if st.session_state.inserted_file and trigger:
             show_mapping_dialog(df_raw)
-            st.stop() 
+            st.stop()
 
         if not trigger and st.session_state.inserted_file:
             st.toast("inside final mapping")
@@ -142,15 +142,18 @@ def docGeneration(clear_downloads_func):
                 
                 if selected_values:
                     filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
-
+         # Reset index after all filters are applied
+        filtered_df = filtered_df.reset_index(drop=True)
+        
         # 2. Display the table using the filtered results
         edited_df = st.data_editor(
             filtered_df, # Use the filtered DF here
             num_rows="dynamic",
             key="single_file_editor",
             width='stretch',
+            hide_index=True,
             column_config={
-                "_index": st.column_config.CheckboxColumn("Select"),
+                # "_index": st.column_config.CheckboxColumn("Row"),
                 "NAVIRE": st.column_config.TextColumn("🚢 Navire", width="small"),
                 # "DATE": st.column_config.DateColumn("📄 DATE", width="medium"),
                 "B/L": st.column_config.TextColumn("📄 B/L", width="medium"),

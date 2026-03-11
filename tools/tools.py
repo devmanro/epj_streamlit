@@ -143,34 +143,41 @@ def align_data(uploaded_df, mapping):
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
     # st.info(list(uploaded_df.columns))
-
-    mapping = {}
     st.session_state.trigger_mapping = False
-    st.session_state.final_mapping = mapping
-    # Define how many mapping boxes you want per row
+    mapping = {}
+    uploaded_cols = list(uploaded_df.columns)
     COLS_PER_ROW = 4
 
-    # Iterate through COLUMNS in chunks to create rows
     for i in range(0, len(COLUMNS), COLS_PER_ROW):
         row_cols = st.columns(COLS_PER_ROW)
-
-        # Get the subset of columns for this specific row
         batch = COLUMNS[i: i + COLS_PER_ROW]
 
         for j, req_col in enumerate(batch):
             with row_cols[j]:
-                # Using a container or border for better visual separation
                 with st.container(border=True):
                     st.markdown(f"**{req_col}**")
 
+                    # --- AUTO-MATCH LOGIC ---
+                    # Find first uploaded col that contains the required name (e.g., 'date' in 'date_manifeste')
+                    default_index = 0  # Default to None
+                    for idx, col in enumerate(uploaded_cols):
+                        if req_col.lower() in col.lower():
+                            default_index = idx + 1 # +1 because [None] is at index 0
+                            break
+                    # ------------------------
+
                     selected_source_column = st.selectbox(
-                        "Source column:",
-                        options=[None] + list(uploaded_df.columns),
+                        f"Source for {req_col}:",
+                        options=[None] + uploaded_cols,
+                        index=default_index,
                         key=f"map_{req_col}",
-                        label_visibility="collapsed"  # Hide label to save space
+                        label_visibility="collapsed"
                     )
-                    if selected_source_column:  # Only add to mapping if a column was selected
+                    
+                    if selected_source_column:
                         mapping[selected_source_column] = req_col
+        
+        st.session_state.final_mapping = mapping
 
     if st.button("Confirm and Import", type="primary", width='stretch'):
         # 1. Clear the trigger immediately so it doesn't re-open
