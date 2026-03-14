@@ -12,7 +12,8 @@ from assets.constants.constants import (
     COL_TYPE,
     COL_QUANTITE,
     COL_BL,
-    GOODS__TYPES
+    GOODS__TYPES,
+    COL_DATE
 )
 from tools.tools import group_sourcefile_by_client
 
@@ -37,6 +38,26 @@ def get_manual_color(product_name):
     
     # Returns None (White) if not found or for 'Others'
     return None
+
+
+
+
+# to DEFINE THE TITLE OF SHIP
+def style_header_cell(ws, text, cell_range="C1:E1", bg_color="D3D3D3", font_color="0000FF"):
+    # Define styles
+    fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+    font = Font(bold=True, size=24, color=font_color)
+    align = Alignment(horizontal="center", vertical="center")
+    
+    # Apply logic
+    ws.merge_cells(cell_range)
+    top_left_cell = cell_range.split(":")[0]
+    
+    ws[top_left_cell].value = text
+    ws[top_left_cell].fill = fill
+    ws[top_left_cell].font = font
+    ws[top_left_cell].alignment = align
+
 
 
 def create_product_table(ws, product_name, product_data, start_col, is_others=False):
@@ -150,7 +171,13 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
         ws[f"{col_letter}{bl_row}"].value = h
 
     # --- Data Rows (Starting at Row 8 for 15 Days) ---
-    base_date = datetime(2025, 2, 10)
+    
+
+    
+    # base_date = product_data[COL_DATE].iloc[0] if not product_data[COL_DATE].empty else datetime.now()
+    # Ensure base_date is a datetime object, not a string
+    base_date = pd.to_datetime(product_data[COL_DATE].iloc[0]) if not product_data[COL_DATE].empty else datetime.now()
+
     shifts = ["MATIN", "SOIR", "NUIT", "NUIT -2-"]
     data_start_row = 8
     curr_data_row = data_start_row
@@ -196,17 +223,28 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
         ws[f"{totalj_col}{day_start_row}"].font = Font(bold=True)
         ws[f"{totalj_col}{day_start_row}"].border = border
 
-    # --- Summary Rows ---
     summary_start_row = curr_data_row
     labels = ["TOTAL DECHARGER", "QUANTITE MANIFEST", "RESTE A BORD"]
     summary_rows = []
     for i, label in enumerate(labels):
         r = summary_start_row + i
-        label_cell = ws[f"{get_column_letter(start_col)}{r}"]
+        col1 = start_col
+        col2 = start_col + 1
+        col1_letter = get_column_letter(col1)
+        col2_letter = get_column_letter(col2)
+
+        # Merge label cell with the next right cell
+        ws.merge_cells(f"{col1_letter}{r}:{col2_letter}{r}")
+
+        label_cell = ws[f"{col1_letter}{r}"]
         label_cell.value = label
         label_cell.font = Font(bold=True)
+        label_cell.alignment = Alignment(horizontal="left", vertical="center")
         label_cell.border = border
-        ws[f"{get_column_letter(start_col + 1)}{r}"].border = border
+
+        # Border on the second cell (even though merged, needed for right border)
+        ws[f"{col2_letter}{r}"].border = border
+
         summary_rows.append(r)
 
 
@@ -274,7 +312,7 @@ def gen_table_deb(filepath=None):
         return False
 
     base_name = os.path.basename(filepath)
-    file_name_only = os.path.splitext(base_name)[0]
+    file_name_only = os.path.splitext(base_name)[0].upper()
 
     source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=False,bl_aggregation=False)
     
@@ -286,7 +324,7 @@ def gen_table_deb(filepath=None):
     ws = wb.active
     ws.title = f"{file_name_only}"
 
-    ship_name_placeholder = f"SHIP NAME:{file_name_only}"
+    ship_name_placeholder = f"SHIP NAME:      {file_name_only}"
 
     list_bl_sheet_name = f"LIST_BL_{file_name_only}"
     ws_bl = wb.create_sheet(title=list_bl_sheet_name)
@@ -300,12 +338,12 @@ def gen_table_deb(filepath=None):
     for r_idx, row in enumerate(source_df.itertuples(index=False), start=2):
         for c_idx, value in enumerate(row, start=1):
             ws_bl.cell(row=r_idx, column=c_idx).value = value
-    
+
+
+    # Define ship name
+    style_header_cell(ws, ship_name_placeholder)
     
 
-    ws.merge_cells("A1:G1")
-    ws["A1"].value = ship_name_placeholder
-    ws["A1"].font = Font(bold=True, size=14)
 
     # Use COMMODITY_TYPES from constants
     specific_keywords = GOODS__TYPES
@@ -345,7 +383,7 @@ def gen_table_deb(filepath=None):
         # Find the maximum row number from all tables to place global summary below
         max_row = max(max(rows) for rows, _ in all_summary_info)
         global_summary_start_row = max_row + 3  # Add some spacing
-        
+
         # Define styles for global summary
         border = Border(
             left=Side(style="thin"),
@@ -356,62 +394,72 @@ def gen_table_deb(filepath=None):
         center = Alignment(horizontal="center", vertical="center", wrap_text=True)
         bold_font = Font(bold=True, size=11)
         header_fill = PatternFill(
-            start_color="FFC000",  # Orange color for global summary header
+            start_color="FFC000",
             end_color="FFC000",
-            fill_type="solid"
+            fill_type="solid",
         )
-        
-        # Create header row
+        label_fill = PatternFill(
+            start_color="FFFF00",  # Yellow for labels
+            end_color="FFFF00",
+            fill_type="solid",
+        )
+
+        # ---- Header row: merged across columns A–B ----
         header_row = global_summary_start_row
+        ws.merge_cells(f"A{header_row}:B{header_row}")
         ws[f"A{header_row}"].value = "GLOBAL SUMMARY"
-        ws[f"B{header_row}"].value = "TOTAL DECHARGER"
-        ws[f"C{header_row}"].value = "QUANTITE MANIFEST"
-        ws[f"D{header_row}"].value = "RESTE A BORD"
-        
-        # Style header row
-        for col_idx in range(1, 5):
+        for col_idx in range(1, 3):
             cell = ws.cell(row=header_row, column=col_idx)
             cell.fill = header_fill
-            cell.font = bold_font
+            cell.font = Font(bold=True, size=13)
             cell.border = border
             cell.alignment = center
-        
-        # Create data row with formulas
-        data_row = global_summary_start_row + 1
-        
-        # Sum of all TOTAL DECHARGER (summary_rows[0] from all tables)
-        total_decharger_formula = "+".join([
+
+        # ---- Vertical rows: label in A, formula in B ----
+        row_total = header_row + 1
+        row_manifest = header_row + 2
+        row_reste = header_row + 3
+
+        # TOTAL DECHARGER
+        ws[f"A{row_total}"].value = "TOTAL DECHARGER"
+        total_decharger_refs = ",".join(
             f"{total_col}{rows[0]}" for rows, total_col in all_summary_info
-        ])
-        ws[f"B{data_row}"].value = f"=SUM({total_decharger_formula})" if len(all_summary_info) > 1 else f"={total_decharger_formula}"
-        
-        # Sum of all QUANTITE MANIFEST (summary_rows[1] from all tables)
-        quantite_manifest_formula = "+".join([
+        )
+        ws[f"B{row_total}"].value = f"={total_decharger_refs}" if len(all_summary_info) == 1 else f"=SUM({total_decharger_refs})"
+
+        # QUANTITE MANIFEST
+        ws[f"A{row_manifest}"].value = "QUANTITE MANIFEST"
+        quantite_refs = ",".join(
             f"{total_col}{rows[1]}" for rows, total_col in all_summary_info
-        ])
-        ws[f"C{data_row}"].value = f"=SUM({quantite_manifest_formula})" if len(all_summary_info) > 1 else f"={quantite_manifest_formula}"
-        
-        # Sum of all RESTE A BORD (summary_rows[2] from all tables)
-        reste_bord_formula = "+".join([
+        )
+        ws[f"B{row_manifest}"].value = f"={quantite_refs}" if len(all_summary_info) == 1 else f"=SUM({quantite_refs})"
+
+        # RESTE A BORD
+        ws[f"A{row_reste}"].value = "RESTE A BORD"
+        reste_refs = ",".join(
             f"{total_col}{rows[2]}" for rows, total_col in all_summary_info
-        ])
-        ws[f"D{data_row}"].value = f"=SUM({reste_bord_formula})" if len(all_summary_info) > 1 else f"={reste_bord_formula}"
-        
-        # Style data row
-        for col_idx in range(1, 5):
-            cell = ws.cell(row=data_row, column=col_idx)
-            cell.font = bold_font
-            cell.border = border
-            cell.alignment = center
-        
-        # Set column widths
-        ws.column_dimensions['A'].width = 20
-        ws.column_dimensions['B'].width = 22
-        ws.column_dimensions['C'].width = 22
-        ws.column_dimensions['D'].width = 22
+        )
+        ws[f"B{row_reste}"].value = f"={reste_refs}" if len(all_summary_info) == 1 else f"=SUM({reste_refs})"
+
+        # Style label + value rows
+        for r in (row_total, row_manifest, row_reste):
+            # Column A – label
+            label_cell = ws.cell(row=r, column=1)
+            label_cell.fill = label_fill
+            label_cell.font = bold_font
+            label_cell.border = border
+            label_cell.alignment = Alignment(horizontal="left", vertical="center")
+            # Column B – value
+            value_cell = ws.cell(row=r, column=2)
+            value_cell.font = bold_font
+            value_cell.border = border
+            value_cell.alignment = center
+
+        # Column widths
+        ws.column_dimensions["A"].width = 25
+        ws.column_dimensions["B"].width = 22
 
     output_xlsx = f"{PATH_DEBRQ}/{file_name_only}.xlsx"
     wb.save(output_xlsx)
-
 
     return output_xlsx

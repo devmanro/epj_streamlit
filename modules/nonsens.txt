@@ -405,3 +405,250 @@ def gen_table(filepath=None):
 
     grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
     return grouped
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      filter_col, table_col = st.columns([1, 4])  # 1:4 ratio — filter is small
+        with table_col:
+            
+            edited_df = st.data_editor(
+                molded_df,
+                num_rows="dynamic",
+                key="single_file_editor",
+                width='stretch',
+                # column_order
+
+                column_config={
+                   
+                    # ── Ship Name ──
+                    "NAVIRE": st.column_config.TextColumn(
+                        "🚢 Navire",
+                        help="Nom du navire",
+                        max_chars=100,
+                        default="",
+                        width="medium",
+                    ),
+
+                    #         # ── Date of Arrival ──
+                    # "DATE": st.column_config.DateColumn(
+                    #     "📅 DATE",
+                    #     help="Date d'arrivée",
+                    #     format="DD/MM/YYYY",
+                    #     min_value=date(2020, 1, 1),
+                    #     max_value=date(2030, 12, 31),
+                    #     step=1,
+                    # ),
+
+                    # ── Bill of Lading ──
+                    "B/L": st.column_config.TextColumn(
+                        "📄 B/L",
+                        help="Numéro de connaissement (Bill of Lading)",
+                        max_chars=50,
+                        default="",
+                        width="medium",
+                    ),
+
+                    # ── Designation ──
+                    "DESIGNATION": st.column_config.TextColumn(
+                        "📦 Désignation",
+                        help="Description de la marchandise",
+                        max_chars=200,
+                        default="",
+                        width="large",
+                    ),
+
+                    # ── Quantity ──
+                    "QUANTITE": st.column_config.NumberColumn(
+                        "🔢 Quantité",
+                        help="Nombre d'unités",
+                        min_value=0,
+                        max_value=100000,
+                        step=1,
+                        format="%d",
+                        default=0,
+                        width="small",
+                    ),
+
+                    # ── Tonnage ──
+                    "TONAGE": st.column_config.NumberColumn(
+                        "⚖️ Tonnage",
+                        help="Poids en tonnes",
+                        min_value=0.0,
+                        max_value=999999.0,
+                        step=0.01,
+                        format="%.2f T",
+                        default=0.0,
+                        width="small",
+                    ),
+
+                    # ── Client ──
+                    "CLIENT": st.column_config.TextColumn(
+                        "👤 Client",
+                        help="Nom du client",
+                        max_chars=100,
+                        default="",
+                        width="medium",
+                    ),
+
+                    # ── Chassis / Serial ──
+                    "CHASSIS/SERIAL": st.column_config.TextColumn(
+                        "🔧 Chassis/Serial",
+                        help="Numéro de chassis ou numéro de série",
+                        max_chars=50,
+                        default="",
+                        width="medium",
+                    ),
+
+                    # ── Reste T/P ──
+                    "RESTE T/P": st.column_config.NumberColumn(
+                        "📊 Reste T/P",
+                        help="Reste à traiter (Tonnes/Pièces)",
+                        min_value=0.0,
+                        step=0.01,
+                        format="%.2f",
+                        default=0.0,
+                        width="small",
+                    ),
+
+                    # ── Type ──
+                    "TYPE": st.column_config.SelectboxColumn(
+                        "📋 Type",
+                        help="Type de marchandise",
+                        options=[
+                            "Conteneur",
+                            "Véhicule",
+                            "Matériel",
+                            "Divers",
+                            "Vrac",
+                            "Roulier",
+                            "Conventionnel",
+                        ],
+                        default="Divers",
+                        width="medium",
+                    ),
+
+                    # ── Situation ──
+                    "SITUATION": st.column_config.SelectboxColumn(
+                        "🚦 Situation",
+                        help="Situation actuelle",
+                        options=[
+                            "En attente",
+                            "En cours",
+                            "Dédouané",
+                            "Livré",
+                            "Bloqué",
+                            "En transit",
+                            "Sorti",
+                        ],
+                        default="En attente",
+                        width="medium",
+                    ),
+
+                    # # ── Observation ──
+                    # "OBSERVATION": st.column_config.TextColumn(
+                    #     "📝 Observation",
+                    #     help="Notes et observations",
+                    #     max_chars=500,
+                    #     default="",
+                    #     width="large",
+                    # ),
+
+                    # # ── Position ──
+                    # "POSITION": st.column_config.TextColumn(
+                    #     "📍 Position",
+                    #     help="Emplacement dans le port/entrepôt",
+                    #     max_chars=50,
+                    #     default="",
+                    #     width="small",
+                    # ),
+
+                    # # ── Transit ──
+                    # "TRANSIT": st.column_config.TextColumn(
+                    #     "🚚 Transit",
+                    #     help="Transitaire",
+                    #     max_chars=100,
+                    #     default="",
+                    #     width="medium",
+                    # ),
+
+                    # ── Keys ──
+                    "CLES": st.column_config.SelectboxColumn(
+                        "🔑 Clés",
+                        help="Clés disponibles",
+                        options=[
+                            "Oui",
+                            "Non",
+                            "N/A",
+                        ],
+                        default="N/A",
+                        width="small",
+                    ),
+
+                    # ── Surface ──
+                    "SURFACE": st.column_config.NumberColumn(
+                        "📐 Surface",
+                        help="Surface en m²",
+                        min_value=0.0,
+                        step=0.01,
+                        format="%.2f m²",
+                        default=0.0,
+                        width="small",
+                    ),
+
+                    # # ── DAEMO Breaker ──
+                    # "DAEMO BREAKER (DRB) TOP BOX TYPE": st.column_config.TextColumn(
+                    #     "🔨 DAEMO Breaker",
+                    #     help="DAEMO Breaker (DRB) Top Box Type",
+                    #     max_chars=100,
+                    #     default="",
+                    #     width="medium",
+                    # ),
+
+                    # # ── Date Enlevement ──
+                    # "DATE ENLEV": st.column_config.DateColumn(
+                    #     "📅 Date Enlèvement",
+                    #     help="Date d'enlèvement de la marchandise",
+                    #     format="DD/MM/YYYY",
+                    #     min_value=date(2000, 1, 1),
+                    #     max_value=date(2030, 12, 31),
+                    #     default=None,
+                    #     width="small",
+                    # ),
+                },
+            )
+       
+        with filter_col:
+            filtered_df = molded_df.copy()
+            
+            for i, column in enumerate(molded_df.columns):
+                if column == "_select":
+                    continue
+                    
+                unique_values = molded_df[column].unique().tolist()
+                
+                # Multiselect is large; using a label and index makes it compact
+                selected_values = st.multiselect(
+                    f"{column}",
+                    options=unique_values,
+                    default=[],
+                    key=f"filter_{column}_{i}",
+                    label_visibility="collapsed", # Hides label to save space
+                    placeholder="All" # Makes it look smaller when empty
+                )
+                
+                if selected_values:
+                    filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
