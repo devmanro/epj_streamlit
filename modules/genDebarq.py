@@ -13,7 +13,8 @@ from assets.constants.constants import (
     COL_QUANTITE,
     COL_BL,
     GOODS__TYPES,
-    COL_DATE
+    COL_DATE,
+    COL_DESIGNATION
 )
 from tools.tools import group_sourcefile_by_client
 
