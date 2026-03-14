@@ -356,7 +356,7 @@ def gen_table_deb(filepath=None):
 
     for keyword in specific_keywords:
  
-        mask = source_df[COL_TYPE].astype(str).str.contains(
+        mask = source_df[COL_DESIGNATION].astype(str).str.contains(
             keyword, case=False, na=False
         )
 
