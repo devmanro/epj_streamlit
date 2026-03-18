@@ -652,3 +652,20 @@ def gen_table(filepath=None):
                 
                 if selected_values:
                     filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
+
+
+
+# Use COMMODITY_TYPES from constants
+    specific_keywords = GOODS__TYPES
+
+    start_col = 1
+    all_matched_indices = pd.Index([])
+    
+    # Track summary information for all tables
+    all_summary_info = []  # List of (summary_rows, total_col_letter) tuples
+
+    for keyword in specific_keywords:
+ 
+        mask = source_df[COL_DESIGNATION].astype(str).str.contains(
+            keyword, case=False, na=False
+        )

@@ -315,12 +315,16 @@ def gen_table_deb(filepath=None):
     base_name = os.path.basename(filepath)
     file_name_only = os.path.splitext(base_name)[0].upper()
 
+    list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
+
     source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=False,bl_aggregation=False)
     
     # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
     st.dataframe(source_df)      # nicer interactive table
 
+    list_bl.columns = list_bl.columns.str.strip().str.upper()
+    
     wb = Workbook()
     ws = wb.active
     ws.title = f"{file_name_only}"
@@ -329,22 +333,67 @@ def gen_table_deb(filepath=None):
 
     list_bl_sheet_name = f"LIST_BL_{file_name_only}"
     ws_bl = wb.create_sheet(title=list_bl_sheet_name)
+   
+    # 1. Define Styles
+    thick_side = Side(border_style="thick", color="000000")
+    thin_side = Side(border_style="thin", color="000000")
+    
+    # 1. Style Setup
+    thick_side = Side(border_style="thick", color="000000")
+    thin_side = Side(border_style="thin", color="000000")
 
-    # Write headers
-    for c_idx, col_name in enumerate(source_df.columns, start=1):
-        ws_bl.cell(row=1, column=c_idx).value = col_name
-        ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
+    # Header: Bold + Thick Borders | Data: Thin Borders
+    header_border = Border(top=thick_side, bottom=thick_side, left=thick_side, right=thick_side)
+    data_border = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
+    # Wrap text alignment
+    center_alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
+
+     # Identify the index of the Type column for coloring
+    type_col_idx = list_bl.columns.get_loc(COL_TYPE)
+
+    ROW_HEIGHT = 35
+    COL_WIDTH = 10
+
+    # 3. Write Headers
+    for c_idx, col_name in enumerate(list_bl.columns, start=1):
+        cell = ws_bl.cell(row=1, column=c_idx)
+        cell.value = col_name
+        cell.font = Font(bold=True)
+        cell.border = header_border
+        cell.alignment = center_alignment
+        ws_bl.column_dimensions[cell.column_letter].width = COL_WIDTH  # ≈ 14mm
+
+
+    # # Write headers
+    # for c_idx, col_name in enumerate(list_bl.columns, start=1):
+    #     ws_bl.cell(row=1, column=c_idx).value = col_name
+    #     ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
         
-     # Write source_df to the new sheet
-    for r_idx, row in enumerate(source_df.itertuples(index=False), start=2):
+     # Write list_bl to the new sheet
+    for r_idx, row in enumerate(list_bl.itertuples(index=False), start=2):
         for c_idx, value in enumerate(row, start=1):
             ws_bl.cell(row=r_idx, column=c_idx).value = value
 
+    # 4. Write Data and Apply Row Coloring
+    for r_idx, row in enumerate(list_bl.itertuples(index=False), start=2):
+        ws_bl.row_dimensions[r_idx].height = ROW_HEIGHT
 
-    # Define ship name
-    style_header_cell(ws, ship_name_placeholder)
+        # Get color based on the value in the COL_TYPE column
+        hex_color = get_manual_color(row[type_col_idx])
+        row_fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid") if hex_color else None
+        
+        for c_idx, value in enumerate(row, start=1):
+            cell = ws_bl.cell(row=r_idx, column=c_idx)
+            cell.value = value
+            cell.alignment = center_alignment
+            cell.border = data_border
+            if row_fill:
+                cell.fill = row_fill
     
 
+
+    # Define ship name for deb sheet
+    style_header_cell(ws, ship_name_placeholder)
 
     # Use COMMODITY_TYPES from constants
     specific_keywords = GOODS__TYPES

@@ -19,6 +19,7 @@ from assets.constants.constants import (
     COMMODITY_TYPES,
     UNITS_TYPES,
     PACKAGES_TYPES,
+    GOODS__TYPES, COL_DESIGNATION,
     numeric_cols,
     date_cols,
     category_cols,
@@ -116,12 +117,11 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
 def align_data(uploaded_df, mapping):
     
     try:
-        # st.write("mappe*ing:")
         valid_mappings_count = sum(
             1 for value in mapping.values() if value is not None)
 
         if valid_mappings_count <= 2:
-            return uploaded_df, False  # Return original DataFrame if required columns are missing
+            return uploaded_df, False
 
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
@@ -132,11 +132,53 @@ def align_data(uploaded_df, mapping):
         # Keep only the required columns
         df_aligned = df_mapped[final_cols]
 
+
+        # Use COMMODITY_TYPES from constants 
+        specific_keywords = GOODS__TYPES 
+
+        # Ensure COL_DESIGNATION exists in the aligned DataFrame
+        if COL_DESIGNATION in df_aligned.columns:
+            def find_type(designation):
+                """Return the first matching keyword found in the designation string."""
+                if not isinstance(designation, str):
+                    return None
+                designation_upper = designation.upper()
+                for keyword in specific_keywords:
+                    if keyword.upper() in designation_upper:
+                        return keyword
+                return None
+
+            df_aligned[COL_TYPE] = df_aligned[COL_DESIGNATION].apply(find_type)
+        else:
+            # If COL_DESIGNATION is not present, set type column to None
+            df_aligned[COL_TYPE] = None
+
         return df_aligned, True
 
     except Exception as e:
         print(f"Error during alignment: {e}")
         return uploaded_df, False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @st.dialog("Map Your Columns", width="large")
