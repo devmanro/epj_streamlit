@@ -111,7 +111,7 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
 
     style = doc.styles["Normal"]
     font = style.font
-    font.name = "Calibri (Corps)"
+    font.name = "Times New Roman"
     font.size = Pt(12)
 
     for idx, row in df.iterrows():

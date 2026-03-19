@@ -109,7 +109,7 @@ PACKAGES_TYPES = {"COLI", "UNITS", "PACKAGE", "CAISSE"}
 
 
 
-# constants.py
+
 
 KEYWORD_RULES = [
     # ══════════════════════════════════════════════════════════
