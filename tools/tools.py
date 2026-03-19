@@ -20,6 +20,7 @@ from assets.constants.constants import (
     UNITS_TYPES,
     PACKAGES_TYPES,
     GOODS__TYPES, COL_DESIGNATION,
+    KEYWORD_RULES,
     numeric_cols,
     date_cols,
     category_cols,
@@ -132,23 +133,34 @@ def align_data(uploaded_df, mapping):
         # Keep only the required columns
         df_aligned = df_mapped[final_cols]
 
-
-        # Use COMMODITY_TYPES from constants 
-        specific_keywords = GOODS__TYPES 
+        # Use KEYWORD_RULES from constants
+        keyword_rules = KEYWORD_RULES
 
         # Ensure COL_DESIGNATION exists in the aligned DataFrame
         if COL_DESIGNATION in df_aligned.columns:
+
             def find_type(designation):
-                """Return the first matching keyword found in the designation string."""
+                """
+                Return the CARGO TYPE by matching keywords against the designation.
+                Rules are checked in order — first match wins (most specific first).
+                
+                KEYWORD_RULES format: [ ([keyword1, keyword2, ...], "TYPE"), ... ]
+                """
                 if not isinstance(designation, str):
                     return None
+
                 designation_upper = designation.upper()
-                for keyword in specific_keywords:
-                    if keyword.upper() in designation_upper:
-                        return keyword
-                return None
+
+                # Iterate through rules in priority order
+                for keywords, cargo_type in keyword_rules:
+                    for keyword in keywords:
+                        if keyword.upper() in designation_upper:
+                            return cargo_type  # ← Returns the TYPE, not the keyword
+                
+                return None  # No match found → flag for manual review
 
             df_aligned[COL_TYPE] = df_aligned[COL_DESIGNATION].apply(find_type)
+
         else:
             # If COL_DESIGNATION is not present, set type column to None
             df_aligned[COL_TYPE] = None

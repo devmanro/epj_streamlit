@@ -14,7 +14,8 @@ from assets.constants.constants import (
     COL_BL,
     GOODS__TYPES,
     COL_DATE,
-    COL_DESIGNATION
+    COL_DESIGNATION,
+    KEYWORD_RULES
 )
 from tools.tools import group_sourcefile_by_client
 
@@ -29,7 +30,7 @@ def get_manual_color(product_name):
         "538DD5": ["BIG BAG","BAG"],             # Blue
         "C65911": ["TUBE"],                # Brown
         "948A54": ["BOB", "COIL"],         # Light Red
-        "DDD9C4": ["BEAMS", "FIL M"],      # RED
+        "DDD9C4": ["BEAMS", "FIL"],      # RED
     }
     
     # Find which group the product belongs to
@@ -44,7 +45,7 @@ def get_manual_color(product_name):
 
 
 # to DEFINE THE TITLE OF SHIP
-def style_header_cell(ws, text, cell_range="C1:E1", bg_color="D3D3D3", font_color="0000FF"):
+def style_header_cell(ws, text, cell_range="C1:H1", bg_color="D3D3D3", font_color="0000FF"):
     # Define styles
     fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
     font = Font(bold=True, size=24, color=font_color)
@@ -351,8 +352,8 @@ def gen_table_deb(filepath=None):
      # Identify the index of the Type column for coloring
     type_col_idx = list_bl.columns.get_loc(COL_TYPE)
 
-    ROW_HEIGHT = 35
-    COL_WIDTH = 10
+    ROW_HEIGHT = 15
+    COL_WIDTH = 20
 
     # 3. Write Headers
     for c_idx, col_name in enumerate(list_bl.columns, start=1):
@@ -406,7 +407,7 @@ def gen_table_deb(filepath=None):
 
     for keyword in specific_keywords:
  
-        mask = source_df[COL_DESIGNATION].astype(str).str.contains(
+        mask = source_df[COL_TYPE].astype(str).str.contains(
             keyword, case=False, na=False
         )
 
