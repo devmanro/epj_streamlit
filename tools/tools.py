@@ -163,7 +163,7 @@ def align_data(uploaded_df, mapping):
 
         else:
             # If COL_DESIGNATION is not present, set type column to None
-            df_aligned[COL_TYPE] = None
+            df_aligned[COL_TYPE] = df_aligned[COL_TYPE].fillna(value='None')
 
         return df_aligned, True
 
@@ -311,8 +311,18 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif matches_any_constant(raw_commodity, {"COLI"}):
-        commodity = "Units"
+
+
+
+    elif matches_any_constant(raw_commodity, {"TRACTEURS"
+                "LOURD",
+                "ENGINS",
+                "UTILITAIRE"}):
+        commodity = "Unit"
+        received_lines = [commodity, f"{commodity} Damaged on board"]
+        total_rec_str = f"{rec_str}  {commodity}"
+    elif matches_any_constant(raw_commodity, {"PACKAGE"}):
+        commodity = "package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
     # elif not raw_commodity:
@@ -323,6 +333,10 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         commodity = raw_commodity if raw_commodity else "General Cargo"
         received_lines = ["Packaging damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
+
+
+
+
     return commodity, received_lines, total_rec_str
 
 
