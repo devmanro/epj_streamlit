@@ -257,7 +257,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
     received_lines = []
     total_rec_str = rec_str
 
-    if matches_any_constant(raw_commodity, {"BAG", "BIG"}):
+    if matches_any_constant(raw_commodity, {"BAG", "BIG","BIG BAG","Calcined", "Anthracite", "Coal"}):
         commodity = "BIG BAGS"
         total_rec_str = f"{rec_str}  Big Bags"
         received_lines = [
@@ -275,7 +275,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         ]
         total_rec_str = f"{rec_str}  Crates of {commodity}"
 
-    elif matches_any_constant(raw_commodity, {"PIPE", "TUBE"}):
+    elif matches_any_constant(raw_commodity, {"PIPE", "TUBE" }):
         commodity = "TUBES"
         received_lines = ["TUBES.", "TUBES Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
@@ -286,7 +286,13 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
                           "Bundles of BEAMS Found Dismembered on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
-    elif matches_any_constant(raw_commodity, {"FILE MACHINE", "FIL"}):
+    elif matches_any_constant(raw_commodity, {"formwork","steel moulds"}):
+        commodity = "Bundles of formwork"
+        received_lines = ["Bundles of formwork.",
+                          "Bundles of formwork Found Dismembered on board"]
+        total_rec_str = f"{rec_str}  {commodity}"
+    
+    elif matches_any_constant(raw_commodity, {"FILE MACHINE", "FIL","STEEL WIRE","WIRE","FIL M"}):
         commodity = "FIL MACHINE"
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
@@ -310,10 +316,6 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         commodity = "Units + Package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-
-
-
-
     elif matches_any_constant(raw_commodity, {"TRACTEURS"
                 "LOURD",
                 "ENGINS",
@@ -333,10 +335,7 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         commodity = raw_commodity if raw_commodity else "General Cargo"
         received_lines = ["Packaging damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-
-
-
-
+        
     return commodity, received_lines, total_rec_str
 
 
