@@ -205,20 +205,19 @@ KEYWORD_RULES = [
     (["H-BEAM", "STEEL H-BEAM", "STEEL CHANNEL",
       "HOT ROLLED STEEL H","BEAMS","ANGLE BARS" ], "STEEL BEAMS"),
     
-    (["FILM","FIL","STEEL WIRE", "COIL TUBING", "WIRE ROD",
+    (["FIL MACHINE","FIL M","FIL","STEEL WIRE", "COIL TUBING", "WIRE ROD",
       "CARBON STEEL COIL TUBING"], "FIL M"),
 
     (["STEEL FORMWORK","FORMWORK","STEEL MOULDS", "STEEL TEMPLATE",
       "HOLLOW PIER STEEL"], "FORMWORK"),
 
     # ── WOOD / PANEL PRODUCTS ─────────────────────────────────
-    (["MDF"], "MDF"),
-    (["VENEER","EDGE GLUED","BLOCKBOARD","PLYWOOD","CTP"], "CTP"),
+    (["PLYWOOD","FILM FACED","COMMERCIAL","MDF"], "MDF"),
+    (["VENEER","EDGE GLUED","BLOCKBOARD","CTP"], "CTP"),
 
     # ── TUBES ─────────────────────────────────────────────────
     (["TUBE", "SEAMLESS BOILER","ECHAFFAUDAGE",
       "STEEL PIPE", "GALVANIZED STEEL PIPE","PIPE"], "PIPE"),
-
 
     # ── SPARE PARTS ───────────────────────────────────────────
     (["SPARE PART", "TRUCK PART", "TRANSMISSION",
