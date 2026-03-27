@@ -212,7 +212,7 @@ KEYWORD_RULES = [
       "HOLLOW PIER STEEL"], "FORMWORK"),
 
     # ── WOOD / PANEL PRODUCTS ─────────────────────────────────
-    (["PLYWOOD","FILM FACED","COMMERCIAL","MDF"], "MDF"),
+    (["PLYWOOD","FILM","FILM FACED","COMMERCIAL","MDF"], "MDF"),
     (["VENEER","EDGE GLUED","BLOCKBOARD","CTP"], "CTP"),
 
     # ── TUBES ─────────────────────────────────────────────────
