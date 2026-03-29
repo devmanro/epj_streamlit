@@ -64,3 +64,14 @@ i need to finish :
 
 in bl tracking
 make sure to include a checker for data where it checks if qty is less or equal to manifest (for landed and received) AND ALSO MAKE SURE TO APPEND THIS OPS_LOGS TO A DATABASE_LOGS WHERE IT SAVES ALL LOGS THERE AND KEEPS THIS AS TEMPORARY FOR EACH FILE
+
+
+
+Insert a date filter for single ship ops ,to be able to find which year/month/date to find the ship.
+
+
+TYPE ,PRODUIT,DETAILS
+
+TYPE :CATEGORY OF MARCHANDISE(DIVERS,ROULANT,PRODUIT PETROLIER,PRODUIT CHIMIQUE,CONTENEURS ETC...)
+PRODUIT:THE EXACT PRODUCT(TUBE,CTP,ENGIN,BUS)
+DESIGNATION:DESCRIPTION OF THE HOW THIS PRODUCT IS 

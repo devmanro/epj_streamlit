@@ -13,6 +13,7 @@ from assets.constants.constants import (
     COL_CHASSIS_SERIAL,
     COL_RESTE_TP,
     COL_TYPE,
+    COL_PRODUIT,
     COL_SITUATION,
     COL_OBSERVATION,
     COL_POSITION,
@@ -66,6 +67,7 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
             COL_CHASSIS_SERIAL: "-",                  # CHASSIS/SERIAL
             COL_RESTE_TP: "-",                        # RESTE T/P
             COL_TYPE: bl.get('conditionnement'),      # TYPE
+            COL_PRODUIT:"" ,                             # COL_PRODUIT
             COL_SITUATION: "-",                       # SITUATION
             COL_OBSERVATION: "-",                     # OBSERVATION
             COL_POSITION: "-",                        # POSITION
@@ -96,6 +98,7 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
                     COL_CHASSIS_SERIAL: item.get('numero_chassis'),
                     COL_RESTE_TP: "-",                     # RESTE T/P
                     COL_TYPE: item.get('type'),            # TYPE
+                    COL_PRODUIT:"" ,                             # COL_PRODUIT
                     COL_SITUATION: "-",                    # SITUATION
                     COL_OBSERVATION: (
                         f"{item.get('marque', '')} {item.get('modele', '')}".strip(
@@ -116,7 +119,8 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
     # Create DataFrame and Export
     df = pd.DataFrame(final_rows)
 
-
+    df = df.sort_values(by=COL_CLIENT)
+    
     df.to_excel(output_path, index=False)
     return output_path
 

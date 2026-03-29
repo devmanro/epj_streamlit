@@ -16,7 +16,9 @@ from assets.constants.constants import (
     DB_PATH, COLUMNS,
     # add COL_VALUES here if you have such a column name
     COL_TYPE,
+    COL_PRODUIT,
     COMMODITY_TYPES,
+    UNIT_CARGO_TYPES,
     UNITS_TYPES,
     PACKAGES_TYPES,
     GOODS__TYPES, COL_DESIGNATION,
@@ -25,10 +27,17 @@ from assets.constants.constants import (
     date_cols,
     category_cols,
     text_cols,
+    PACKAGE_CARGO_TYPES,
+    UNIT_CARGO_TYPES
 )
 
 
-
+ # Helper function to get display name without extension
+# ============================================================
+def get_display_name(filename: str) -> str:
+    """Remove file extension for display"""
+    from pathlib import Path
+    return Path(filename).stem
 
 def clean_dataframe_types(datasource , only_cols=None):
     """
@@ -66,15 +75,6 @@ def clean_dataframe_types(datasource , only_cols=None):
             datasource[col] = datasource[col].astype(str).replace(['nan', 'None', 'NaN'], default_val)
 
     return datasource
-
-
-
-
-
-
-
-
-
 
 
 def getDB():
@@ -115,6 +115,56 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
     return mapping
 
 
+def find_type_and_produit(designation):
+    """
+    Return (CARGO_TYPE, PRODUIT_CATEGORY) by matching keywords against the designation.
+    Rules are checked in order — first match wins for cargo_type.
+    PRODUIT scans the full designation against UNIT and PACKAGE sets.
+    """
+    if not isinstance(designation, str):
+        return pd.Series([None, None])
+
+    designation_upper = designation.upper()
+
+    # Step 1: Find cargo_type from KEYWORD_RULES (first match wins)
+    cargo_type = None
+    for keywords, ctype in KEYWORD_RULES:
+        for keyword in keywords:
+            if keyword.upper() in designation_upper:
+                cargo_type = ctype
+                break
+        if cargo_type is not None:
+            break
+
+    # Step 2: Check designation directly against BOTH category sets
+    is_unit = any(
+        constant.upper() in designation_upper
+        for constant in UNIT_CARGO_TYPES
+    )
+    is_package = any(
+        constant.upper() in designation_upper
+        for constant in PACKAGE_CARGO_TYPES
+    )
+
+    # Step 3: Also check cargo_type itself against category sets
+    if cargo_type is not None:
+        if not is_unit:
+            is_unit = matches_any_constant(cargo_type, UNIT_CARGO_TYPES)
+        if not is_package:
+            is_package = matches_any_constant(cargo_type, PACKAGE_CARGO_TYPES)
+
+    # Step 4: Determine PRODUIT
+    if is_package and is_unit:
+        produit = "UNIT + PACKAGE"
+    elif is_package:
+        produit = "PACKAGE"
+    elif is_unit:
+        produit = "UNIT"
+    else:
+        produit = cargo_type  # Unknown → flag for manual review
+
+    return pd.Series([cargo_type, produit])
+
 def align_data(uploaded_df, mapping):
     
     try:
@@ -133,37 +183,20 @@ def align_data(uploaded_df, mapping):
         # Keep only the required columns
         df_aligned = df_mapped[final_cols]
 
-        # Use KEYWORD_RULES from constants
-        keyword_rules = KEYWORD_RULES
+        
 
         # Ensure COL_DESIGNATION exists in the aligned DataFrame
         if COL_DESIGNATION in df_aligned.columns:
+            # Apply once, assign both columns
+            df_aligned[[COL_TYPE, COL_PRODUIT]] = df_aligned[COL_DESIGNATION].apply(find_type_and_produit)
 
-            def find_type(designation):
-                """
-                Return the CARGO TYPE by matching keywords against the designation.
-                Rules are checked in order — first match wins (most specific first).
-                
-                KEYWORD_RULES format: [ ([keyword1, keyword2, ...], "TYPE"), ... ]
-                """
-                if not isinstance(designation, str):
-                    return None
-
-                designation_upper = designation.upper()
-
-                # Iterate through rules in priority order
-                for keywords, cargo_type in keyword_rules:
-                    for keyword in keywords:
-                        if keyword.upper() in designation_upper:
-                            return cargo_type  # ← Returns the TYPE, not the keyword
-                
-                return None  # No match found → flag for manual review
-
-            df_aligned[COL_TYPE] = df_aligned[COL_DESIGNATION].apply(find_type)
-
+            # matches_any_constant(raw_commodity, UNIT_CARGO_TYPES) and matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES)
         else:
             # If COL_DESIGNATION is not present, set type column to None
-            df_aligned[COL_TYPE] = df_aligned[COL_TYPE].fillna(value='None')
+            df_aligned[[COL_TYPE,COL_PRODUIT]] = df_aligned[[COL_TYPE,COL_PRODUIT]].fillna(value='None')
+
+
+
 
         return df_aligned, True
 
@@ -266,6 +299,11 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
                           "Bundles of BEAMS Found Dismembered on board"]
         total_rec_str = f"{rec_str}  {commodity}"
 
+    elif matches_any_constant(raw_commodity, {"METAL SHEET"}):
+        commodity = "Bundles of METAL SHEET"
+        received_lines = ["Bundles of METAL SHEET.",
+                          "Bundles of METAL SHEET Found Dismembered on board"]
+        total_rec_str = f"{rec_str}  {commodity}"
     elif matches_any_constant(raw_commodity, {"formwork","steel moulds"}):
         commodity = "Bundles of formwork"
         received_lines = ["Bundles of formwork.",
@@ -292,25 +330,22 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
         ]
         total_rec_str = f"{rec_str}  Bundles of {raw_commodity}"
 
-    elif matches_any_constant(raw_commodity, {"COLI"}) and matches_any_constant(raw_commodity, {"PACKAGE"}):
+    elif matches_any_constant(raw_commodity, UNIT_CARGO_TYPES) and matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES):
         commodity = "Units + Package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-    elif matches_any_constant(raw_commodity, {"TRACTEURS"
-                "LOURD",
-                "ENGINS",
-                "UTILITAIRE"}):
-        commodity = "Unit"
-        received_lines = [commodity, f"{commodity} Damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
-    elif matches_any_constant(raw_commodity, {"PACKAGE"}):
+
+    elif matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES):
         commodity = "package"
         received_lines = [commodity, f"{commodity} Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
-    # elif not raw_commodity:
-    #     commodity = "Units + Package"
-    #     received_lines = ["Packaging damaged on board"]
-    #     total_rec_str = f"{rec_str}  {commodity}"
+
+     # Handle UNIT cargo types (vehicles, equipment, trailers)
+    elif matches_any_constant(raw_commodity, UNIT_CARGO_TYPES):
+        commodity = "Unit"
+        received_lines = [commodity, f"{commodity} Damaged on board"]
+        total_rec_str = f"{rec_str}  Units"
+    
     else:
         commodity = raw_commodity if raw_commodity else "General Cargo"
         received_lines = ["Packaging damaged on board"]
@@ -493,7 +528,6 @@ def group_sourcefile_by_client(
     sheet_name: int | str = 0,
     skip_units_packages: bool = False,
     bl_aggregated: bool = False,
-
 ) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
 
@@ -517,13 +551,11 @@ def group_sourcefile_by_client(
     if COL_BL in df.columns:
         df[COL_BL] = df[COL_BL].apply(_shorten_bl_code)
     
-
-        # ============================================================
+    # ============================================================
     # NEW: Normalize TYPE column before grouping
     # ============================================================
     if COL_TYPE in df.columns:
         df[COL_TYPE] = df[COL_TYPE].apply(normalize_type)
-
 
     # Base aggregation
     agg_dict = {
@@ -549,6 +581,6 @@ def group_sourcefile_by_client(
     grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False).agg(agg_dict)
 
     sorted_grouped = grouped.sort_values(
-        by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
-
+        by=[COL_CLIENT, COL_TYPE], ascending=True, na_position='last').reset_index(drop=True)
+    
     return sorted_grouped

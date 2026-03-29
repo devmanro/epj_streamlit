@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 PATH_BRDX = "reports/bordereaux"
@@ -10,7 +9,7 @@ WORKFORCE_DB = "data/workforce1.xlsx"
 
 DEFAULT_OPS_LOG_PATH = Path("data/ops_log.csv")
 
-PATH_DEBRQ = "data/debarqs"
+PATH_DEBRQ = "reports/debarqs"
 UPLOAD_DIR = "data/uploads"
 DB_PATH = "data/database.xlsx"
 MAP_IMAGE_PATH = "assets/map/port_map.png"
@@ -26,6 +25,7 @@ COLUMNS = [
     "CLIENT",
     "CHASSIS/SERIAL",
     "RESTE T/P",
+    "PRODUIT",
     "TYPE",
     "SITUATION",
     "OBSERVATION",
@@ -54,6 +54,7 @@ GOODS__TYPES = {"COIL", "METAL SHEET", "STEEL BEAMS", "FIL M", "FORMWORK", "MDF"
     COL_CHASSIS_SERIAL,
     COL_RESTE_TP,
     COL_TYPE,
+    COL_PRODUIT,
     COL_SITUATION,
     COL_OBSERVATION,
     COL_POSITION,
@@ -93,10 +94,28 @@ text_cols = [
 ]
 
 
-# "UNITS", "PACKAGES"
-UNITS_TYPES = {"UNITS", "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL"}
-PACKAGES_TYPES = {"COLI", "UNITS", "PACKAGE", "CAISSE"}
+# Define cargo type categories based on KEYWORD_RULES
+UNIT_CARGO_TYPES = {
+    "BUS", "MIXER_TRUCK", "CTRN_TRUCK", "DUMP_TRUCK", "TRACTOR_TRUCK",
+    "SPECIAL_TRUCK", "MINING_TRUCK", "LIGHT_TRUCK", "CARGO_TRUCK",
+    "LOWBED_TRAILER", "DUMP_TRAILER", "CEMENT_TRAILER", "CTRN", "SEMI_TRAILER",
+    "EXCAVATOR", "LOADER", "BULLDOZER", "ROLLER", "GRADER", "CRANE",
+    "FORKLIFT", "CONCRETE_PUMP", "CRUSHER", "DRILLING_RIG", "BACKHOE",
+    "ASPHALT_EQUIP", "SELF_LOADER", "BREAKER",
+    "WELL_LOG_TRUCK", "PUMP_SKID", "CAMP",  "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL",
+}
 
+PACKAGE_CARGO_TYPES = {
+    "SPARE_PARTS", "WELDING_EQUIP", "ROLLER_PAD", "COOLED_PANEL", "ZINC_KETTLE",
+    "COLI", "PACKAGE","PKGS" ,"CAISSE"
+}
+
+
+
+
+#  "PACKAGES"
+UNITS_TYPES = { "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL"}
+PACKAGES_TYPES = {"COLI",  "PACKAGE", "CAISSE"}
 
 
 KEYWORD_RULES = [
@@ -105,8 +124,24 @@ KEYWORD_RULES = [
     # Each tuple: ( [list_of_keywords], "CARGO_TYPE" )
     # ══════════════════════════════════════════════════════════
 
-    # ── VEHICLES (specific → generic) ─────────────────────────
-    (["AUTOBUS", "AUTOCAR", "MINI BUS", "MINIBUS", "MICRO BUS",
+    # ── INDUSTRIAL / MISC ─────────────────────────────────────
+    (["WELDING MACHINE", "HOISTING EQUIPMENT"], "WELDING_EQUIP"),
+    (["WELL LOGGING"], "WELL_LOG_TRUCK"),
+    (["CEMENTING SKID", "FUEL SUPPLY"], "PUMP_SKID"),
+    (["COOLED PANEL"], "COOLED_PANEL"),
+    (["CAMP"], "CAMP"),
+    (["ZINC KETTLE"], "ZINC_KETTLE"),
+    (["ROLLER FOOT PAD", "FOOT PAD"], "ROLLER_PAD"),
+    # ── SPARE PARTS ───────────────────────────────────────────
+    (["PKGS","SPARE PART", "TRUCK PART", "TRANSMISSION",
+      "BUCKET"], "SPARE_PARTS"),
+    # ── STRUCTURAL / BRIDGE ───────────────────────────────────
+    (["BRIDGE", "GIRDER ERECTION", 
+      "COMPONENTS FOR BRIDGE"], "BRIDGE_COMP"),
+
+
+    # ── UTILITIES (specific → generic) ─────────────────────────
+    (["UNITS","AUTOBUS", "AUTOCAR", "MINI BUS", "MINIBUS", "MICRO BUS",
       "19 SEAT", "15 SEAT", "BUS"], "BUS"),
 
     (["CONCRETE MIXER", "MIXER TRUCK", "MIXER"], "MIXER_TRUCK"),
@@ -208,26 +243,11 @@ KEYWORD_RULES = [
     (["TUBE", "SEAMLESS BOILER","ECHAFFAUDAGE",
       "STEEL PIPE", "GALVANIZED STEEL PIPE","PIPE"], "PIPE"),
 
-    # ── SPARE PARTS ───────────────────────────────────────────
-    (["SPARE PART", "TRUCK PART", "TRANSMISSION",
-      "BUCKET"], "SPARE_PARTS"),
-
-    # ── STRUCTURAL / BRIDGE ───────────────────────────────────
-    (["BRIDGE", "GIRDER ERECTION", "BEAM CARRIER",
-      "COMPONENTS FOR BRIDGE"], "BRIDGE_COMP"),
 
     # ── RAW MATERIALS ─────────────────────────────────────────
     
     (["BIG BAG","BAG","RESINE","CHEMICAL" ,"PET", "POLYESTER CHIPS","QUARTZ SAND", "ANTHRACITE COAL","Anthracite","Coal", "CALCINED"], "BIG BAG"),
 
-    # ── INDUSTRIAL / MISC ─────────────────────────────────────
-    (["WELDING MACHINE", "HOISTING EQUIPMENT"], "WELDING_EQUIP"),
-    (["WELL LOGGING"], "WELL_LOG_TRUCK"),
-    (["CEMENTING SKID", "FUEL SUPPLY"], "PUMP_SKID"),
-    (["COOLED PANEL"], "COOLED_PANEL"),
-    (["CAMP"], "CAMP"),
-    (["ZINC KETTLE"], "ZINC_KETTLE"),
-    (["ROLLER FOOT PAD", "FOOT PAD"], "ROLLER_PAD"),
     
 
 ]

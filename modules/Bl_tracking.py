@@ -13,7 +13,7 @@ import streamlit as st
 
 import os
 from assets.constants.constants import UPLOAD_DIR, DEFAULT_LOCATIONS, DEFAULT_OPS_LOG_PATH
-
+from tools.tools import get_display_name
 
 # -----------------------------
 # Configuration
@@ -194,17 +194,34 @@ def render_tracking_ui(
                    "Please upload a file first.")
         return _empty
 
-    default_index = 0
-    if (st.session_state.get("selected_file")
-            and st.session_state.selected_file in files):
-        default_index = files.index(st.session_state.selected_file)
 
-    selected_file = st.selectbox(
+    # NEW: Create display names without extensions
+    # ============================================================
+    # def get_display_name(filename: str) -> str:
+    #     """Remove file extension for display"""
+    #     return Path(filename).stem
+
+    # Create mapping: display_name -> actual_filename
+    file_display_map = {get_display_name(f): f for f in files}
+    display_names = list(file_display_map.keys())
+    default_index = 0
+    # if (st.session_state.get("selected_file")
+    #         and st.session_state.selected_file in files):
+    #     default_index = files.index(st.session_state.selected_file)
+    if st.session_state.get("selected_file"):
+        actual_file = st.session_state.selected_file
+        display_name = get_display_name(actual_file)
+        if display_name in display_names:
+            default_index = display_names.index(display_name)
+
+    selected_display_name = st.selectbox(
         "Select a ship file to operate on:",
-        files,
+        display_names,
         index=default_index,
         key=f"{key_prefix}file_selector",
     )
+    selected_file = file_display_map[selected_display_name]
+
     st.session_state.selected_file = selected_file
     file_path = os.path.join(UPLOAD_DIR, selected_file)
 

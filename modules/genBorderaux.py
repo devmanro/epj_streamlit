@@ -94,7 +94,7 @@ def format_entry_docx(doc, row):
 
 
 def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_docx=None):
-    if not output_docx:
+    if output_docx is None or input_excel is None:
         return
     
     # Accept either a path or a DataFrame
@@ -134,7 +134,7 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     output_docx = f"{PATH_BRDX}/{file_name_only}.docx"
     template_path = f"{PATH_TEMPLATES}/{template_name}"
 
-    grouped_df = group_sourcefile_by_client(sourcefile)
+    grouped_df = group_sourcefile_by_client(sourcefile, skip_units_packages=False,bl_aggregated=True)
     
     st.dataframe(grouped_df)      # nicer interactive table
     excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)

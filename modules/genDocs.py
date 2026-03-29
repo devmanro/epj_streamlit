@@ -10,7 +10,7 @@ from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table_deb
 from modules.genPv import generate_daily_pv
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, COLUMNS
-
+from tools.tools import get_display_name
 
 def docGeneration(clear_downloads_func):
 
@@ -56,25 +56,38 @@ def docGeneration(clear_downloads_func):
     # 2. List and Select Files
     files = os.listdir(UPLOAD_DIR)
     if files:
-
+        # NEW: Create display names mapping
+        # ============================================================
+        file_display_map = {get_display_name(f): f for f in files}
+        display_names = list(file_display_map.keys())
         default_index = 0
         if st.session_state.uploaded_file and st.session_state.inserted_file in files:
+            inserted_display_name = get_display_name(st.session_state.inserted_file)
+            if inserted_display_name in display_names:
+                default_index = display_names.index(inserted_display_name)
+
             # st.session_state.uploaded_file = None # Reset uploader
-            default_index = files.index(st.session_state.inserted_file)
+            # default_index = files.index(st.session_state.inserted_file)
             # st.session_state.inserted_file=None
 
-        st.session_state.selected_file = st.selectbox(
+        selected_display_name  = st.selectbox(
             "Select a ship file to operate on:",
-            files,
+            display_names,
             index=default_index,
             on_change=clear_downloads_func,
             key="file_selector_widget"
         )
+
+        # NEW: Map back to actual filename (with extension)
+        # ============================================================
+        st.session_state.selected_file = file_display_map[selected_display_name]
+
         # st.toast(f" {st.session_state.selected_file}")
         file_path = os.path.join(UPLOAD_DIR, st.session_state.selected_file)
 
         # Load Data
         df_raw = pd.read_excel(file_path) if st.session_state.selected_file.endswith('.xlsx') else pd.read_csv(file_path)
+        
         molded_df = df_raw
         trigger = st.session_state.get("trigger_mapping", False)
         # TRIGGER DIALOG ONLY ON NEW UPLOAD
