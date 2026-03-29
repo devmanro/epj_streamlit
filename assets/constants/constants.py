@@ -66,10 +66,6 @@ GOODS__TYPES = {"COIL", "METAL SHEET", "STEEL BEAMS", "FIL M", "FORMWORK", "MDF"
 ) = COLUMNS
 
 
-
-
-
-
 DEFAULT_LOCATIONS = [
     "Quay",
     "Hangar",
@@ -80,8 +76,6 @@ DEFAULT_LOCATIONS = [
     "Warehouse 2",
     "Other"
 ]
-
-
 
 # 1. Numeric Group (Must be float/int, handles math)
 numeric_cols = ["QUANTITE", "TONAGE", "RESTE T/P", "SURFACE"]
@@ -99,14 +93,9 @@ text_cols = [
 ]
 
 
-
 # "UNITS", "PACKAGES"
 UNITS_TYPES = {"UNITS", "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL"}
 PACKAGES_TYPES = {"COLI", "UNITS", "PACKAGE", "CAISSE"}
-
-
-
-
 
 
 

@@ -173,26 +173,6 @@ def align_data(uploaded_df, mapping):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @st.dialog("Map Your Columns", width="large")
 def show_mapping_dialog(uploaded_df):
     st.write("Match your file columns to the database headings:")
@@ -474,33 +454,24 @@ def matches_any_constant(type_str, constants_set):
     return False
 
 
-def aggregate_type_column(series):
-    # Get unique non-null values and convert to uppercase for comparison
-    unique_types = [str(x).strip().upper()
-                    for x in series.unique() if pd.notna(x) and str(x).strip()]
 
-    # Filter types into units and packages using partial matching
-    filtered_units = [
-        t for t in unique_types if matches_any_constant(t, UNITS_TYPES)]
-    filtered_packages = [
-        t for t in unique_types if matches_any_constant(t, PACKAGES_TYPES)]
-
-    # Check if we have any units or packages
-    has_units = len(filtered_units) > 0
-    has_packages = len(filtered_packages) > 0
-
-    # Determine result based on what's present
-    if has_units and has_packages:
-        return "UNITS + PACKAGES"
-    elif has_units:
-        return "UNITS"
-    elif has_packages:
-        return "PACKAGES"
-    else:
-        # If no units or packages found, return joined unique types
-        return ",".join(unique_types) if unique_types else None
 
  # Fix: Use a helper function to avoid closure issues
+def normalize_type(type_value):
+    """Normalize TYPE value to standard categories"""
+    if pd.isna(type_value):
+        return None
+    
+    type_str = str(type_value).strip().upper()
+    
+    if matches_any_constant(type_str, UNITS_TYPES):
+        return "UNITS"
+    elif matches_any_constant(type_str, PACKAGES_TYPES):
+        return "PACKAGES"
+    else:
+        return type_str  # Keep original if not matching
+
+
 
 
 def first_non_null(series):
@@ -520,14 +491,14 @@ def aggregate_bl(series):
 def group_sourcefile_by_client(
     input_excel: str,
     sheet_name: int | str = 0,
-    skip_unknown_commodities: bool = False,
-    bl_aggregation: bool = False,
+    skip_units_packages: bool = False,
+    bl_aggregated: bool = False,
 
 ) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
 
       # Skip rows whose commodity type is in UNITS_TYPES or PACKAGES_TYPES
-    if skip_unknown_commodities and COL_TYPE in df.columns:
+    if skip_units_packages and COL_TYPE in df.columns:
         skip_types = UNITS_TYPES | PACKAGES_TYPES
         df = df[
             ~df[COL_TYPE]
@@ -545,6 +516,14 @@ def group_sourcefile_by_client(
     # Short B/L into the same column
     if COL_BL in df.columns:
         df[COL_BL] = df[COL_BL].apply(_shorten_bl_code)
+    
+
+        # ============================================================
+    # NEW: Normalize TYPE column before grouping
+    # ============================================================
+    if COL_TYPE in df.columns:
+        df[COL_TYPE] = df[COL_TYPE].apply(normalize_type)
+
 
     # Base aggregation
     agg_dict = {
@@ -553,9 +532,9 @@ def group_sourcefile_by_client(
         COL_BL:aggregate_bl,
     }
 
-    skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL]
+    skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL,COL_TYPE]
     
-    if bl_aggregation is False :
+    if not bl_aggregated  :
         skip_cols.remove(COL_BL)
         agg_dict.pop(COL_BL, None)
 
@@ -565,15 +544,10 @@ def group_sourcefile_by_client(
             continue
         
         if col in df.columns:
-            # Special handling for COL_TYPE: join only specific commodity types
-            if col == COL_TYPE :
-                agg_dict[col] = aggregate_type_column
-                # agg_dict[col] = lambda s: ",".join([x for x in s.unique() if pd.notna(x) and x in units_types])
-            else:
-                agg_dict[col] = first_non_null
+            agg_dict[col] = first_non_null
+           
+    grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False).agg(agg_dict)
 
-    grouped = df.groupby(COL_CLIENT, as_index=False).agg(agg_dict)
-    
     sorted_grouped = grouped.sort_values(
         by=COL_TYPE, ascending=True, na_position='last').reset_index(drop=True)
 

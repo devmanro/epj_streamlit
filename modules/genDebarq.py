@@ -318,7 +318,7 @@ def gen_table_deb(filepath=None):
 
     list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
 
-    source_df = group_sourcefile_by_client(filepath, skip_unknown_commodities=False,bl_aggregation=True)
+    source_df = group_sourcefile_by_client(filepath, skip_units_packages=False,bl_aggregated=True)
     
     # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
