@@ -7,6 +7,11 @@ from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from pathlib import Path
+from openpyxl.formatting.rule import FormulaRule
+
+from openpyxl.styles import  PatternFill
+from openpyxl.utils import get_column_letter
 
 from assets.constants.constants import (
     COL_CLIENT,
@@ -28,9 +33,122 @@ from assets.constants.constants import (
     category_cols,
     text_cols,
     PACKAGE_CARGO_TYPES,
-    UNIT_CARGO_TYPES
+    UNIT_CARGO_TYPES,
+    LIST_OF_PATHS
 )
 
+
+
+def get_manual_color(product_name):
+    """Maps product names to specific hex colors as requested."""
+    name = str(product_name).upper()
+    
+    # Group products by color
+    color_groups = {
+        "92D050": ["CTP", "PLYWOOD", "MDF"],                      # Greenish
+        "538DD5": ["BIG BAG", "BAG", "PIPE"],                     # Blue
+        "C65911": ["TUBE", "FORMWORK"],                           # Brown/Orange
+        "948A54": ["BOB", "COIL", "METAL SHEET", "STEEL BEAMS"],  # Tan/Gold
+        "DDD9C4": ["BEAMS", "FIL", "FIL M"],                      # Grey/Beige
+    }
+    
+    # Find which group the product belongs to
+    for color, products in color_groups.items():
+        if name in products:
+            return color
+    
+    # Returns None (White) if not found or for 'Others'
+    return None
+
+
+def apply_summary_conditional_formatting(ws, summary_rows, start_col, clients):
+    red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+    yellow_fill = PatternFill(start_color="FFFFFF00", end_color="FFFFFF00", fill_type="solid")
+
+    total_row = summary_rows[0]      # total decharger
+    manifest_row = summary_rows[1]   # total quantite manifest
+    reste_row = summary_rows[2]      # reste
+
+    first_client_col = get_column_letter(start_col + 2)
+    last_client_col = get_column_letter(start_col + 1 + len(clients))
+
+    total_range = f"{first_client_col}{total_row}:{last_client_col}{total_row}"
+    manifest_range = f"{first_client_col}{manifest_row}:{last_client_col}{manifest_row}"
+    reste_range = f"{first_client_col}{reste_row}:{last_client_col}{reste_row}"
+
+    # total decharger row
+    ws.conditional_formatting.add(
+        total_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{total_row}>{first_client_col}{manifest_row}"],
+            fill=red_fill,
+            stopIfTrue=True
+        )
+    )
+    ws.conditional_formatting.add(
+        total_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{total_row}={first_client_col}{manifest_row}"],
+            fill=yellow_fill
+        )
+    )
+
+    # total quantite manifest row
+    ws.conditional_formatting.add(
+        manifest_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{total_row}>{first_client_col}{manifest_row}"],
+            fill=red_fill,
+            stopIfTrue=True
+        )
+    )
+    ws.conditional_formatting.add(
+        manifest_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{total_row}={first_client_col}{manifest_row}"],
+            fill=yellow_fill
+        )
+    )
+
+    # reste row
+    ws.conditional_formatting.add(
+        reste_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{reste_row}<0"],
+            fill=red_fill,
+            stopIfTrue=True
+        )
+    )
+    ws.conditional_formatting.add(
+        reste_range,
+        FormulaRule(
+            formula=[f"={first_client_col}{reste_row}=0"],
+            fill=yellow_fill
+        )
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @st.cache_resource
+def ensure_directories():
+    """Creates folders if they don't exist. Cached to run only once."""
+    for p in LIST_OF_PATHS:
+        Path(p).mkdir(parents=True, exist_ok=True)
 
  # Helper function to get display name without extension
 # ============================================================

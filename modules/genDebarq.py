@@ -5,6 +5,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
+
 from assets.constants.constants import (
     PATH_DEBRQ,
     COMMODITY_TYPES,
@@ -17,39 +18,17 @@ from assets.constants.constants import (
     COL_DESIGNATION,
     KEYWORD_RULES
 )
-from tools.tools import group_sourcefile_by_client
-
-
-def get_manual_color(product_name):
-    """Maps product names to specific hex colors as requested."""
-    name = str(product_name).upper()
-    
-    # Group products by color
-    color_groups = {
-        "92D050": ["CTP", "PLYWOOD"],      # Green
-        "538DD5": ["BIG BAG","BAG"],             # Blue
-        "C65911": ["TUBE"],                # Brown
-        "948A54": ["BOB", "COIL"],         # Light Red
-        "DDD9C4": ["BEAMS", "FIL"],      # RED
-    }
-    
-    # Find which group the product belongs to
-    for color, products in color_groups.items():
-        if name in products:
-            return color
-    
-    # Returns None (White) if not found or for 'Others'
-    return None
-
+from tools.tools import group_sourcefile_by_client,apply_summary_conditional_formatting,get_manual_color
 
 
 
 # to DEFINE THE TITLE OF SHIP
-def style_header_cell(ws, text, cell_range="C1:H1", bg_color="D3D3D3", font_color="0000FF"):
+def style_header_cell(ws, text, cell_range="C1:J1", bg_color="D3D3D3", font_color="0000FF"):
     # Define styles
     fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
-    font = Font(bold=True, size=24, color=font_color)
+    font = Font(name="Times New Roman",bold=True, size=18, color=font_color)
     align = Alignment(horizontal="center", vertical="center")
+
     
     # Apply logic
     ws.merge_cells(cell_range)
@@ -64,7 +43,7 @@ def style_header_cell(ws, text, cell_range="C1:H1", bg_color="D3D3D3", font_colo
 
 def create_product_table(ws, product_name, product_data, start_col, is_others=False):
     # --- Color Selection ---
-    raw_color = get_manual_color(product_name) if not is_others else None
+    raw_color = get_manual_color(product_name) if  is_others is False else None
 
     # --- Styles ---
     header_fill = PatternFill(
@@ -185,9 +164,15 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     curr_data_row = data_start_row
 
     for day_offset in range(15):
+        # ADD THIS: Determine if row should be hidden
+        should_hide = day_offset > 0
         d_str = (base_date + timedelta(days=day_offset)).strftime("%Y-%m-%d")
         day_start_row = curr_data_row
         for shift in shifts:
+            # ADD THIS: Hide the row dimension
+            if should_hide:
+                ws.row_dimensions[curr_data_row].hidden = True
+
             ws[f"{get_column_letter(start_col)}{curr_data_row}"].value = d_str
             ws[f"{get_column_letter(start_col + 1)}{curr_data_row}"].value = shift
 
@@ -297,13 +282,14 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
     # Global totals columns (TOTAL / TOTAL/J)
     for r in summary_rows:
-        ws[f"{extra_cols[1]}{r}"].value = (f"=SUM({get_column_letter(start_col+2)}{r}:{extra_cols[0]}{r})"
-)
+        ws[f"{extra_cols[1]}{r}"].value = (f"=SUM({get_column_letter(start_col+2)}{r}:{extra_cols[0]}{r})")
         ws[f"{extra_cols[1]}{r}"].font = Font(bold=True)
         ws[f"{extra_cols[1]}{r}"].border = border
         ws[f"{extra_cols[1]}{r}"].alignment = center
 
+    apply_summary_conditional_formatting(ws, summary_rows, start_col, clients)
 
+    
     # return last_col_idx
     return last_col_idx, summary_rows, extra_cols[1] 
 

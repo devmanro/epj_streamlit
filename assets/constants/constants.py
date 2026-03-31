@@ -1,18 +1,34 @@
 from pathlib import Path
 
+#PATH_REPORTS="reports/"
 PATH_BRDX = "reports/bordereaux"
 PATH_PVS = "reports/pvs"
+PATH_DEBRQ = "reports/debarqs"
+
+#PATH_ASSETS="assets/"
 PATH_TEMPLATES = "assets/templates"
 FIXED_STAFF_PATH = "assets/templates/staff_template.csv"
+MAP_IMAGE_PATH = "assets/map/port_map.png"
 
-WORKFORCE_DB = "data/workforce1.xlsx"
 
 DEFAULT_OPS_LOG_PATH = Path("data/ops_log.csv")
-
-PATH_DEBRQ = "reports/debarqs"
+WORKFORCE_DB = "data/workforce1.xlsx"
+#DATA_PATH = "data/"
+DATA_PATH_ARCH = "data/archive"
 UPLOAD_DIR = "data/uploads"
 DB_PATH = "data/database.xlsx"
-MAP_IMAGE_PATH = "assets/map/port_map.png"
+
+
+
+# Use .parent for file paths to get their containing directory
+LIST_OF_PATHS = [
+    PATH_BRDX, 
+    PATH_PVS, 
+    PATH_TEMPLATES, 
+    PATH_DEBRQ, 
+    UPLOAD_DIR, 
+    DATA_PATH_ARCH,
+]
 
 COLUMNS = [
     "ESCALE",

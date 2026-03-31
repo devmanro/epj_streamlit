@@ -9,8 +9,14 @@ from tools.tools import getDB, align_data, show_mapping_dialog,clean_dataframe_t
 from modules.genBorderaux import generate_brd
 from modules.genDebarq import gen_table_deb
 from modules.genPv import generate_daily_pv
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, COLUMNS
 from tools.tools import get_display_name
+
+from assets.constants.constants import (
+    PATH_BRDX, PATH_PVS, PATH_TEMPLATES, 
+    PATH_DEBRQ, UPLOAD_DIR, DB_PATH,COLUMNS
+)
+
+
 
 def docGeneration(clear_downloads_func):
 
@@ -205,8 +211,12 @@ def docGeneration(clear_downloads_func):
             updated_global = pd.concat(
                 [global_db, edited_df], ignore_index=True)
 
+
             # Optional: Remove exact duplicate rows
             updated_global = updated_global.drop_duplicates()
+
+             # 3. Save the edited file to the uploaded file
+            edited_df.to_excel(file_path, index=False)
 
             # 3. Save the master database back to DB_PATH
             updated_global.to_excel(DB_PATH, index=False)

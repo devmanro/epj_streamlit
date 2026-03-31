@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 import time
+from tools.tools import ensure_directories
 
-from assets.constants.constants import UPLOAD_DIR,DB_PATH
+from assets.constants.constants import UPLOAD_DIR,DB_PATH,PATH_DEBRQ
 # Import your specific scripts
 # from modules.genBorderaux import generate_brd
 
@@ -35,9 +36,9 @@ menu = ["Dashboard", "State Manager", "Port Map",
 # choice = st.sidebar.radio("Navigation", menu)
 choice = st.sidebar.radio("Navigation", menu, index=1)
 
-# --- Helper: File Management Logic ---
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
+# # --- Helper: File Management Logic ---
+# if not os.path.exists(UPLOAD_DIR):
+#     os.makedirs(UPLOAD_DIR)
 
 if "active_download" not in st.session_state:
     # Will store a dict: {"path": ..., "type": ...}
@@ -54,6 +55,7 @@ def clear_downloads():
 if choice == "Dashboard":
     # Simply call the function imported from modules.Dashboard
     # Pass UPLOAD_DIR if your dashboard needs to scan the files for stats
+    ensure_directories()
     dashboard()
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
