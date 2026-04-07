@@ -17,6 +17,9 @@ from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
 
+
+
+
 # from modules.genPvs import generate_pv
 
 # st.set_page_config(page_title="Djendjen Logistics Portal", layout="wide")
@@ -34,7 +37,7 @@ st.sidebar.title("🚢 Port Operations")
 menu = ["Dashboard", "State Manager", "Port Map",
         "Workforce Tracking", "Logistics Tools", "Templates"]
 # choice = st.sidebar.radio("Navigation", menu)
-choice = st.sidebar.radio("Navigation", menu, index=1)
+choice = st.sidebar.radio("Navigation", menu, index=0)
 
 # # --- Helper: File Management Logic ---
 # if not os.path.exists(UPLOAD_DIR):

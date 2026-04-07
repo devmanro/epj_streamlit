@@ -15,14 +15,10 @@ CLIENT_COLORS = {
     'Sonatrach': '#d62728', 'Cevital': '#9467bd', 'Other': '#7f7f7f'
 }
 
-
-
 # === HELPER FUNCTIONS ===
-
 
 def get_client_color(client_name):
     return CLIENT_COLORS.get(client_name, CLIENT_COLORS['Other'])
-
 
 def get_icon(item_type):
     mapping = {
@@ -30,7 +26,6 @@ def get_icon(item_type):
         'Plywood': '🪵', 'Coil': '⚫', 'Beams': '🏗️', 'Utilities': '🔧', 'Grain': '🌾'
     }
     return mapping.get(item_type, '📦')
-
 
 def determine_location(x, y):
     """
