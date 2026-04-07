@@ -20,19 +20,17 @@ from assets.constants.constants import (
 )
 from tools.tools import group_sourcefile_by_client,apply_summary_conditional_formatting,get_manual_color
 
-
-
 # to DEFINE THE TITLE OF SHIP
 def style_header_cell(ws, text, cell_range="C1:J1", bg_color="D3D3D3", font_color="0000FF"):
     # Define styles
     fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
     font = Font(name="Times New Roman",bold=True, size=18, color=font_color)
     align = Alignment(horizontal="center", vertical="center")
-
     
     # Apply logic
     ws.merge_cells(cell_range)
     top_left_cell = cell_range.split(":")[0]
+    
     
     ws[top_left_cell].value = text
     ws[top_left_cell].fill = fill
