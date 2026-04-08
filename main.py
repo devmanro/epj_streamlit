@@ -126,7 +126,7 @@ elif choice == "Port Map":
 # 8. LOGISTICS TOOLS
 # ---------------------------------------------------------
 elif choice == "Logistics Tools":
-    st.header("🧮 Calculation Tools")
+    st.header("🧮 Calculateur de Surfaces Portuaires 🚢")
     utilities(st)
    
 # ---------------------------------------------------------
