@@ -1,27 +1,11 @@
-
-# from modules.processor import calculate_daily_totals,calculate_surface
-
-
-# def utilities(st):
-#     with st.expander("Surface Area Calculator"):
-#         type_good = st.selectbox("Type of Good", ["Bulk", "Containers", "Steel Pipes"])
-#         inp_qty=st.number_input("Quantity/Weight", min_value=1)
-#         surface=calculate_surface(inp_qty)
-#         st.success(f"Estimated Surface Needed: {surface} m²")
-
-    
-
-
-
-
+import io
 import pandas as pd
+from datetime import datetime
 from data.merchandise_data import RORO_ITEMS, MARCHANDISES_ITEMS
 from modules.roro_tab import render_roro_tab
 from modules.marchandise_tab import render_marchandises_tab
 from modules.summary_tab import render_summary_tab  
 
-import io
-from datetime import datetime
 
 def utilities(st):
     """
@@ -36,6 +20,7 @@ def utilities(st):
         .stTabs [data-baseweb="tab-list"] {
             gap: 0; 
             border-radius: 10px; padding: 4px;
+
         }
         .stTabs [data-baseweb="tab"] {
             border-radius: 8px; 
@@ -102,6 +87,7 @@ def utilities(st):
     # ── Header ──────────────────────────────────────────────────────────────
 
 
+
     tab_roro, tab_marc, tab_resume = st.tabs(["🚗  RoRo", "📦  Marchandises", "📊  Résumé & Export"])
 
     # ════════════════════════════════════════════════════════════════════════
@@ -121,7 +107,7 @@ def utilities(st):
             surf_unit = roro_lookup.get(roro_selected, 0)
             st.markdown(f"<div style='margin-top:28px;'><div class='section-title'>Surface/unité</div><span class='surface-badge surface-badge-blue'>{surf_unit:.2f} M²</span></div>", unsafe_allow_html=True)
         with r3:
-            roro_bl = st.text_input("N° BL", key="roro_bl", placeholder="ex: BL-2024-001")
+            roro_bl = st.text_input("N° BL", key="roro_bl", value="BL-XXX-XXX", placeholder="ex: BL-XXX-XXX")
         with r4:
             roro_qty = st.number_input("Quantité", min_value=1, step=1, value=1, key="roro_qty")
 
@@ -175,7 +161,7 @@ def utilities(st):
         with m2:
             st.markdown(f"<div style='margin-top:28px;'><span class='surface-badge surface-badge-blue'>{m_surf_unit:.2f} / {m_gerbage}</span></div>", unsafe_allow_html=True)
         with m3:
-            marc_bl = st.text_input("N° BL", key="marc_bl")
+            marc_bl = st.text_input("N° BL", key="marc_bl", value="BL-XXX-XXX", placeholder="ex: BL-XXX-XXX")
         with m4:
             marc_qty = st.number_input("Quantité", min_value=1, value=1, key="marc_qty")
 

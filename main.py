@@ -17,6 +17,8 @@ from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
 
+from modules.M_tracker import manifest_tracker
+
 
 
 
@@ -34,7 +36,7 @@ st.markdown("""
 
 # --- Sidebar Navigation ---
 st.sidebar.title("🚢 Port Operations")
-menu = ["Dashboard", "State Manager", "Port Map",
+menu = ["Dashboard","Manifest Tracker","State Manager", "Port Map",
         "Workforce Tracking", "Logistics Tools", "Templates"]
 # choice = st.sidebar.radio("Navigation", menu)
 choice = st.sidebar.radio("Navigation", menu, index=0)
@@ -56,10 +58,14 @@ def clear_downloads():
 # 0. DASHBOARD
 # ---------------------------------------------------------
 if choice == "Dashboard":
-    # Simply call the function imported from modules.Dashboard
     # Pass UPLOAD_DIR if your dashboard needs to scan the files for stats
     ensure_directories()
     dashboard()
+
+# Add to your navigation choices
+if choice == "Manifest Tracker":
+    manifest_tracker()
+
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
 # ---------------------------------------------------------

@@ -1,4 +1,4 @@
-Make these updates while giving me the project structure at the end
+ake these updates while giving me the project structure at the end
 i need it to be a complete software with these changes(keeping python scripts for handling the functionalities )
 
 In my app i need to be able to load xls,csv files 
@@ -75,3 +75,5 @@ TYPE ,PRODUIT,DETAILS
 TYPE :CATEGORY OF MARCHANDISE(DIVERS,ROULANT,PRODUIT PETROLIER,PRODUIT CHIMIQUE,CONTENEURS ETC...)
 PRODUIT:THE EXACT PRODUCT(TUBE,CTP,ENGIN,BUS)
 DESIGNATION:DESCRIPTION OF THE HOW THIS PRODUCT IS 
+add option to make changes to the utilities (surface ,add new surface type )
+

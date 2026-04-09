@@ -294,5 +294,3 @@ def dashboard():
         time.sleep(refresh_interval)
         st.rerun()
 
-if __name__ == "__main__":
-    dashboard()
