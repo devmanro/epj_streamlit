@@ -4,7 +4,7 @@ import os
 import time
 from tools.tools import ensure_directories
 
-from assets.constants.constants import UPLOAD_DIR,DB_PATH,PATH_DEBRQ
+from assets.constants.constants import UPLOAD_DIR,DB_PATH,PATH_DEBRQ,UPLOAD_DIR
 # Import your specific scripts
 # from modules.genBorderaux import generate_brd
 
@@ -64,7 +64,7 @@ if choice == "Dashboard":
 
 # Add to your navigation choices
 if choice == "Manifest Tracker":
-    manifest_tracker()
+    manifest_tracker(UPLOAD_DIR)
 
 # ---------------------------------------------------------
 # 1 & 5. FILE MANAGER & GLOBAL DATABASE
