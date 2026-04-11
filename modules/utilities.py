@@ -1,7 +1,7 @@
 import io
 import pandas as pd
 from datetime import datetime
-from data.merchandise_data import RORO_ITEMS, MARCHANDISES_ITEMS
+from constants.merchandise_data import RORO_ITEMS, MARCHANDISES_ITEMS
 from modules.roro_tab import render_roro_tab
 from modules.marchandise_tab import render_marchandises_tab
 from modules.summary_tab import render_summary_tab  
