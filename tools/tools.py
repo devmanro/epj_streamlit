@@ -46,11 +46,13 @@ def get_manual_color(product_name):
     # Group products by color
     color_groups = {
         "92D050": ["CTP", "PLYWOOD", "MDF"],                      # Greenish
-        "538DD5": ["BIG BAG", "BAG", "PIPE"],                     # Blue
-        "C65911": ["TUBE", "FORMWORK"],                           # Brown/Orange
+        "538DD5": ["BIG BAG", "BAG", "PIPE","CORNIERS"],          # Blue
+        "C65911": ["TUBE", "FORMWORK","POUTRELLE"],               # Brown/Orange
         "948A54": ["BOB", "COIL", "METAL SHEET", "STEEL BEAMS"],  # Tan/Gold
         "DDD9C4": ["BEAMS", "FIL", "FIL M"],                      # Grey/Beige
+        "#FFDC6B": ["COLI","UNIT"],                      # GOLD
     }
+
     
     # Find which group the product belongs to
     for color, products in color_groups.items():
@@ -300,8 +302,6 @@ def align_data(uploaded_df, mapping):
 
         # Keep only the required columns
         df_aligned = df_mapped[final_cols]
-
-        
 
         # Ensure COL_DESIGNATION exists in the aligned DataFrame
         if COL_DESIGNATION in df_aligned.columns:

@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
 from tools.tools import getDB, align_data, show_mapping_dialog,clean_dataframe_types
 from modules.genBorderaux import generate_brd
@@ -15,8 +14,6 @@ from assets.constants.constants import (
     PATH_BRDX, PATH_PVS, PATH_TEMPLATES, 
     PATH_DEBRQ, UPLOAD_DIR, DB_PATH,COLUMNS
 )
-
-
 
 def docGeneration(clear_downloads_func):
 
@@ -164,31 +161,36 @@ def docGeneration(clear_downloads_func):
          # Reset index after all filters are applied
         filtered_df = filtered_df.reset_index(drop=True)
         
-        # 2. Display the table using the filtered results
-        edited_df = st.data_editor(
-            filtered_df, # Use the filtered DF here
-            num_rows="dynamic",
-            key="single_file_editor",
-            width='stretch',
-            hide_index=True,
-            column_config={
-                # "_index": st.column_config.CheckboxColumn("Row"),
-                "NAVIRE": st.column_config.TextColumn("🚢 Navire", width="small"),
-                # "DATE": st.column_config.DateColumn("📄 DATE", width="medium"),
-                "B/L": st.column_config.TextColumn("📄 B/L", width="medium"),
-                "DESIGNATION": st.column_config.TextColumn("📦 Désignation", width="large"),
-                "QUANTITE": st.column_config.NumberColumn("🔢 Quantité", format="%d", width="small"),
-                "TONAGE": st.column_config.NumberColumn("⚖️ Tonnage", format="%.2f T", width="small"),
-                "CLIENT": st.column_config.TextColumn("👤 Client", width="medium"),
-                "CHASSIS/SERIAL": st.column_config.TextColumn("🔧 Chassis/Serial", width="medium"),
-                # "RESTE T/P": st.column_config.NumberColumn("📊 Reste T/P", format="%.2f", width="small"),
-                # "TYPE": st.column_config.TextColumn("📋 Type",  width="medium"),
-                # "SITUATION": st.column_config.TextColumn("🚦 Situation", width="medium"),
-                # "CLES": st.column_config.NumberColumn("🔑 Clés",width="small"),
-                # "SURFACE": st.column_config.NumberColumn("📐 Surface", format="%.2f m²", width="small"),
-            },
-            # disabled=["RESTE T/P", "SURFACE","SITUATION","NAVIRE"] # List columns that shouldn't be edited
-        )
+        try:
+            # 2. Display the table using the filtered results
+            edited_df = st.data_editor(
+                filtered_df, # Use the filtered DF here
+                num_rows="dynamic",
+                key="single_file_editor",
+                width='stretch',
+                hide_index=True,
+                column_config={
+                    # "_index": st.column_config.CheckboxColumn("Row"),
+                    "NAVIRE": st.column_config.TextColumn("🚢 Navire", width="small"),
+                    # "DATE": st.column_config.DateColumn("📄 DATE", width="medium"),
+                    "B/L": st.column_config.TextColumn("📄 B/L", width="medium"),
+                    "DESIGNATION": st.column_config.TextColumn("📦 Désignation", width="large"),
+                    "QUANTITE": st.column_config.NumberColumn("🔢 Quantité", format="%d", width="small"),
+                    "TONAGE": st.column_config.NumberColumn("⚖️ Tonnage", format="%.2f T", width="small"),
+                    "CLIENT": st.column_config.TextColumn("👤 Client", width="medium"),
+                    "CHASSIS/SERIAL": st.column_config.TextColumn("🔧 Chassis/Serial", width="medium"),
+                    # "RESTE T/P": st.column_config.NumberColumn("📊 Reste T/P", format="%.2f", width="small"),
+                    # "TYPE": st.column_config.TextColumn("📋 Type",  width="medium"),
+                    # "SITUATION": st.column_config.TextColumn("🚦 Situation", width="medium"),
+                    # "CLES": st.column_config.NumberColumn("🔑 Clés",width="small"),
+                    # "SURFACE": st.column_config.NumberColumn("📐 Surface", format="%.2f m²", width="small"),
+                },
+                # disabled=["RESTE T/P", "SURFACE","SITUATION","NAVIRE"] # List columns that shouldn't be edited
+            )
+        except Exception as e:
+            st.error(f"Error in data editor: {e}")
+            edited_df = None  # Prevents the save logic from running on broken data
+
 
         col1, col2, col3, col4, col5 = st.columns(5)
 

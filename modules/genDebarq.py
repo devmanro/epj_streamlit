@@ -15,6 +15,7 @@ from assets.constants.constants import (
     COL_BL,
     GOODS__TYPES,
     COL_DATE,
+    COL_MODELE, COL_CHASSIS_SERIAL, COL_PRODUIT,
     COL_DESIGNATION,
     KEYWORD_RULES
 )
@@ -293,7 +294,6 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
 
 def gen_table_deb(filepath=None):
 
-    # --- MAIN EXECUTION ---
     if not filepath:
         return False
 
@@ -302,11 +302,10 @@ def gen_table_deb(filepath=None):
 
     list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
 
-    source_df = group_sourcefile_by_client(filepath, skip_units_packages=True,bl_aggregated=False)
+    source_df = group_sourcefile_by_client(filepath, skip_units_packages=True, bl_aggregated=False)
     
-    # Normalize column names to match constants in COLUMNS
     source_df.columns = source_df.columns.str.strip().str.upper()
-    st.dataframe(source_df)      # nicer interactive table
+    st.dataframe(source_df)
 
     list_bl.columns = list_bl.columns.str.strip().str.upper()
     
@@ -319,82 +318,98 @@ def gen_table_deb(filepath=None):
     list_bl_sheet_name = f"LIST_BL_{file_name_only}"
     ws_bl = wb.create_sheet(title=list_bl_sheet_name)
    
-    # 1. Define Styles
+    # ─── Styles ───────────────────────────────────────────────────────────────
     thick_side = Side(border_style="thick", color="000000")
-    thin_side = Side(border_style="thin", color="000000")
-    
-    # 1. Style Setup
-    thick_side = Side(border_style="thick", color="000000")
-    thin_side = Side(border_style="thin", color="000000")
+    thin_side  = Side(border_style="thin",  color="000000")
 
-    # Header: Bold + Thick Borders | Data: Thin Borders
-    header_border = Border(top=thick_side, bottom=thick_side, left=thick_side, right=thick_side)
-    data_border = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
-    # Wrap text alignment
+    header_border = Border(top=thick_side, bottom=thick_side,
+                           left=thick_side, right=thick_side)
+    data_border   = Border(top=thin_side,  bottom=thin_side,
+                           left=thin_side,  right=thin_side)
+
     center_alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
 
-     # Identify the index of the Type column for coloring
-    type_col_idx = list_bl.columns.get_loc(COL_TYPE)
+    # Times New Roman 12 pt – base font for ws_bl
+    base_font        = Font(name="Times New Roman", size=12)
+    base_font_bold   = Font(name="Times New Roman", size=12, bold=True)
+
+    # Purple font for the CLIENT column
+    purple_font      = Font(name="Times New Roman", size=12,
+                            bold=True, color="7030A0")   # standard purple
 
     ROW_HEIGHT = 15
-    COL_WIDTH = 20
+    COL_WIDTH  = 20
 
-    # 3. Write Headers
+    # ─── Column-index helpers ─────────────────────────────────────────────────
+    cols = list(list_bl.columns)
+
+    type_col_idx    = list_bl.columns.get_loc(COL_TYPE)          # 0-based
+
+    # Columns that receive row_fill coloring (0-based indices)
+    colored_col_indices = set()
+    for col_const in (COL_TYPE, COL_MODELE, COL_CHASSIS_SERIAL, COL_PRODUIT):
+        if col_const in list_bl.columns:
+            colored_col_indices.add(list_bl.columns.get_loc(col_const))
+
+    # Client column index (0-based), if it exists
+    client_col_idx = list_bl.columns.get_loc(COL_CLIENT) if COL_CLIENT in list_bl.columns else None
+
+    # ─── Write Headers ────────────────────────────────────────────────────────
     for c_idx, col_name in enumerate(list_bl.columns, start=1):
         cell = ws_bl.cell(row=1, column=c_idx)
-        cell.value = col_name
-        cell.font = Font(bold=True)
-        cell.border = header_border
+        cell.value     = col_name
+        cell.font      = base_font_bold          # Times New Roman 12 bold
+        cell.border    = header_border
         cell.alignment = center_alignment
-        ws_bl.column_dimensions[cell.column_letter].width = COL_WIDTH  # ≈ 14mm
+        ws_bl.column_dimensions[cell.column_letter].width = COL_WIDTH
 
-
-    # # Write headers
-    # for c_idx, col_name in enumerate(list_bl.columns, start=1):
-    #     ws_bl.cell(row=1, column=c_idx).value = col_name
-    #     ws_bl.cell(row=1, column=c_idx).font = Font(bold=True)
-        
-     # Write list_bl to the new sheet
-    for r_idx, row in enumerate(list_bl.itertuples(index=False), start=2):
-        for c_idx, value in enumerate(row, start=1):
-            ws_bl.cell(row=r_idx, column=c_idx).value = value
-
-    # 4. Write Data and Apply Row Coloring
+    # ─── Write Data with Styling ──────────────────────────────────────────────
     for r_idx, row in enumerate(list_bl.itertuples(index=False), start=2):
         ws_bl.row_dimensions[r_idx].height = ROW_HEIGHT
 
-        # Get color based on the value in the COL_TYPE column
+        # Determine row fill colour from COL_TYPE value
         hex_color = get_manual_color(row[type_col_idx])
-        row_fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid") if hex_color else None
-        
+        row_fill  = (
+            PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
+            if hex_color else None
+        )
+
         for c_idx, value in enumerate(row, start=1):
+            zero_idx = c_idx - 1          # 0-based column index
             cell = ws_bl.cell(row=r_idx, column=c_idx)
-            cell.value = value
+
+            # ── Value ──
+            # Force CLIENT column to uppercase string
+            if zero_idx == client_col_idx and value is not None:
+                cell.value = str(value).upper()
+            else:
+                cell.value = value
+
+            # ── Alignment & Border (all cells) ──
             cell.alignment = center_alignment
-            cell.border = data_border
-            if row_fill:
+            cell.border    = data_border
+
+            # ── Font ──
+            if zero_idx == client_col_idx:
+                cell.font = purple_font          # purple + Times New Roman 12
+            else:
+                cell.font = base_font            # Times New Roman 12
+
+            # ── Fill – only on the four designated columns ──
+            if row_fill and zero_idx in colored_col_indices:
                 cell.fill = row_fill
-    
 
-
-    # Define ship name for deb sheet
+    # ─── Rest of the function (ws / deb sheet) is unchanged ──────────────────
     style_header_cell(ws, ship_name_placeholder)
 
-    # Use COMMODITY_TYPES from constants
     specific_keywords = GOODS__TYPES
 
     start_col = 1
     all_matched_indices = pd.Index([])
-    
-    # Track summary information for all tables
-    all_summary_info = []  # List of (summary_rows, total_col_letter) tuples
+    all_summary_info = []
 
     for keyword in specific_keywords:
- 
-        mask = source_df[COL_TYPE].astype(str).str.contains(
-            keyword, case=False, na=False
-        )
-
+        mask   = source_df[COL_TYPE].astype(str).str.contains(keyword, case=False, na=False)
         p_data = source_df[mask]
 
         if not p_data.empty:
@@ -405,7 +420,6 @@ def gen_table_deb(filepath=None):
             all_summary_info.append((summary_rows, total_col))
             start_col = last_col_idx + 3
 
-    # Everything not matched by COMMODITY_TYPES goes into "UNITS + PACKAGES"
     others_data = source_df.drop(all_matched_indices)
     if not others_data.empty:
         last_col_idx, summary_rows, total_col = create_product_table(
@@ -413,84 +427,58 @@ def gen_table_deb(filepath=None):
         )
         all_summary_info.append((summary_rows, total_col))
 
-    # Add global sum sub-table below all tables
     if all_summary_info:
-        # Find the maximum row number from all tables to place global summary below
         max_row = max(max(rows) for rows, _ in all_summary_info)
-        global_summary_start_row = max_row + 3  # Add some spacing
+        global_summary_start_row = max_row + 3
 
-        # Define styles for global summary
-        border = Border(
-            left=Side(style="thin"),
-            right=Side(style="thin"),
-            top=Side(style="thin"),
-            bottom=Side(style="thin"),
-        )
-        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        bold_font = Font(bold=True, size=11)
-        header_fill = PatternFill(
-            start_color="FFC000",
-            end_color="FFC000",
-            fill_type="solid",
-        )
-        label_fill = PatternFill(
-            start_color="FFFF00",  # Yellow for labels
-            end_color="FFFF00",
-            fill_type="solid",
-        )
+        border      = Border(left=Side(style="thin"), right=Side(style="thin"),
+                             top=Side(style="thin"),  bottom=Side(style="thin"))
+        center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        bold_font   = Font(bold=True, size=11)
+        header_fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+        label_fill  = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
-        # ---- Header row: merged across columns A–B ----
         header_row = global_summary_start_row
         ws.merge_cells(f"A{header_row}:B{header_row}")
         ws[f"A{header_row}"].value = "GLOBAL SUMMARY"
         for col_idx in range(1, 3):
             cell = ws.cell(row=header_row, column=col_idx)
-            cell.fill = header_fill
-            cell.font = Font(bold=True, size=13)
-            cell.border = border
+            cell.fill      = header_fill
+            cell.font      = Font(bold=True, size=13)
+            cell.border    = border
             cell.alignment = center
 
-        # ---- Vertical rows: label in A, formula in B ----
-        row_total = header_row + 1
+        row_total    = header_row + 1
         row_manifest = header_row + 2
-        row_reste = header_row + 3
+        row_reste    = header_row + 3
 
-        # TOTAL DECHARGER
         ws[f"A{row_total}"].value = "TOTAL DECHARGER"
-        total_decharger_refs = ",".join(
-            f"{total_col}{rows[0]}" for rows, total_col in all_summary_info
-        )
-        ws[f"B{row_total}"].value = f"={total_decharger_refs}" if len(all_summary_info) == 1 else f"=SUM({total_decharger_refs})"
+        total_decharger_refs = ",".join(f"{total_col}{rows[0]}" for rows, total_col in all_summary_info)
+        ws[f"B{row_total}"].value = (f"={total_decharger_refs}" if len(all_summary_info) == 1
+                                     else f"=SUM({total_decharger_refs})")
 
-        # QUANTITE MANIFEST
         ws[f"A{row_manifest}"].value = "QUANTITE MANIFEST"
-        quantite_refs = ",".join(
-            f"{total_col}{rows[1]}" for rows, total_col in all_summary_info
-        )
-        ws[f"B{row_manifest}"].value = f"={quantite_refs}" if len(all_summary_info) == 1 else f"=SUM({quantite_refs})"
+        quantite_refs = ",".join(f"{total_col}{rows[1]}" for rows, total_col in all_summary_info)
+        ws[f"B{row_manifest}"].value = (f"={quantite_refs}" if len(all_summary_info) == 1
+                                        else f"=SUM({quantite_refs})")
 
-        # RESTE A BORD
         ws[f"A{row_reste}"].value = "RESTE A BORD"
-        reste_refs = ",".join(
-            f"{total_col}{rows[2]}" for rows, total_col in all_summary_info
-        )
-        ws[f"B{row_reste}"].value = f"={reste_refs}" if len(all_summary_info) == 1 else f"=SUM({reste_refs})"
+        reste_refs = ",".join(f"{total_col}{rows[2]}" for rows, total_col in all_summary_info)
+        ws[f"B{row_reste}"].value = (f"={reste_refs}" if len(all_summary_info) == 1
+                                     else f"=SUM({reste_refs})")
 
-        # Style label + value rows
         for r in (row_total, row_manifest, row_reste):
-            # Column A – label
-            label_cell = ws.cell(row=r, column=1)
-            label_cell.fill = label_fill
-            label_cell.font = bold_font
-            label_cell.border = border
+            label_cell           = ws.cell(row=r, column=1)
+            label_cell.fill      = label_fill
+            label_cell.font      = bold_font
+            label_cell.border    = border
             label_cell.alignment = Alignment(horizontal="left", vertical="center")
-            # Column B – value
-            value_cell = ws.cell(row=r, column=2)
-            value_cell.font = bold_font
-            value_cell.border = border
+
+            value_cell           = ws.cell(row=r, column=2)
+            value_cell.font      = bold_font
+            value_cell.border    = border
             value_cell.alignment = center
 
-        # Column widths
         ws.column_dimensions["A"].width = 25
         ws.column_dimensions["B"].width = 22
 

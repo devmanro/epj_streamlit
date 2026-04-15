@@ -6,11 +6,13 @@ from assets.constants.constants import (
     COL_NAVIRE,
     COL_DATE,
     COL_BL,
+    COL_ARTICLE,
     COL_DESIGNATION,
     COL_QUANTITE,
     COL_TONAGE,
     COL_CLIENT,
     COL_CHASSIS_SERIAL,
+    COL_MODELE,
     COL_RESTE_TP,
     COL_TYPE,
     COL_PRODUIT,
@@ -22,7 +24,8 @@ from assets.constants.constants import (
     COL_SURFACE,
     COL_DRB_TYPE,
     COL_DATE_ENLEV,
-    COL_CARGO_TYPE
+    COL_CARGO_TYPE,
+    COL_IMO_NAVIRE
 )
 
 def extract_to_excel_flattened(json_path, output_path, st_upload=False):
@@ -40,6 +43,7 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
     date_col = datetime.strptime(raw_date, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y')
 
     escale=data[0].get('numero_escale')
+    imo_navire = data[0].get('imo_navire')
     ship_name=data[0].get('nom_navire')
     cargo_type =data[0].get('type_manifeste') # type_manifeste(diver/roro/etc...)
 
@@ -48,7 +52,12 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
     for bl in connaissements:
         # Get basic BL info
         bl_no = bl.get('num_bl')
+        n_article = bl.get('article')
         client = bl.get('client_final')
+        nombre_colis = bl.get('nombre_colis')
+        surface = bl.get('surface')
+       
+        conditionnement = bl.get('conditionnement')
         description = bl.get('description_marchandise')
         # Convert Global Weight from KG to Tons (poids_brute / 1000)
         poids_kg = bl.get('poids_brute') or bl.get('poids') 
@@ -60,24 +69,28 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
             COL_NAVIRE:ship_name ,                    # NAVIRE
             COL_DATE: date_col,                       # DATE
             COL_BL: bl_no,                            # B/L
+            COL_ARTICLE: n_article,                   #COL_ARTICLE
             COL_DESIGNATION: description,             # DESIGNATION
-            COL_QUANTITE: bl.get('nombre_colis'),     # QUANTITE
+            COL_QUANTITE: nombre_colis,               # QUANTITE
             COL_TONAGE: weight_tons,                  # TONAGE
             COL_CLIENT: client,                       # CLIENT
+            COL_TYPE:conditionnement ,                # TYPE
             COL_CHASSIS_SERIAL: "-",                  # CHASSIS/SERIAL
+            COL_MODELE:"-",
+            COL_PRODUIT:"" ,                          # COL_PRODUIT
             COL_RESTE_TP: "-",                        # RESTE T/P
-            COL_TYPE: bl.get('conditionnement'),      # TYPE
-            COL_PRODUIT:"" ,                             # COL_PRODUIT
             COL_SITUATION: "-",                       # SITUATION
             COL_OBSERVATION: "-",                     # OBSERVATION
             COL_POSITION: "-",                        # POSITION
             COL_TRANSIT: "-",                         # TRANSIT
             COL_CLES: "-",                            # CLES
-            COL_SURFACE: "-",                         # SURFACE
+            COL_SURFACE: surface,                         # SURFACE
             # DAEMO BREAKER (DRB) TOP BOX TYPE
             COL_DRB_TYPE: "-",
             COL_DATE_ENLEV: "-",                      # DATE ENLEV
             COL_CARGO_TYPE:cargo_type,               # type_manifeste(diver/roro/etc...)
+            COL_IMO_NAVIRE: imo_navire,
+
         }
         final_rows.append(row)
 
@@ -95,20 +108,20 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
                     COL_TONAGE:  (item.get('poids') / 1000) ,         # TONAGE
                     COL_CLIENT: client,                    # CLIENT
                     # CHASSIS/SERIAL
-                    COL_CHASSIS_SERIAL: item.get('numero_chassis'),
-                    COL_RESTE_TP: "-",                     # RESTE T/P
                     COL_TYPE: item.get('type'),            # TYPE
-                    COL_PRODUIT:"" ,                             # COL_PRODUIT
+                    COL_CHASSIS_SERIAL: item.get('numero_chassis'),
+                    COL_MODELE:item.get('modele'),
+                    COL_PRODUIT:"" ,                       # COL_PRODUIT
+                    COL_RESTE_TP: "-",                     # RESTE T/P
                     COL_SITUATION: "-",                    # SITUATION
                     COL_OBSERVATION: (
-                        f"{item.get('marque', '')} {item.get('modele', '')}".strip(
-                        ) or "-"
+                        f"{item.get('marque', '')}".strip() or "-"
                         # OBSERVATION (Brand/Model)
                     ),
                     COL_POSITION: "-",                     # POSITION
                     COL_TRANSIT: "-",                      # TRANSIT
                     COL_CLES: "-",                         # CLES
-                    COL_SURFACE: "-",                      # SURFACE
+                    COL_SURFACE: surface,                         # SURFACE
                     # DAEMO BREAKER (DRB) TOP BOX TYPE
                     COL_DRB_TYPE: "-",
                     COL_DATE_ENLEV: "-",                   # DATE ENLEV
@@ -122,6 +135,12 @@ def extract_to_excel_flattened(json_path, output_path, st_upload=False):
     df = df.sort_values(by=COL_CLIENT)
     
     df.to_excel(output_path, index=False)
+
+    # style = doc.styles["Normal"]
+    # font = style.font
+    # font.name = "Times New Roman"
+    # font.size = Pt(12)
+
     return output_path
 
  
