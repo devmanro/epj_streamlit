@@ -37,6 +37,9 @@ from modules.get_recap import (
     get_visible_rows,
     get_visible_cols,
     find_last_bordered_table,
+    get_recap,
+    get_whatsapp_groups_greenapi,
+    send_images_to_whatsapp,
 )
 
 # from modules.genPvs import generate_pv

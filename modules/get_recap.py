@@ -1,4 +1,3 @@
-import streamlit as st
 import os
 import time
 import logging
@@ -6,6 +5,7 @@ import traceback
 import io
 import zipfile
 import tempfile
+import requests
 from pathlib import Path
 from typing import List, Tuple, Optional
 import openpyxl
@@ -20,6 +20,162 @@ import matplotlib.ticker as ticker
 from matplotlib import colors as mcolors
 import numpy as np
 import re
+
+
+# ============================================================
+# ========== BOUNDS / VISIBILITY HELPERS =====================
+# ============================================================
+
+
+def get_used_bounds(sheet) -> Tuple[int, int, int, int]:
+    """Return (min_row, max_row, min_col, max_col) for the sheet's used range."""
+    return sheet.min_row, sheet.max_row, sheet.min_column, sheet.max_column
+
+
+def get_visible_rows(sheet, start_row: int, end_row: int) -> List[int]:
+    """Return list of row indices that are not hidden."""
+    result = []
+    for r in range(start_row, end_row + 1):
+        rd = sheet.row_dimensions.get(r)
+        if rd and rd.hidden:
+            continue
+        result.append(r)
+    return result
+
+
+def get_visible_cols(sheet, start_col: int, end_col: int) -> List[int]:
+    """Return list of column indices that are not hidden."""
+    result = []
+    for c in range(start_col, end_col + 1):
+        col_letter = get_column_letter(c)
+        cd = sheet.column_dimensions.get(col_letter)
+        if cd and cd.hidden:
+            continue
+        result.append(c)
+    return result
+
+
+def _column_has_data(sheet, col: int, start_row: int, end_row: int) -> bool:
+    for row in range(start_row, end_row + 1):
+        val = sheet.cell(row=row, column=col).value
+        if val is not None and str(val).strip() != "":
+            return True
+    return False
+
+
+def detect_horizontal_tables(sheet) -> List[Tuple[int, int, int, int]]:
+    """
+    Detect contiguous column blocks that contain data.
+    Returns list of (start_col, end_col, start_row, end_row).
+    """
+    start_row, end_row, start_col, end_col = get_used_bounds(sheet)
+    tables = []
+    block_start = None
+
+    for col in range(start_col, end_col + 2):
+        has_data = col <= end_col and _column_has_data(sheet, col, start_row, end_row)
+        if has_data and block_start is None:
+            block_start = col
+        elif not has_data and block_start is not None:
+            tables.append((block_start, col - 1, start_row, end_row))
+            block_start = None
+
+    return tables
+
+
+def find_last_bordered_table(
+    sheet, t_sr: int, t_er: int, t_sc: int, t_ec: int
+) -> Optional[Tuple[int, int, int, int]]:
+    """
+    Within the rectangle (t_sr..t_er, t_sc..t_ec), find the tightest
+    bounding box of cells that have any border edge.
+    Returns (start_col, end_col, start_row, end_row) or None if no borders found.
+    """
+    min_r = min_c = None
+    max_r = max_c = None
+
+    for r in range(t_sr, t_er + 1):
+        for c in range(t_sc, t_ec + 1):
+            cell = sheet.cell(row=r, column=c)
+            edges = get_border_edges_styled(cell)
+            if any(v is not None for v in edges.values()):
+                if min_r is None or r < min_r:
+                    min_r = r
+                if max_r is None or r > max_r:
+                    max_r = r
+                if min_c is None or c < min_c:
+                    min_c = c
+                if max_c is None or c > max_c:
+                    max_c = c
+
+    if min_r is None:
+        return None
+    return (min_c, max_c, min_r, max_r)
+
+
+# ============================================================
+# ========== WHATSAPP (GREEN API) ============================
+# ============================================================
+
+
+def get_whatsapp_groups_greenapi(id_instance: str, api_token: str) -> List[dict]:
+    """Fetch all WhatsApp groups via Green API. Returns list of {id, name}."""
+    url = (
+        f"https://api.green-api.com/waInstance{id_instance}"
+        f"/getChats/{api_token}"
+    )
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        chats = resp.json()
+        return [
+            {"id": c["id"], "name": c.get("name") or c["id"]}
+            for c in chats
+            if isinstance(c.get("id"), str) and c["id"].endswith("@g.us")
+        ]
+    except Exception as exc:
+        logging.error(f"Green API getChats error: {exc}")
+        return []
+
+
+def send_images_to_whatsapp(
+    image_paths: List[str],
+    chat_id: str,
+    id_instance: str,
+    api_token: str,
+    log_fn,
+    delay_seconds: float = 1.5,
+) -> Tuple[int, int]:
+    """
+    Upload and send each image in *image_paths* to *chat_id* via Green API.
+    Returns (ok_count, fail_count).
+    """
+    ok = fail = 0
+    upload_url = (
+        f"https://api.green-api.com/waInstance{id_instance}"
+        f"/sendFileByUpload/{api_token}"
+    )
+
+    for img_path in image_paths:
+        fname = Path(img_path).name
+        try:
+            with open(img_path, "rb") as fh:
+                resp = requests.post(
+                    upload_url,
+                    files={"file": (fname, fh, "image/png")},
+                    data={"chatId": chat_id, "caption": Path(img_path).stem},
+                    timeout=30,
+                )
+            resp.raise_for_status()
+            log_fn(f"✅ Sent: {fname}")
+            ok += 1
+        except Exception as exc:
+            log_fn(f"❌ Failed: {fname} — {exc}")
+            fail += 1
+
+        time.sleep(delay_seconds)
+
+    return ok, fail
 
 
 # ============================================================
