@@ -174,6 +174,11 @@ elif choice == "Workforce Tracking":
 # 10. Send_Recaps
 # ---------------------------------------------------------
 # Assumes 'choice' is already defined by your sidebar/menu
+
+# ==========================================================
+# ========== STREAMLIT UI ==================================
+# ==========================================================
+
 elif choice == "Send_Recaps":
     st.header("Send_Recaps")
 
@@ -206,7 +211,7 @@ elif choice == "Send_Recaps":
             type="password",
             key="wa_api_token",
         )
-        # Fetch groups button
+        
         if st.button("🔄 Load My WhatsApp Groups"):
             if id_instance and api_token:
                 with st.spinner("Fetching groups..."):
@@ -219,7 +224,7 @@ elif choice == "Send_Recaps":
             else:
                 st.error("Please enter ID Instance and API Token first.")
 
-    # Group selector (populated after "Load Groups")
+    # Group selector logic
     send_to_whatsapp = False
     selected_chat_id = None
 
@@ -239,7 +244,6 @@ elif choice == "Send_Recaps":
             value=False,
         )
     else:
-        # Manual chat ID fallback
         manual_chat_id = st.text_input(
             "Or enter Group Chat ID manually",
             placeholder="120363XXXXXXXXXX@g.us",
@@ -253,7 +257,7 @@ elif choice == "Send_Recaps":
 
     st.divider()
 
-    # ── Start button ──────────────────────────────────────────────────
+    # ── Processing Execution ──────────────────────────────────────────
     if st.button("🚀 Start Processing", use_container_width=True):
         if not uploaded_files:
             st.error("Please select at least one file.")
@@ -267,7 +271,7 @@ elif choice == "Send_Recaps":
             st.session_state.wa_chat_id = selected_chat_id
             st.session_state.pop("zip_buffer", None)
 
-    # ── Processing block ──────────────────────────────────────────────
+    # ── Processing block ─────────────────────────────────────────────
     if st.session_state.get("processing"):
         status_text = st.empty()
         progress_bar = st.progress(0)
@@ -279,18 +283,16 @@ elif choice == "Send_Recaps":
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 total = len(uploaded_files)
-
                 for idx, up_file in enumerate(uploaded_files):
                     wb_name = Path(up_file.name).stem
                     status_text.text(f"Processing {idx + 1}/{total}: {wb_name}...")
 
+                    # Save upload to temp file
                     tmp_path = os.path.join(tmp_dir, up_file.name)
                     with open(tmp_path, "wb") as fh:
                         fh.write(up_file.getbuffer())
 
-                    wb = openpyxl.load_workbook(
-                        tmp_path, data_only=True, read_only=False
-                    )
+                    wb = openpyxl.load_workbook(tmp_path, data_only=True)
                     sheet = wb.worksheets[0]
 
                     imgs = get_recap(
@@ -304,20 +306,19 @@ elif choice == "Send_Recaps":
                     wb.close()
                     progress_bar.progress((idx + 1) / total)
 
-            # ── ZIP ───────────────────────────────────────────────────
+            # ── ZIP Bundle ────────────────────────────────────────────
             if all_images:
                 zip_buf = io.BytesIO()
-                with zipfile.ZipFile(
-                    zip_buf, mode="w", compression=zipfile.ZIP_STORED
-                ) as zf:
+                with zipfile.ZipFile(zip_buf, mode="w") as zf:
                     for img_path in all_images:
                         zf.write(img_path, arcname=Path(img_path).name)
-                zip_buf.seek(0)
                 st.session_state.zip_buffer = zip_buf.getvalue()
+                status_text.text("✅ Done!")
+                st.success(f"Processed {total} workbook(s). {len(all_images)} image(s) created.")
+            else:
+                status_text.text("⚠️ No images were generated.")
 
-            st.success(f"✅ Done! {len(all_images)} image(s) from {total} workbook(s).")
-
-            # ── Send to WhatsApp ──────────────────────────────────────
+            # ── WhatsApp Dispatch ─────────────────────────────────────
             if st.session_state.get("do_send_wa") and all_images:
                 st.info(f"📤 Sending {len(all_images)} image(s) to WhatsApp...")
                 wa_log = st.expander("WhatsApp Send Logs", expanded=True)
@@ -332,19 +333,15 @@ elif choice == "Send_Recaps":
                 if fail == 0:
                     st.success(f"✅ All {ok} image(s) sent to WhatsApp!")
                 else:
-                    st.warning(
-                        f"Sent: {ok} ✅  |  Failed: {fail} ❌  "
-                        f"— check WhatsApp logs above."
-                    )
+                    st.warning(f"Sent: {ok} ✅ | Failed: {fail} ❌ — check logs above.")
 
         except Exception as exc:
             st.error(f"An error occurred: {exc}")
             st.text(traceback.format_exc())
-
         finally:
             st.session_state.processing = False
 
-    # ── Persistent download button ─────────────────────────────────────
+    # ── Persistent download button ────────────────────────────────────
     if st.session_state.get("zip_buffer"):
         st.download_button(
             label="⬇️ Download All Images (ZIP)",
