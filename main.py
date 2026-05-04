@@ -1,4 +1,3 @@
-import streamlit as st
 import os
 import time
 import logging
@@ -6,15 +5,13 @@ import traceback
 import io
 import zipfile
 import tempfile
+import streamlit as st
 from pathlib import Path
 from typing import List, Tuple
 import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from matplotlib import colors as mcolors
+
 import numpy as np
 
 from tools.tools import ensure_directories
@@ -34,9 +31,12 @@ from modules.portMap import show_map  # Import the function
 
 from modules.M_tracker import manifest_tracker
 from modules.get_recap import (
-    get_excel_files,
     detect_horizontal_tables,
     export_range_as_image,
+    get_used_bounds,
+    get_visible_rows,
+    get_visible_cols,
+    find_last_bordered_table
 )
 
 # from modules.genPvs import generate_pv
@@ -170,14 +170,21 @@ elif choice == "Workforce Tracking":
 # ---------------------------------------------------------
 # 10. Send_Recaps
 # ---------------------------------------------------------
+# Assumes 'choice' is already defined by your sidebar/menu
 elif choice == "Send_Recaps":
     st.header("Send_Recaps")
 
     uploaded_files = st.file_uploader(
         "Select Excel Files", type=["xlsx", "xlsm", "xls"], accept_multiple_files=True
     )
+
     output_folder = st.text_input("Output Folder Path", value="/tmp/output")
-    col_limit = st.number_input("Last Table Column Limit", value=6, min_value=1)
+
+    last_table_tail_cols = st.number_input(
+        "Ending columns to capture for last table tail picture",
+        value=6,
+        min_value=1,
+    )
 
     if st.button("🚀 Start Processing", use_container_width=True):
         if not uploaded_files:
@@ -193,21 +200,19 @@ elif choice == "Send_Recaps":
         log_area = st.expander("Show Logs", expanded=True)
 
         Path(output_folder).mkdir(parents=True, exist_ok=True)
-
         generated_images: List[str] = []
 
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 for idx, uploaded_file in enumerate(uploaded_files):
+
                     workbook_name = Path(uploaded_file.name).stem
                     status_text.text(f"Processing: {workbook_name}...")
 
-                    # Save uploaded bytes to temp file
                     temp_file_path = os.path.join(temp_dir, uploaded_file.name)
                     with open(temp_file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
 
-                    # Open with openpyxl (Linux-compatible)
                     wb = openpyxl.load_workbook(
                         temp_file_path, data_only=True, read_only=False
                     )
@@ -215,41 +220,107 @@ elif choice == "Send_Recaps":
 
                     tables = detect_horizontal_tables(sheet)
 
-                    if tables:
-                        last_table_idx = len(tables) - 1
-                        for i, (start_col, end_col, start_row, end_row) in enumerate(
-                            tables, 1
-                        ):
-                            if i - 1 == last_table_idx:
-                                total_cols = end_col - start_col + 1
-                                cols_to_take = min(col_limit, total_cols)
-                                eff_start_col = end_col - cols_to_take + 1
-                            else:
-                                eff_start_col = start_col
+                    if not tables:
+                        log_area.write(f"⚠️ No tables found in {workbook_name}")
+                        wb.close()
+                        progress_bar.progress((idx + 1) / len(uploaded_files))
+                        continue
 
-                            # Pass bounds as tuple instead of win32 range object
-                            rng_bounds = (start_row, end_row, eff_start_col, end_col)
+                    # ── All tables except last ──────────────────────────────
+                    for i, (start_col, end_col, start_row, end_row) in enumerate(
+                        tables[:-1], 1
+                    ):
+                        rng_bounds = (start_row, end_row, start_col, end_col)
 
-                            out_name = f"{workbook_name}__{sheet.title}__table{i}.png"
-                            out_path = os.path.join(output_folder, out_name)
+                        out_name = f"{workbook_name}__{sheet.title}__table{i}.png"
+                        out_path = os.path.join(output_folder, out_name)
 
-                            export_range_as_image(sheet, rng_bounds, out_path)
-                            generated_images.append(out_path)
-                            log_area.write(f"✅ Saved: {out_name}")
+                        export_range_as_image(sheet, rng_bounds, out_path)
+
+                        generated_images.append(out_path)
+                        log_area.write(f"✅ Saved: {out_name}")
+
+                    # ── Last table ─────────────────────────────────────────
+                    last_start_col, last_end_col, last_start_row, last_end_row = tables[-1]
+                    table_num = len(tables)
+
+                    bordered = find_last_bordered_table(
+                        sheet,
+                        last_start_row,
+                        last_end_row,
+                        last_start_col,
+                        last_end_col,
+                    )
+
+                    if bordered:
+                        b_sc, b_ec, b_sr, b_er = bordered
+                    else:
+                        b_sc, b_ec, b_sr, b_er = (
+                            last_start_col,
+                            last_end_col,
+                            last_start_row,
+                            last_end_row,
+                        )
+
+                    # ✅ Picture 1: Full last table
+                    rng_bounds_full = (b_sr, b_er, b_sc, b_ec)
+
+                    out_name_full = (
+                        f"{workbook_name}__{sheet.title}__table{table_num}_full.png"
+                    )
+                    out_path_full = os.path.join(output_folder, out_name_full)
+
+                    export_range_as_image(sheet, rng_bounds_full, out_path_full)
+
+                    generated_images.append(out_path_full)
+                    log_area.write(f"✅ Saved (last full): {out_name_full}")
+
+                    # ✅ Picture 2: Tail of last table
+                    visible_cols = [
+                        c for c in range(b_sc, b_ec + 1)
+                        if not sheet.column_dimensions.get(
+                            sheet.cell(row=1, column=c).column_letter
+                        ) or not sheet.column_dimensions[
+                            sheet.cell(row=1, column=c).column_letter
+                        ].hidden
+                    ]
+
+                    tail_count = min(last_table_tail_cols, len(visible_cols))
+                    tail_cols = visible_cols[-tail_count:]
+
+                    if tail_cols:
+                        rng_bounds_tail = (
+                            b_sr,
+                            b_er,
+                            tail_cols[0],
+                            tail_cols[-1],
+                        )
+
+                        out_name_tail = (
+                            f"{workbook_name}__{sheet.title}"
+                            f"__table{table_num}_tail{tail_count}.png"
+                        )
+                        out_path_tail = os.path.join(output_folder, out_name_tail)
+
+                        export_range_as_image(sheet, rng_bounds_tail, out_path_tail)
+
+                        generated_images.append(out_path_tail)
+                        log_area.write(
+                            f"✅ Saved (last tail {tail_count} cols): {out_name_tail}"
+                        )
 
                     wb.close()
                     progress_bar.progress((idx + 1) / len(uploaded_files))
 
-            # Bundle into ZIP (no compression)
+            # ── ZIP all images ────────────────────────────────────────
             if generated_images:
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(
-                    zip_buffer,
-                    mode="w",
-                    compression=zipfile.ZIP_STORED,
+                    zip_buffer, mode="w", compression=zipfile.ZIP_STORED
                 ) as zf:
                     for img_path in generated_images:
                         zf.write(img_path, arcname=Path(img_path).name)
+
                 zip_buffer.seek(0)
                 st.session_state.zip_buffer = zip_buffer.getvalue()
 
@@ -258,10 +329,10 @@ elif choice == "Send_Recaps":
         except Exception as e:
             st.error(f"An error occurred: {e}")
             st.text(traceback.format_exc())
+
         finally:
             st.session_state.processing = False
 
-    # Single download button for all images
     if "zip_buffer" in st.session_state and st.session_state.zip_buffer:
         st.download_button(
             label="⬇️ Download All Images (ZIP)",
