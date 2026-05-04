@@ -186,15 +186,85 @@ elif choice == "Send_Recaps":
         min_value=1,
     )
 
-    # ── Start button ─────────────────────────────────────────────────
+    # ── WhatsApp settings ─────────────────────────────────────────────
+    st.divider()
+    st.subheader("📱 WhatsApp Settings (Green API)")
+
+    with st.expander("🔑 API Credentials", expanded=False):
+        id_instance = st.text_input(
+            "ID Instance",
+            value=st.session_state.get("wa_id_instance", ""),
+            type="default",
+            key="wa_id_instance",
+        )
+        api_token = st.text_input(
+            "API Token",
+            value=st.session_state.get("wa_api_token", ""),
+            type="password",
+            key="wa_api_token",
+        )
+        # Fetch groups button
+        if st.button("🔄 Load My WhatsApp Groups"):
+            if id_instance and api_token:
+                with st.spinner("Fetching groups..."):
+                    groups = get_whatsapp_groups_greenapi(id_instance, api_token)
+                st.session_state.wa_groups = groups
+                if groups:
+                    st.success(f"Found {len(groups)} group(s).")
+                else:
+                    st.warning("No groups found or invalid credentials.")
+            else:
+                st.error("Please enter ID Instance and API Token first.")
+
+    # Group selector (populated after "Load Groups")
+    send_to_whatsapp = False
+    selected_chat_id = None
+
+    if st.session_state.get("wa_groups"):
+        groups = st.session_state.wa_groups
+        group_options = {g["name"]: g["id"] for g in groups}
+
+        selected_group_name = st.selectbox(
+            "Select WhatsApp Group",
+            options=list(group_options.keys()),
+        )
+        selected_chat_id = group_options[selected_group_name]
+        st.caption(f"Chat ID: `{selected_chat_id}`")
+
+        send_to_whatsapp = st.checkbox(
+            "📤 Send images to this group after processing",
+            value=False,
+        )
+    else:
+        # Manual chat ID fallback
+        manual_chat_id = st.text_input(
+            "Or enter Group Chat ID manually",
+            placeholder="120363XXXXXXXXXX@g.us",
+        )
+        if manual_chat_id:
+            selected_chat_id = manual_chat_id
+            send_to_whatsapp = st.checkbox(
+                "📤 Send images to this group after processing",
+                value=False,
+            )
+
+    st.divider()
+
+    # ── Start button ──────────────────────────────────────────────────
     if st.button("🚀 Start Processing", use_container_width=True):
         if not uploaded_files:
             st.error("Please select at least one file.")
+        elif send_to_whatsapp and not selected_chat_id:
+            st.error("Please select or enter a WhatsApp group.")
+        elif send_to_whatsapp and (not id_instance or not api_token):
+            st.error("Please enter Green API credentials.")
         else:
             st.session_state.processing = True
+            st.session_state.do_send_wa = send_to_whatsapp
+            st.session_state.wa_chat_id = selected_chat_id
             st.session_state.pop("zip_buffer", None)
 
-    # ── Processing block ─────────────────────────────────────────────
+    # ── Processing block ──────────────────────────────────────────────
     if st.session_state.get("processing"):
         status_text = st.empty()
         progress_bar = st.progress(0)
@@ -206,11 +276,11 @@ elif choice == "Send_Recaps":
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 total = len(uploaded_files)
+
                 for idx, up_file in enumerate(uploaded_files):
                     wb_name = Path(up_file.name).stem
-                    status_text.text(f"Processing {idx + 1}/{total}: {wb_name}")
+                    status_text.text(f"Processing {idx + 1}/{total}: {wb_name}...")
 
-                    # Save upload to a temp path so openpyxl can open it
                     tmp_path = os.path.join(tmp_dir, up_file.name)
                     with open(tmp_path, "wb") as fh:
                         fh.write(up_file.getbuffer())
@@ -228,11 +298,10 @@ elif choice == "Send_Recaps":
                         log_fn=log_area.write,
                     )
                     all_images.extend(imgs)
-
                     wb.close()
                     progress_bar.progress((idx + 1) / total)
 
-            # ── Bundle into ZIP ───────────────────────────────────────
+            # ── ZIP ───────────────────────────────────────────────────
             if all_images:
                 zip_buf = io.BytesIO()
                 with zipfile.ZipFile(
@@ -240,16 +309,30 @@ elif choice == "Send_Recaps":
                 ) as zf:
                     for img_path in all_images:
                         zf.write(img_path, arcname=Path(img_path).name)
-
                 zip_buf.seek(0)
                 st.session_state.zip_buffer = zip_buf.getvalue()
-                status_text.text("✅ Done!")
-            else:
-                status_text.text("⚠️ No images were generated.")
 
-            st.success(
-                f"Processed {total} workbook(s). {len(all_images)} image(s) created."
-            )
+            st.success(f"✅ Done! {len(all_images)} image(s) from {total} workbook(s).")
+
+            # ── Send to WhatsApp ──────────────────────────────────────
+            if st.session_state.get("do_send_wa") and all_images:
+                st.info(f"📤 Sending {len(all_images)} image(s) to WhatsApp...")
+                wa_log = st.expander("WhatsApp Send Logs", expanded=True)
+                ok, fail = send_images_to_whatsapp(
+                    image_paths=all_images,
+                    chat_id=st.session_state.wa_chat_id,
+                    id_instance=st.session_state.wa_id_instance,
+                    api_token=st.session_state.wa_api_token,
+                    log_fn=wa_log.write,
+                    delay_seconds=1.5,
+                )
+                if fail == 0:
+                    st.success(f"✅ All {ok} image(s) sent to WhatsApp!")
+                else:
+                    st.warning(
+                        f"Sent: {ok} ✅  |  Failed: {fail} ❌  "
+                        f"— check WhatsApp logs above."
+                    )
 
         except Exception as exc:
             st.error(f"An error occurred: {exc}")
@@ -258,7 +341,7 @@ elif choice == "Send_Recaps":
         finally:
             st.session_state.processing = False
 
-    # ── Download button (persists across reruns) ──────────────────────
+    # ── Persistent download button ─────────────────────────────────────
     if st.session_state.get("zip_buffer"):
         st.download_button(
             label="⬇️ Download All Images (ZIP)",
