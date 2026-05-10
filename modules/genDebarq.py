@@ -156,7 +156,10 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     
     # base_date = product_data[COL_DATE].iloc[0] if not product_data[COL_DATE].empty else datetime.now()
     # Ensure base_date is a datetime object, not a string
-    base_date = pd.to_datetime(product_data[COL_DATE].iloc[0]) if not product_data[COL_DATE].empty else datetime.now()
+    # base_date = pd.to_datetime(product_data[COL_DATE].iloc[0]) if not product_data[COL_DATE].empty else datetime.now()
+    base_date = pd.to_datetime(product_data[COL_DATE].iloc[0], errors='coerce')
+    if pd.isna(base_date):
+        base_date = datetime.now()
 
     shifts = ["MATIN", "SOIR", "NUIT", "NUIT -2-"]
     data_start_row = 8

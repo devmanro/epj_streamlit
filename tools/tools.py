@@ -284,45 +284,42 @@ def find_type_and_produit(designation):
         produit = cargo_type  # Unknown → flag for manual review
 
     return pd.Series([cargo_type, produit])
-
 def align_data(uploaded_df, mapping):
-    
     try:
-        valid_mappings_count = sum(
-            1 for value in mapping.values() if value is not None)
+        valid_mappings_count = sum(1 for value in mapping.values() if value is not None)
 
         if valid_mappings_count <= 2:
             return uploaded_df, False
 
-        # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
+        final_cols = [value for value in mapping.values() if value is not None]
+        df_aligned = df_mapped[final_cols].copy()
 
-        final_cols = [value for key, value in mapping.items()
-                      if value is not None]
+        # Ensure target columns exist
+        for col in [COL_TYPE, COL_PRODUIT]:
+            if col not in df_aligned.columns:
+                df_aligned[col] = None
 
-        # Keep only the required columns
-        df_aligned = df_mapped[final_cols]
-
-        # Ensure COL_DESIGNATION exists in the aligned DataFrame
         if COL_DESIGNATION in df_aligned.columns:
-            # Apply once, assign both columns
-            df_aligned[[COL_TYPE, COL_PRODUIT]] = df_aligned[COL_DESIGNATION].apply(find_type_and_produit)
+            # Since find_type_and_produit returns pd.Series([a, b]),
+            # calling apply on the designation column results in a DataFrame automatically.
+            extracted_df = df_aligned[COL_DESIGNATION].apply(find_type_and_produit)
+            
+            # Name the columns to match for the fillna operation
+            extracted_df.columns = [COL_TYPE, COL_PRODUIT]
 
-            # matches_any_constant(raw_commodity, UNIT_CARGO_TYPES) and matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES)
-        else:
-            # If COL_DESIGNATION is not present, set type column to None
-            df_aligned[[COL_TYPE,COL_PRODUIT]] = df_aligned[[COL_TYPE,COL_PRODUIT]].fillna(value='None')
-
-
-
+            # Fill only if current cells are empty or NaN
+            df_aligned[COL_TYPE] = df_aligned[COL_TYPE].replace('', None).fillna(extracted_df[COL_TYPE])
+            df_aligned[COL_PRODUIT] = df_aligned[COL_PRODUIT].replace('', None).fillna(extracted_df[COL_PRODUIT])
+        
+        # Final cleanup
+        df_aligned[[COL_TYPE, COL_PRODUIT]] = df_aligned[[COL_TYPE, COL_PRODUIT]].fillna('None')
 
         return df_aligned, True
 
     except Exception as e:
         print(f"Error during alignment: {e}")
         return uploaded_df, False
-
-
 
 @st.dialog("Map Your Columns", width="large")
 def show_mapping_dialog(uploaded_df):
