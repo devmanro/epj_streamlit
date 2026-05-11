@@ -284,42 +284,61 @@ def find_type_and_produit(designation):
         produit = cargo_type  # Unknown → flag for manual review
 
     return pd.Series([cargo_type, produit])
+
 def align_data(uploaded_df, mapping):
+    
     try:
-        valid_mappings_count = sum(1 for value in mapping.values() if value is not None)
+        valid_mappings_count = sum(
+            1 for value in mapping.values() if value is not None)
 
         if valid_mappings_count <= 2:
             return uploaded_df, False
 
+        # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
-        final_cols = [value for value in mapping.values() if value is not None]
+
+        final_cols = [value for key, value in mapping.items()
+                      if value is not None]
+
+        # Keep only the required columns
         df_aligned = df_mapped[final_cols].copy()
 
-        # Ensure target columns exist
-        for col in [COL_TYPE, COL_PRODUIT]:
-            if col not in df_aligned.columns:
-                df_aligned[col] = None
-
+        # Ensure COL_DESIGNATION exists in the aligned DataFrame
         if COL_DESIGNATION in df_aligned.columns:
-            # Since find_type_and_produit returns pd.Series([a, b]),
-            # calling apply on the designation column results in a DataFrame automatically.
-            extracted_df = df_aligned[COL_DESIGNATION].apply(find_type_and_produit)
-            
-            # Name the columns to match for the fillna operation
-            extracted_df.columns = [COL_TYPE, COL_PRODUIT]
 
-            # Fill only if current cells are empty or NaN
-            df_aligned[COL_TYPE] = df_aligned[COL_TYPE].replace('', None).fillna(extracted_df[COL_TYPE])
-            df_aligned[COL_PRODUIT] = df_aligned[COL_PRODUIT].replace('', None).fillna(extracted_df[COL_PRODUIT])
-        
-        # Final cleanup
-        df_aligned[[COL_TYPE, COL_PRODUIT]] = df_aligned[[COL_TYPE, COL_PRODUIT]].fillna('None')
+            # --- 1. BYPASS: Save existing values before overwriting ---
+            orig_type   = df_aligned[COL_TYPE].copy()   if COL_TYPE   in df_aligned.columns else None
+            orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
+
+            # --- 2. COMPUTE: Simple list comprehension avoids all Pandas apply shape bugs ---
+            computed = [find_type_and_produit(val) for val in df_aligned[COL_DESIGNATION]]
+            df_aligned[COL_TYPE]    = [res[0] for res in computed]
+            df_aligned[COL_PRODUIT] = [res[1] for res in computed]
+
+            # --- 3. REINSERT: Put back original values where they were not null ---
+            if orig_type is not None:
+                mask = orig_type.notna() & (orig_type != '')
+                df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
+
+            if orig_produit is not None:
+                mask = orig_produit.notna() & (orig_produit != '')
+                df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
+
+        else:
+            # If COL_DESIGNATION is not present, fill nulls with 'None'
+            for col in [COL_TYPE, COL_PRODUIT]:
+                if col not in df_aligned.columns:
+                    df_aligned[col] = 'None'
+                else:
+                    df_aligned[col] = df_aligned[col].fillna('None')
 
         return df_aligned, True
 
     except Exception as e:
         print(f"Error during alignment: {e}")
         return uploaded_df, False
+
+
 
 @st.dialog("Map Your Columns", width="large")
 def show_mapping_dialog(uploaded_df):
