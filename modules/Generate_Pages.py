@@ -12,15 +12,226 @@ import re
 import io
 import threading
 import streamlit as st
+from difflib import SequenceMatcher
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-TODAY        = date.today()
-TODAY_STR    = TODAY.strftime("%d-%m-%Y")
-RST_SHEET_NAME = "RST-10-10-2026"
-SOURCE_FILE  = "manifest_source.xlsx"
-OUTPUT_FILE  = "output_omar.xlsx"
+TODAY           = date.today()
+TODAY_STR       = TODAY.strftime("%d-%m-%Y")
+RST_SHEET_NAME  = "RST-10-10-2026"
+SOURCE_FILE     = "manifest_source.xlsx"
+OUTPUT_FILE     = "output_omar.xlsx"
+
+# ---------------------------------------------------------------------------
+# ══════════════════════════════════════════════════════════════════════════
+#  FUZZY HEADER RESOLVER
+#  Strategy:
+#   1. Exact match (after strip)
+#   2. Case-insensitive match
+#   3. Normalized match  (collapse spaces, remove punctuation)
+#   4. Token-subset match (all tokens of canonical are in column tokens)
+#   5. Character-ratio fuzzy match via SequenceMatcher (≥ 0.82 threshold)
+#  Each canonical name maps to a list of aliases tried in order.
+# ══════════════════════════════════════════════════════════════════════════
+# ---------------------------------------------------------------------------
+
+# Canonical name → list of known aliases / alternate spellings
+COLUMN_ALIASES: dict[str, list[str]] = {
+    "escale_numb":        ["escale_numb", "escale numb", "n escale", "n° escale",
+                           "numero escale", "numéro escale", "escale"],
+    "navire_name":        ["navire_name", "navire name", "navire", "vessel", "ship name"],
+    "CONSIGNATAIRE":      ["consignataire", "consignatair", "consign"],
+    "DATE":               ["date", "dat"],
+    "DATE D'ENTREE":      ["date d'entree", "date entree", "date d entree",
+                           "date d'entrée", "date entrée", "date arrivee",
+                           "date arrivée", "date d'arrivee"],
+    "EMBARQ/DEBARQ":      ["embarq/debarq", "embarq debarq", "embarq / debarq",
+                           "emb/deb", "embarquement debarquement", "emb deb"],
+    "PRODUITS":           ["produits", "produit", "product", "marchandise type"],
+    "Détails PRODUITS":   ["détails produits", "details produits", "detail produits",
+                           "détail produits", "détails produit", "details produit",
+                           "produits details", "produit detail"],
+    "nombre colis":       ["nombre colis", "nbre colis", "nb colis", "nombre de colis",
+                           "nbr colis", "nombre col", "colis", "qte", "quantite",
+                           "quantité"],
+    "Poids brute":        ["poids brute", "poids brut", "poid brute", "poid brut",
+                           "tonnage", "weight", "gross weight", "poids"],
+    "Client":             ["client", "clients", "clien", "customer", "nom client"],
+    "BL":                 ["bl", "b/l", "b l", "bill of lading", "bl numero",
+                           "numéro bl", "numero bl", "n° bl"],
+    "Article":            ["article", "articles", "art", "crn", "crn/art", "crn art"],
+    "Marchandise":        ["marchandise", "marchandises", "marchandise d",
+                           "marchandi", "goods", "designation marchandise"],
+    "Marchandise.1":      ["marchandise.1", "marchandise 1", "marchandise h",
+                           "marchandises.1"],
+    "Némuro de chassis":  ["némuro de chassis", "numero de chassis", "numéro de chassis",
+                           "n° chassis", "n chassis", "chassis", "chassis number",
+                           "vin", "numro de chassis", "nemuro de chassis",
+                           "numero chassis", "numéro chassis", "chassis no"],
+    "Modèle":             ["modèle", "modele", "model", "mod", "modèl"],
+    "SURF":               ["surf", "surface", "superficie", "surface m2", "surf m2"],
+    "MRN":                ["mrn", "n° gros", "n gros", "gros", "mrn / n° gros",
+                           "mrn/n° gros"],
+}
+
+# Reverse lookup built once: normalised_alias → canonical
+def _build_reverse_map() -> dict[str, str]:
+    rev: dict[str, str] = {}
+    for canonical, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            rev[_norm(alias)] = canonical
+    return rev
+
+def _norm(s: str) -> str:
+    """Lowercase, collapse whitespace, remove common punctuation."""
+    s = s.lower().strip()
+    s = re.sub(r"[°'\"./\\]", " ", s)   # replace punctuation with space
+    s = re.sub(r"\s+", " ", s)           # collapse spaces
+    return s.strip()
+
+def _tokenize(s: str) -> set[str]:
+    return set(re.split(r"\s+", _norm(s)))
+
+_REVERSE_MAP: dict[str, str] = {}   # filled lazily on first use
+
+
+def resolve_column(col_name: str) -> Optional[str]:
+    """
+    Given an actual spreadsheet column name, return the canonical key
+    (from COLUMN_ALIASES) or None if no match.
+    """
+    global _REVERSE_MAP
+    if not _REVERSE_MAP:
+        _REVERSE_MAP = _build_reverse_map()
+
+    # 1. Exact match
+    if col_name in COLUMN_ALIASES:
+        return col_name
+
+    normed = _norm(col_name)
+
+    # 2. Direct normalised lookup
+    if normed in _REVERSE_MAP:
+        return _REVERSE_MAP[normed]
+
+    # 3. Token-subset match:
+    #    canonical tokens ⊆ actual tokens  (handles extra words in header)
+    col_tokens = _tokenize(col_name)
+    for canonical, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            alias_tokens = _tokenize(alias)
+            if alias_tokens and alias_tokens.issubset(col_tokens):
+                return canonical
+
+    # 4. Fuzzy ratio match (SequenceMatcher ≥ 0.82)
+    best_ratio   = 0.0
+    best_canon   = None
+    for canonical, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            ratio = SequenceMatcher(None, normed, _norm(alias)).ratio()
+            if ratio > best_ratio:
+                best_ratio  = ratio
+                best_canon  = canonical
+    if best_ratio >= 0.82:
+        return best_canon
+
+    return None   # no match found
+
+
+def build_column_map(df_columns) -> dict[str, str]:
+    """
+    Returns  {canonical_name: actual_df_column_name}
+    for every column in the DataFrame that could be resolved.
+    Logs unresolved columns for debugging.
+    """
+    mapping: dict[str, str] = {}          # canonical → actual col
+    unresolved: list[str]   = []
+
+    for col in df_columns:
+        canon = resolve_column(str(col))
+        if canon:
+            # First match wins (handles duplicate-like columns)
+            if canon not in mapping:
+                mapping[canon] = str(col)
+        else:
+            unresolved.append(str(col))
+
+    if unresolved:
+        # Surface in Streamlit sidebar for debugging — non-blocking
+        try:
+            with st.sidebar.expander("⚠️ Unresolved columns", expanded=False):
+                st.write(unresolved)
+        except Exception:
+            pass
+
+    return mapping
+
+
+# ---------------------------------------------------------------------------
+# Safe accessor that uses the dynamic column map
+# ---------------------------------------------------------------------------
+def safe_val(row, canonical: str, col_map: dict[str, str]):
+    """Fetch value using canonical name resolved through col_map."""
+    actual = col_map.get(canonical)
+    if actual is None or actual not in row.index:
+        return ""
+    val = row[actual]
+    return "" if pd.isna(val) else val
+
+
+# ---------------------------------------------------------------------------
+# Multi-sheet loader: reads ALL sheets from manifest_source and stacks them
+# ---------------------------------------------------------------------------
+def load_all_sheets(filepath: str) -> tuple[pd.DataFrame, list[str], dict]:
+    """
+    Opens every sheet in `filepath`, normalises headers via the fuzzy resolver,
+    renames columns to their canonical names, and concatenates into one DataFrame.
+
+    Returns:
+        combined_df  – single DataFrame with canonical column names
+        sheet_names  – list of sheet names found
+        per_sheet    – dict  {sheet_name: row_count}
+    """
+    xl      = pd.ExcelFile(filepath)
+    sheets  = xl.sheet_names
+    frames  = []
+    per_sheet: dict[str, int] = {}
+
+    for sheet in sheets:
+        try:
+            df = xl.parse(sheet, header=0, dtype=str)
+        except Exception as e:
+            st.warning(f"⚠️ Could not read sheet `{sheet}`: {e}")
+            continue
+
+        if df.empty:
+            per_sheet[sheet] = 0
+            continue
+
+        # Strip whitespace from column names
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # Build column map for THIS sheet
+        col_map = build_column_map(df.columns)
+
+        # Rename columns to canonical names
+        rename_dict = {actual: canon for canon, actual in col_map.items()}
+        df = df.rename(columns=rename_dict)
+
+        # Tag with source sheet so downstream code can use it if needed
+        df["_source_sheet"] = sheet
+
+        per_sheet[sheet] = len(df)
+        frames.append(df)
+
+    if not frames:
+        return pd.DataFrame(), sheets, per_sheet
+
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    return combined, sheets, per_sheet
+
 
 # ---------------------------------------------------------------------------
 # Type mapping
@@ -57,7 +268,7 @@ for _cat, _keywords in TYPE_MAP.items():
 
 
 # ---------------------------------------------------------------------------
-# Core logic helpers
+# Core logic helpers  (updated to accept col_map)
 # ---------------------------------------------------------------------------
 def gs_type_function(item: str) -> str:
     if not isinstance(item, str):
@@ -86,25 +297,21 @@ def gs_extract_chassis(val) -> str:
 
 
 def gs_has_valid_chassis(row) -> bool:
-    raw = gs_safe_val(row, "Némuro de chassis")
+    """Works on rows that already have canonical column names."""
+    raw = row.get("Némuro de chassis", "")
+    if pd.isna(raw):
+        raw = ""
     return bool(gs_extract_chassis(raw))
 
 
-def gs_safe_val(row, col: str):
-    if col in row.index:
-        val = row[col]
-        return "" if pd.isna(val) else val
-    return ""
-
-
 def gs_marchandise_d(row):
-    return gs_safe_val(row, "Marchandise")
+    val = row.get("Marchandise", "")
+    return "" if pd.isna(val) else val
 
 
 def gs_marchandise_h(row):
-    if "Marchandise.1" in row.index:
-        return gs_safe_val(row, "Marchandise.1")
-    return ""
+    val = row.get("Marchandise.1", "")
+    return "" if pd.isna(val) else val
 
 
 def gs_normalize_number(val, as_int=False):
@@ -184,7 +391,7 @@ def _freeze(ws, row=2):
 
 
 # ---------------------------------------------------------------------------
-# Sheet builders
+# Sheet builders  (now receive a DataFrame with canonical column names)
 # ---------------------------------------------------------------------------
 def gs_build_navires(ws, df: pd.DataFrame, append: bool, cancel_flag: threading.Event):
     headers = [
@@ -206,37 +413,37 @@ def gs_build_navires(ws, df: pd.DataFrame, append: bool, cancel_flag: threading.
         start_row = ws.max_row + 1
 
     chassis_list = [
-        gs_extract_chassis(gs_safe_val(df_f.iloc[i], "Némuro de chassis"))
+        gs_extract_chassis(df_f.iloc[i].get("Némuro de chassis", "") or "")
         for i in range(len(df_f))
     ]
 
     for idx in range(len(df_f)):
         if cancel_flag.is_set():
-            return None, None           # signal cancellation
+            return None, None
 
         er  = start_row + idx
         row = df_f.iloc[idx]
-        pv  = str(gs_safe_val(row, "PRODUITS"))
+        pv  = str(row.get("PRODUITS", "") or "")
 
         values = [
-            gs_safe_val(row, "escale_numb"),
-            gs_safe_val(row, "navire_name"),
-            gs_safe_val(row, "CONSIGNATAIRE"),
+            row.get("escale_numb", ""),
+            row.get("navire_name", ""),
+            row.get("CONSIGNATAIRE", ""),
             "",
-            gs_safe_val(row, "DATE"),
-            gs_safe_val(row, "EMBARQ/DEBARQ"),
+            row.get("DATE", ""),
+            row.get("EMBARQ/DEBARQ", ""),
             gs_type_function(pv),
             pv,
             gs_marchandise_d(row),
-            gs_normalize_number(gs_safe_val(row, "nombre colis"), True),
-            gs_normalize_number(gs_safe_val(row, "Poids brute")),
-            gs_safe_val(row, "Client"),
+            gs_normalize_number(row.get("nombre colis", ""), True),
+            gs_normalize_number(row.get("Poids brute", "")),
+            row.get("Client", ""),
             None,
             TODAY,
             f'=IFERROR(N{er}-M{er},"")',
             "TP",
-            gs_normalize_number(gs_safe_val(row, "SURF")),
-            gs_safe_val(row, "BL"),
+            gs_normalize_number(row.get("SURF", "")),
+            row.get("BL", ""),
             "",
             chassis_list[idx],
         ]
@@ -297,17 +504,17 @@ def gs_build_chassis(ws, df: pd.DataFrame, append: bool, cancel_flag: threading.
         row = df_f.iloc[idx]
 
         values = [
-            gs_safe_val(row, "navire_name"),
-            gs_safe_val(row, "BL"),
-            gs_safe_val(row, "Article"),
+            row.get("navire_name", ""),
+            row.get("BL", ""),
+            row.get("Article", ""),
             gs_marchandise_d(row),
-            gs_safe_val(row, "Détails PRODUITS"),
-            gs_normalize_number(gs_safe_val(row, "nombre colis"), True),
-            gs_normalize_number(gs_safe_val(row, "Poids brute")),
-            gs_safe_val(row, "Client"),
+            row.get("Détails PRODUITS", ""),
+            gs_normalize_number(row.get("nombre colis", ""), True),
+            gs_normalize_number(row.get("Poids brute", "")),
+            row.get("Client", ""),
             gs_marchandise_h(row),
-            gs_safe_val(row, "Némuro de chassis"),
-            gs_safe_val(row, "Modèle"),
+            row.get("Némuro de chassis", ""),
+            row.get("Modèle", ""),
             gs_marchandise_d(row),
         ]
 
@@ -353,25 +560,25 @@ def gs_build_rst(ws, df: pd.DataFrame, append: bool, cancel_flag: threading.Even
         er  = start_row + idx
         row = df_f.iloc[idx]
 
-        qte     = gs_normalize_number(gs_safe_val(row, "nombre colis"), True)
-        tonnage = gs_normalize_number(gs_safe_val(row, "Poids brute"))
-        surface = gs_normalize_number(gs_safe_val(row, "SURF"))
+        qte     = gs_normalize_number(row.get("nombre colis", ""), True)
+        tonnage = gs_normalize_number(row.get("Poids brute", ""))
+        surface = gs_normalize_number(row.get("SURF", ""))
 
         values = [
-            gs_safe_val(row, "escale_numb"),
-            gs_safe_val(row, "navire_name"),
-            gs_safe_val(row, "DATE D'ENTREE"),
+            row.get("escale_numb", ""),
+            row.get("navire_name", ""),
+            row.get("DATE D'ENTREE", ""),
             "",
             qte, tonnage, surface,
-            gs_safe_val(row, "Client"),
-            gs_safe_val(row, "Détails PRODUITS"),
-            gs_safe_val(row, "PRODUITS"),
+            row.get("Client", ""),
+            row.get("Détails PRODUITS", ""),
+            row.get("PRODUITS", ""),
             f'=IFERROR(D{er}+8,"")',
             f'=IFERROR(K{er}+8,"")',
-            gs_safe_val(row, "MRN"),
+            row.get("MRN", ""),
             qte, tonnage, surface,
-            gs_safe_val(row, "BL"),
-            gs_safe_val(row, "Article"),
+            row.get("BL", ""),
+            row.get("Article", ""),
             gs_marchandise_d(row),
             "", "",
             "N-OP",
@@ -399,13 +606,16 @@ def gs_build_rst(ws, df: pd.DataFrame, append: bool, cancel_flag: threading.Even
 # ---------------------------------------------------------------------------
 # Main generator (runs in background thread)
 # ---------------------------------------------------------------------------
-def gs_run_generation(raw: pd.DataFrame, cancel_flag: threading.Event, result: dict):
+def gs_run_generation(
+    raw: pd.DataFrame,
+    cancel_flag: threading.Event,
+    result: dict,
+):
     """
+    `raw` already has canonical column names (produced by load_all_sheets).
     Builds output_omar.xlsx on disk and stores result dict.
-    result keys set on completion: 'stats', 'error', 'cancelled'
     """
     try:
-        # Load or create workbook
         if os.path.exists(OUTPUT_FILE):
             wb = load_workbook(OUTPUT_FILE)
         else:
@@ -416,13 +626,11 @@ def gs_run_generation(raw: pd.DataFrame, cancel_flag: threading.Event, result: d
         stats = {}
 
         # ── NAVIRES ────────────────────────────────────────────────────────
-        sn = "NAVIRES"
+        sn  = "NAVIRES"
         app = sn in wb.sheetnames
+        ws  = wb[sn] if app else wb.create_sheet(sn)
         if not app:
-            ws = wb.create_sheet(sn)
             ws.sheet_view.showGridLines = False
-        else:
-            ws = wb[sn]
         kept, skipped = gs_build_navires(ws, raw, app, cancel_flag)
         if cancel_flag.is_set():
             result["cancelled"] = True
@@ -430,13 +638,11 @@ def gs_run_generation(raw: pd.DataFrame, cancel_flag: threading.Event, result: d
         stats["NAVIRES"] = {"kept": kept, "skipped": skipped, "appended": app}
 
         # ── N° chassis ─────────────────────────────────────────────────────
-        sn = "N° chassis"
+        sn  = "N° chassis"
         app = sn in wb.sheetnames
+        ws  = wb[sn] if app else wb.create_sheet(sn)
         if not app:
-            ws = wb.create_sheet(sn)
             ws.sheet_view.showGridLines = False
-        else:
-            ws = wb[sn]
         kept, skipped = gs_build_chassis(ws, raw, app, cancel_flag)
         if cancel_flag.is_set():
             result["cancelled"] = True
@@ -444,20 +650,17 @@ def gs_run_generation(raw: pd.DataFrame, cancel_flag: threading.Event, result: d
         stats["N° chassis"] = {"kept": kept, "skipped": skipped, "appended": app}
 
         # ── RST ────────────────────────────────────────────────────────────
-        sn = RST_SHEET_NAME
+        sn  = RST_SHEET_NAME
         app = sn in wb.sheetnames
+        ws  = wb[sn] if app else wb.create_sheet(sn)
         if not app:
-            ws = wb.create_sheet(sn)
             ws.sheet_view.showGridLines = False
-        else:
-            ws = wb[sn]
         kept, skipped = gs_build_rst(ws, raw, app, cancel_flag)
         if cancel_flag.is_set():
             result["cancelled"] = True
             return
         stats[RST_SHEET_NAME] = {"kept": kept, "skipped": skipped, "appended": app}
 
-        # Save to disk
         wb.save(OUTPUT_FILE)
         result["stats"] = stats
 
@@ -468,9 +671,6 @@ def gs_run_generation(raw: pd.DataFrame, cancel_flag: threading.Event, result: d
 # ---------------------------------------------------------------------------
 # Streamlit page
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Streamlit page
-# ---------------------------------------------------------------------------
 def page_generate_sheets():
     st.title("📋 Generate Sheets")
     st.caption(
@@ -478,28 +678,33 @@ def page_generate_sheets():
     )
 
     # ── File uploader ──────────────────────────────────────────────────────
-    uploaded_file = st.file_uploader("📂 Upload Source Manifest File (Excel)", type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader(
+        "📂 Upload Source Manifest File (Excel)", type=["xlsx", "xls"]
+    )
     if uploaded_file is not None:
         with open(SOURCE_FILE, "wb") as f:
             f.write(uploaded_file.getbuffer())
+        # Reset reverse map so it's rebuilt fresh on next resolve
+        global _REVERSE_MAP
+        _REVERSE_MAP = {}
 
     # ── Session state init ─────────────────────────────────────────────────
-    if "gs_running"      not in st.session_state:
-        st.session_state.gs_running      = False   # is thread active?
-    if "gs_cancel_flag"  not in st.session_state:
-        st.session_state.gs_cancel_flag  = None
-    if "gs_thread"       not in st.session_state:
-        st.session_state.gs_thread       = None
-    if "gs_result"       not in st.session_state:
-        st.session_state.gs_result       = {}
-    if "gs_done"         not in st.session_state:
-        st.session_state.gs_done         = False   # completed (success/cancel)
+    for key, default in [
+        ("gs_running",     False),
+        ("gs_cancel_flag", None),
+        ("gs_thread",      None),
+        ("gs_result",      {}),
+        ("gs_done",        False),
+        ("gs_raw",         None),       # canonical DataFrame cached here
+        ("gs_sheet_info",  {}),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
 
     # ── Source file presence check ─────────────────────────────────────────
     source_exists = os.path.exists(SOURCE_FILE)
     output_exists = os.path.exists(OUTPUT_FILE)
 
-    # Status bar
     c1, c2 = st.columns(2)
     with c1:
         if source_exists:
@@ -514,40 +719,75 @@ def page_generate_sheets():
 
     st.divider()
 
-    # ── Source preview ─────────────────────────────────────────────────────
+    # ── Load & resolve all sheets ──────────────────────────────────────────
+    raw = None
     if source_exists:
         try:
-            raw = pd.read_excel(SOURCE_FILE, header=0, dtype=str)
-            raw.columns = [str(c).strip() for c in raw.columns]
+            raw, sheet_names, per_sheet = load_all_sheets(SOURCE_FILE)
+            st.session_state.gs_raw        = raw
+            st.session_state.gs_sheet_info = per_sheet
         except Exception as e:
             st.error(f"❌ Cannot read `{SOURCE_FILE}`: {e}")
             return
 
-        total_rows  = len(raw)
-        nc_filled   = (
+        # ── Sheet breakdown ────────────────────────────────────────────────
+        with st.expander(f"📑 Sheets found in source ({len(sheet_names)})", expanded=True):
+            sheet_df = pd.DataFrame(
+                [{"Sheet": s, "Rows": per_sheet.get(s, 0)} for s in sheet_names]
+            )
+            st.dataframe(sheet_df, use_container_width=True, hide_index=True)
+
+        # ── Metrics ───────────────────────────────────────────────────────
+        total_rows = len(raw)
+        nc_filled  = (
             raw["nombre colis"]
             .apply(lambda x: not pd.isna(x) and str(x).strip() != "")
             .sum()
             if "nombre colis" in raw.columns else 0
         )
-        chassis_ok  = (
+        chassis_ok = (
             raw.apply(gs_has_valid_chassis, axis=1).sum()
             if "Némuro de chassis" in raw.columns else 0
         )
-        bl_count    = raw["BL"].nunique() if "BL" in raw.columns else 0
+        bl_count   = (
+            raw["BL"].nunique() if "BL" in raw.columns else 0
+        )
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Rows",                 total_rows)
-        m2.metric("→ NAVIRES / RST rows",       nc_filled)
-        m3.metric("→ N° chassis rows",          chassis_ok)
-        m4.metric("Unique BL",                  bl_count)
+        m1.metric("Total Rows (all sheets)", total_rows)
+        m2.metric("→ NAVIRES / RST rows",    nc_filled)
+        m3.metric("→ N° chassis rows",       chassis_ok)
+        m4.metric("Unique BL",               bl_count)
 
-        required = ["BL","navire_name","nombre colis","Poids brute","PRODUITS","escale_numb"]
-        missing  = [c for c in required if c not in raw.columns]
+        # ── Column resolution report ───────────────────────────────────────
+        required_canonicals = [
+            "BL", "navire_name", "nombre colis",
+            "Poids brute", "PRODUITS", "escale_numb",
+        ]
+        missing = [c for c in required_canonicals if c not in raw.columns]
         if missing:
-            st.warning(f"⚠️ Missing columns: `{'`, `'.join(missing)}`")
+            st.warning(
+                f"⚠️ Could not resolve required columns: "
+                f"`{'`, `'.join(missing)}`  — check aliases or add them to COLUMN_ALIASES."
+            )
 
-        with st.expander("🔍 Preview source (first 10 rows)"):
+        with st.expander("🗺️ Column resolution map (canonical → actual)"):
+            # Show per-sheet maps for transparency
+            xl = pd.ExcelFile(SOURCE_FILE)
+            for sname in xl.sheet_names:
+                try:
+                    df_tmp = xl.parse(sname, header=0, dtype=str)
+                    df_tmp.columns = [str(c).strip() for c in df_tmp.columns]
+                    cmap   = build_column_map(df_tmp.columns)
+                    cmap_df = pd.DataFrame(
+                        [{"Canonical": k, "Actual column": v} for k, v in cmap.items()]
+                    )
+                    st.markdown(f"**Sheet: {sname}**")
+                    st.dataframe(cmap_df, use_container_width=True, hide_index=True)
+                except Exception:
+                    pass
+
+        with st.expander("🔍 Preview combined data (first 10 rows)"):
             st.dataframe(raw.head(10), use_container_width=True)
 
     st.divider()
@@ -556,20 +796,18 @@ def page_generate_sheets():
     if st.session_state.gs_running:
         thread: threading.Thread = st.session_state.gs_thread
         if thread and not thread.is_alive():
-            # Thread finished — collect result
             st.session_state.gs_running = False
             st.session_state.gs_done    = True
-            # result already stored in st.session_state.gs_result by thread
 
     # ── Control buttons ────────────────────────────────────────────────────
     st.subheader("⚙️ Controls")
     btn_col1, btn_col2 = st.columns([1, 1])
 
-    # START button
     with btn_col1:
         start_disabled = (
-            not source_exists                # no source file
-            or st.session_state.gs_running   # already running
+            not source_exists
+            or raw is None
+            or st.session_state.gs_running
         )
         if st.button(
             "▶ Start Processing",
@@ -577,17 +815,16 @@ def page_generate_sheets():
             disabled=start_disabled,
             use_container_width=True,
         ):
-            # Reset state
-            st.session_state.gs_done        = False
-            st.session_state.gs_result      = {}
-            cancel_flag                     = threading.Event()
-            result_dict: dict               = {}
+            st.session_state.gs_done   = False
+            st.session_state.gs_result = {}
+            cancel_flag                = threading.Event()
+            result_dict: dict          = {}
             st.session_state.gs_cancel_flag = cancel_flag
             st.session_state.gs_result      = result_dict
 
             t = threading.Thread(
                 target=gs_run_generation,
-                args=(raw, cancel_flag, result_dict),
+                args=(st.session_state.gs_raw, cancel_flag, result_dict),
                 daemon=True,
             )
             st.session_state.gs_thread  = t
@@ -595,7 +832,6 @@ def page_generate_sheets():
             t.start()
             st.rerun()
 
-    # STOP / CANCEL button
     with btn_col2:
         stop_disabled = not st.session_state.gs_running
         if st.button(
@@ -605,7 +841,7 @@ def page_generate_sheets():
             use_container_width=True,
         ):
             if st.session_state.gs_cancel_flag:
-                st.session_state.gs_cancel_flag.set()   # signal thread to stop
+                st.session_state.gs_cancel_flag.set()
             st.warning("⚠️ Cancellation requested — stopping after current row …")
 
     st.divider()
@@ -613,7 +849,6 @@ def page_generate_sheets():
     # ── Live status while running ──────────────────────────────────────────
     if st.session_state.gs_running:
         with st.spinner("⏳ Processing … click **Stop / Cancel** to abort."):
-            # auto-refresh every second while thread is alive
             import time
             time.sleep(1)
             st.rerun()
@@ -631,15 +866,14 @@ def page_generate_sheets():
         elif result.get("stats"):
             st.success("✅ Processing complete!")
 
-            # Summary table
             st.subheader("📊 Sheet Summary")
             rows_data = []
             for sheet, s in result["stats"].items():
                 rows_data.append({
-                    "Sheet":         sheet,
-                    "Mode":          "Appended ➕" if s["appended"] else "Created 🆕",
-                    "Rows Written":  s["kept"],
-                    "Rows Skipped":  s["skipped"],
+                    "Sheet":        sheet,
+                    "Mode":         "Appended ➕" if s["appended"] else "Created 🆕",
+                    "Rows Written": s["kept"],
+                    "Rows Skipped": s["skipped"],
                 })
             st.dataframe(
                 pd.DataFrame(rows_data),
@@ -647,12 +881,10 @@ def page_generate_sheets():
                 hide_index=True,
             )
 
-            # Download button
             st.divider()
             if os.path.exists(OUTPUT_FILE):
                 with open(OUTPUT_FILE, "rb") as f:
                     file_bytes = f.read()
-
                 st.download_button(
                     label=f"⬇️ Download  {OUTPUT_FILE}",
                     data=file_bytes,
@@ -668,21 +900,21 @@ def page_generate_sheets():
     if not st.session_state.gs_running and not st.session_state.gs_done:
         with st.expander("ℹ️ How it works"):
             st.markdown(f"""
-            | Sheet | Filter Rule |
-            |-------|-------------|
-            | **NAVIRES** | Rows where `nombre colis` is filled |
-            | **N° chassis** | Rows where `Némuro de chassis` is a valid VIN/chassis (8–17 alphanumeric chars) |
-            | **RST** (`{RST_SHEET_NAME}`) | Rows where `nombre colis` is filled |
+            **Multi-sheet loading**: Every sheet in `{SOURCE_FILE}` is read and stacked.
 
-            - Source file read from disk: **`{SOURCE_FILE}`**
-            - Output written to disk: **`{OUTPUT_FILE}`**
-            - If **`{OUTPUT_FILE}`** already exists, rows are **appended** to each sheet.
-            - Numbers (`nombre colis`, `Poids brute`, `SURF`) are written as real numeric values.
+            **Fuzzy header resolution** (4-pass strategy per sheet):
+            | Pass | Method |
+            |------|--------|
+            | 1 | Exact match |
+            | 2 | Case-insensitive + normalised punctuation |
+            | 3 | Token-subset match (word order irrelevant) |
+            | 4 | SequenceMatcher fuzzy ratio ≥ 0.82 |
+
+            | Output Sheet | Filter Rule |
+            |-------------|-------------|
+            | **NAVIRES** | `nombre colis` is filled |
+            | **N° chassis** | `Némuro de chassis` is valid (8-17 alphanumeric) |
+            | **{RST_SHEET_NAME}** | `nombre colis` is filled |
+
+            - Output: **`{OUTPUT_FILE}`** (appended if it already exists)
             """)
-# ---------------------------------------------------------------------------
-# Hook into your existing app router
-# ---------------------------------------------------------------------------
-# In your main app file:
-#
-#   elif menu == "Generate_Sheets":
-#       page_generate_sheets()
