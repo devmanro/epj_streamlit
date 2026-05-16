@@ -11,13 +11,9 @@ from typing import List, Tuple
 import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
-
 import numpy as np
-
 from tools.tools import ensure_directories
-
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR
-
 import concurrent.futures
 import threading
 import time
@@ -79,6 +75,8 @@ from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
 
+from modules.Generate_Pages import page_generate_sheets
+
 from modules.M_tracker import manifest_tracker
 from modules.get_recap import (
     detect_horizontal_tables,
@@ -118,6 +116,8 @@ menu = [
     "Logistics Tools",
     "Templates",
     "Send_Recaps",
+    "Generate_Sheets",
+
 ]
 # choice = st.sidebar.radio("Navigation", menu)
 choice = st.sidebar.radio("Navigation", menu, index=0)
@@ -228,6 +228,8 @@ elif choice == "Workforce Tracking":
 # ==========================================================
 # ========== STREAMLIT UI ==================================
 # ==========================================================
+elif choice == "Generate_Sheets":
+    page_generate_sheets()     # ← add this line
 
 elif choice == "Send_Recaps":
     st.header("Send_Recaps")
