@@ -195,7 +195,7 @@ class DjendjenScraper:
 #  DASHBOARD UI
 # ============================================================
 
-def dashboard():
+def Dashboard():
     # --- HEADER ---
     st.markdown("""
         <div class="dashboard-header">

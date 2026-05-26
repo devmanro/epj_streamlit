@@ -604,7 +604,6 @@ def _shorten_bl_code(bl: str) -> str:
 
 # Helper function to check if type matches any constant (partial/substring matching)
 
-
 def matches_any_constant(type_str, constants_set):
     """
     Check if type_str contains any constant from constants_set (or vice versa).
@@ -622,9 +621,6 @@ def matches_any_constant(type_str, constants_set):
             return True
     return False
 
-
-
-
  # Fix: Use a helper function to avoid closure issues
 def normalize_type(type_value):
     """Normalize TYPE value to standard categories"""
@@ -639,8 +635,6 @@ def normalize_type(type_value):
         return "PACKAGES"
     else:
         return type_str  # Keep original if not matching
-
-
 
 
 def first_non_null(series):
@@ -664,7 +658,9 @@ def group_sourcefile_by_client(
     bl_aggregated: bool = False,
 ) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
+    print(df[COL_TYPE].unique())
 
+    print(df[COL_PRODUIT].unique())
       # Skip rows whose commodity type is in UNITS_TYPES or PACKAGES_TYPES
     if skip_units_packages and COL_TYPE in df.columns:
         skip_types = UNITS_TYPES | PACKAGES_TYPES
@@ -690,15 +686,17 @@ def group_sourcefile_by_client(
     # ============================================================
     if COL_TYPE in df.columns:
         df[COL_TYPE] = df[COL_TYPE].apply(normalize_type)
+    
 
     # Base aggregation
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
         COL_BL:aggregate_bl,
+        
     }
 
-    skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL,COL_TYPE]
+    skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL,COL_PRODUIT,COL_TYPE]
     
     if not bl_aggregated  :
         skip_cols.remove(COL_BL)
@@ -712,9 +710,11 @@ def group_sourcefile_by_client(
         if col in df.columns:
             agg_dict[col] = first_non_null
            
-    grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False).agg(agg_dict)
+    grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False ).agg(agg_dict)
+     
 
     sorted_grouped = grouped.sort_values(
-        by=[COL_CLIENT, COL_TYPE], ascending=True, na_position='last').reset_index(drop=True)
+        by=[COL_TYPE,COL_CLIENT], ascending=False, na_position='last').reset_index(drop=True)
+    
     
     return sorted_grouped

@@ -70,7 +70,7 @@ def drain_log_queue(log_container):
 from modules.utilities import utilities
 from modules.staff_manager import staff_m
 
-from modules.Dashboard import dashboard
+from modules.Dashboard import Dashboard
 from modules.landingManager import render_global_manager
 from modules.shipManager import render_single_file_manager
 from modules.portMap import show_map  # Import the function
@@ -117,10 +117,9 @@ menu = [
     "Templates",
     "Send_Recaps",
     "Generate_Sheets",
-
 ]
 # choice = st.sidebar.radio("Navigation", menu)
-choice = st.sidebar.radio("Navigation", menu, index=0)
+choice = st.sidebar.radio("Navigation", menu, index=2)
 
 # # --- Helper: File Management Logic ---
 # if not os.path.exists(UPLOAD_DIR):
@@ -142,7 +141,7 @@ def clear_downloads():
 if choice == "Dashboard":
     # Pass UPLOAD_DIR if your dashboard needs to scan the files for stats
     ensure_directories()
-    dashboard()
+    # Dashboard()
 
 # Add to your navigation choices
 if choice == "Manifest Tracker":

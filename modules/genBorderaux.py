@@ -16,6 +16,7 @@ from assets.constants.constants import (
     # add more if you need them
 )
 
+from modules.M_tracker import COL_PRODUIT
 import streamlit as st
 
 from tools.tools import _compute_commodity_and_received_lines, _fill_entry_table, group_sourcefile_by_client
@@ -133,11 +134,11 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     file_name_only = os.path.splitext(base_name)[0]
     output_docx = f"{PATH_BRDX}/{file_name_only}.docx"
     template_path = f"{PATH_TEMPLATES}/{template_name}"
-
+ 
     grouped_df = group_sourcefile_by_client(sourcefile, skip_units_packages=False,bl_aggregated=True)
-    
-    st.dataframe(grouped_df)      # nicer interactive table
+   
     excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
+    st.dataframe(grouped_df)      #    nicer interactive table
     return output_docx
 
 # if __name__ == "__main__":

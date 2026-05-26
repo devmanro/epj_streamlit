@@ -82,3 +82,34 @@ make the landed vs removed ,manifested vs landed separted in the circle,
 make the upper clients displayed bellow the circle and smaller in size 
 remove the key card of details from right side (in the sidebar)
 
+
+
+
+
+
+
+
+
+
+---------------------------------FEATURES--------------------------
+PRODUCT,TYPE,FILLED ,works better.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
