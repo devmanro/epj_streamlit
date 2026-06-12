@@ -50,7 +50,7 @@ def get_manual_color(product_name):
         "C65911": ["TUBE", "FORMWORK","POUTRELLE"],               # Brown/Orange
         "948A54": ["BOB", "COIL", "METAL SHEET", "STEEL BEAMS"],  # Tan/Gold
         "DDD9C4": ["BEAMS", "FIL", "FIL M"],                      # Grey/Beige
-        "#FFDC6B": ["COLI","UNIT"],                      # GOLD
+        "FFDC6B": ["COLI","UNIT"],                      # GOLD
     }
 
     
