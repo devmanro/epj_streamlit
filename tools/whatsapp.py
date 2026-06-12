@@ -1,7 +1,8 @@
 import requests
-import base64
 import mimetypes
+import time
 from pathlib import Path
+from typing import List, Tuple
 
 
 # ============================================================
@@ -11,20 +12,11 @@ from pathlib import Path
 
 def send_image_to_whatsapp_greenapi(
     image_path: str,
-    chat_id: str,  # e.g. "120363XXXXXXXXXX@g.us" for group
+    chat_id: str,
     caption: str,
     id_instance: str,
     api_token: str,
 ) -> dict:
-    """
-    Sends a single image file to a WhatsApp chat/group via Green API.
-
-    chat_id format:
-      - Group : "120363XXXXXXXXXX@g.us"
-      - Contact: "972501234567@c.us"   (country code, no +)
-
-    Returns the API response as a dict.
-    """
     url = (
         f"https://api.green-api.com"
         f"/waInstance{id_instance}"
@@ -37,15 +29,34 @@ def send_image_to_whatsapp_greenapi(
     mime_type = mime_type or "image/png"
 
     with open(image_path, "rb") as f:
-        files = {
-            "file": (file_name, f, mime_type),
-        }
-        data = {
-            "chatId": chat_id,
-            "caption": caption,
-        }
+        files = {"file": (file_name, f, mime_type)}
+        data  = {"chatId": chat_id, "caption": caption}
         response = requests.post(url, data=data, files=files, timeout=60)
 
+    try:
+        return response.json()
+    except Exception:
+        return {"error": response.text}
+
+
+def send_text_to_whatsapp_greenapi(
+    message: str,
+    chat_id: str,
+    id_instance: str,
+    api_token: str,
+) -> dict:
+    """Send a plain text message."""
+    url = (
+        f"https://api.green-api.com"
+        f"/waInstance{id_instance}"
+        f"/sendMessage"
+        f"/{api_token}"
+    )
+    payload = {
+        "chatId": chat_id,
+        "message": message,
+    }
+    response = requests.post(url, json=payload, timeout=30)
     try:
         return response.json()
     except Exception:
@@ -57,15 +68,10 @@ def send_images_to_whatsapp(
     chat_id: str,
     id_instance: str,
     api_token: str,
-    log_fn,  # callable(str)
-    delay_seconds: float = 1.5,  # avoid rate limiting
+    log_fn,
+    delay_seconds: float = 1.5,
 ) -> Tuple[int, int]:
-    """
-    Sends all images in *image_paths* to a WhatsApp group.
-    Returns (success_count, fail_count).
-    """
-    import time
-
+    """Send multiple images. Returns (success_count, fail_count)."""
     success, fail = 0, 0
 
     for i, img_path in enumerate(image_paths, start=1):
@@ -83,17 +89,13 @@ def send_images_to_whatsapp(
                 log_fn(f"✅ Sent ({i}/{len(image_paths)}): {Path(img_path).name}")
                 success += 1
             else:
-                log_fn(
-                    f"⚠️ Failed ({i}/{len(image_paths)}): "
-                    f"{Path(img_path).name} → {result}"
-                )
+                log_fn(f"⚠️ Failed ({i}/{len(image_paths)}): {Path(img_path).name} → {result}")
                 fail += 1
 
         except Exception as exc:
             log_fn(f"❌ Error sending {Path(img_path).name}: {exc}")
             fail += 1
 
-        # Small delay between sends to respect rate limits
         if i < len(image_paths):
             time.sleep(delay_seconds)
 
@@ -104,13 +106,10 @@ def get_whatsapp_groups_greenapi(
     id_instance: str,
     api_token: str,
 ) -> List[dict]:
-    """
-    Fetches all WhatsApp chats and returns only groups.
-    Each item: {"id": "...", "name": "..."}
-    """
+    """Fetch all groups you are in."""
     url = f"https://api.green-api.com/waInstance{id_instance}/getChats/{api_token}"
     try:
-        resp = requests.get(url, timeout=30)
+        resp  = requests.get(url, timeout=30)
         chats = resp.json()
         return [
             {"id": c.get("id", ""), "name": c.get("name", c.get("id", ""))}
@@ -119,3 +118,12 @@ def get_whatsapp_groups_greenapi(
         ]
     except Exception:
         return []
+
+
+# ============================================================
+# ========== YOUR CREDENTIALS ================================
+# ============================================================
+
+ID_INSTANCE = "7107651033"          # ← paste yours
+API_TOKEN   = "9d9983de28a546eeab96421d62ebac6d30e27257edb147589c" # ← paste yours
+
