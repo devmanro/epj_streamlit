@@ -12,7 +12,7 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
 import numpy as np
-from tools.tools import send_image_to_whatsapp_greenapi
+from tools.whatsapp import send_image_to_whatsapp_greenapi
 from tools.tools import ensure_directories
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE 
 
