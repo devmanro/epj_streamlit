@@ -231,89 +231,229 @@ elif choice == "Generate_Sheets":
     page_generate_sheets()     # ← add this line
 
 elif choice == "Send_Recaps":
-    st.header("Send_Recaps")
+    st.header("📤 Send Recaps via WhatsApp")
 
-    # 1. Inputs
-    uploaded_files = st.file_uploader("Select Excel Files", type=["xlsx", "xlsm", "xls"], accept_multiple_files=True)
+    # ============================================================
+    # 1. FILE INPUTS
+    # ============================================================
+    uploaded_files = st.file_uploader(
+        "Select Excel Files",
+        type=["xlsx", "xlsm", "xls"],
+        accept_multiple_files=True
+    )
     output_folder = st.text_input("Output Folder Path", value="/tmp/output")
-    last_table_tail_cols = st.number_input("Ending columns for last table tail", value=6, min_value=1)
-    file_timeout = st.number_input("⏱️ Per-file timeout (seconds)", value=30, min_value=5)
-
-    # 2. WhatsApp Settings (same as your code)
-    # ... [Keep your WhatsApp credentials and group selector code here] ...
+    last_table_tail_cols = st.number_input(
+        "Ending columns for last table tail", value=6, min_value=1
+    )
+    file_timeout = st.number_input(
+        "⏱️ Per-file timeout (seconds)", value=30, min_value=5
+    )
 
     st.divider()
 
-    # 3. Control Buttons
+    # ============================================================
+    # 2. WHATSAPP SETTINGS
+    # ============================================================
+    st.subheader("📱 WhatsApp Settings")
+
+    wa_col1, wa_col2 = st.columns(2)
+
+    with wa_col1:
+        id_instance = st.text_input(
+            "Green API — ID Instance",
+            value=st.session_state.get("wa_id_instance", ""),
+            placeholder="e.g. 1101234567",
+            help="Found in your Green API dashboard",
+        )
+
+    with wa_col2:
+        api_token = st.text_input(
+            "Green API — API Token",
+            value=st.session_state.get("wa_api_token", ""),
+            placeholder="e.g. abc123xyz...",
+            type="password",
+            help="Found in your Green API dashboard",
+        )
+
+    # Save credentials to session state so they survive reruns
+    if id_instance:
+        st.session_state.wa_id_instance = id_instance
+    if api_token:
+        st.session_state.wa_api_token = api_token
+
+    # ── Group Fetcher ──────────────────────────────────────────
+    wa_col3, wa_col4 = st.columns([1, 3])
+
+    with wa_col3:
+        fetch_groups = st.button(
+            "🔄 Fetch My Groups",
+            disabled=not (id_instance and api_token),
+            help="Connects to Green API and lists your WhatsApp groups",
+        )
+
+    if fetch_groups:
+        with st.spinner("Fetching groups from WhatsApp..."):
+            groups = get_whatsapp_groups_greenapi(id_instance, api_token)
+            if groups:
+                st.session_state.wa_groups = groups
+                st.success(f"✅ Found {len(groups)} group(s)")
+            else:
+                st.error(
+                    "❌ No groups found. "
+                    "Check your credentials and make sure your instance is active."
+                )
+                st.session_state.wa_groups = []
+
+    # ── Group Selector ─────────────────────────────────────────
+    groups_available = st.session_state.get("wa_groups", [])
+
+    if groups_available:
+        group_options = {
+            f"{g['name']}  ({g['id']})": g["id"]
+            for g in groups_available
+        }
+
+        selected_label = st.selectbox(
+            "📋 Select Target WhatsApp Group",
+            options=list(group_options.keys()),
+            index=0,
+        )
+        selected_chat_id = group_options[selected_label]
+
+    else:
+        # Manual entry fallback
+        selected_chat_id = st.text_input(
+            "📋 WhatsApp Group / Contact Chat ID",
+            value=st.session_state.get("wa_chat_id", ""),
+            placeholder="120363XXXXXXXXXX@g.us  or  972501234567@c.us",
+            help=(
+                "Group  → ends with @g.us\n"
+                "Contact → ends with @c.us  (country code, no +)"
+            ),
+        )
+
+    if selected_chat_id:
+        st.session_state.wa_chat_id = selected_chat_id
+
+    # ── Send Options ───────────────────────────────────────────
+    send_to_whatsapp = st.checkbox(
+        "📨 Send images to WhatsApp after processing",
+        value=st.session_state.get("send_to_whatsapp", False),
+    )
+    st.session_state.send_to_whatsapp = send_to_whatsapp
+
+    wa_delay = st.slider(
+        "⏳ Delay between images (seconds)",
+        min_value=1.0,
+        max_value=10.0,
+        value=2.0,
+        step=0.5,
+        disabled=not send_to_whatsapp,
+        help="Prevents WhatsApp rate limiting / spam detection",
+    )
+
+    # Validation warning
+    if send_to_whatsapp:
+        missing = []
+        if not id_instance:
+            missing.append("ID Instance")
+        if not api_token:
+            missing.append("API Token")
+        if not selected_chat_id:
+            missing.append("Chat ID / Group")
+
+        if missing:
+            st.warning(f"⚠️ Missing WhatsApp fields: {', '.join(missing)}")
+        else:
+            st.info(
+                f"📲 Images will be sent to:\n\n"
+                f"`{selected_chat_id}`"
+            )
+
+    st.divider()
+
+    # ============================================================
+    # 3. CONTROL BUTTONS
+    # ============================================================
     col_start, col_stop = st.columns(2)
-    
-    # Initialize session states
+
     if "processing" not in st.session_state:
         st.session_state.processing = False
     if "cancel_requested" not in st.session_state:
         st.session_state.cancel_requested = False
 
-    if col_start.button("🚀 Start Processing", use_container_width=True, disabled=st.session_state.processing):
+    if col_start.button(
+        "🚀 Start Processing",
+        use_container_width=True,
+        disabled=st.session_state.processing,
+    ):
         st.session_state.processing = True
         st.session_state.cancel_requested = False
         st.session_state.pop("zip_buffer", None)
         st.rerun()
 
-    if col_stop.button("🛑 Stop / Cancel", use_container_width=True, disabled=not st.session_state.processing):
+    if col_stop.button(
+        "🛑 Stop / Cancel",
+        use_container_width=True,
+        disabled=not st.session_state.processing,
+    ):
         st.session_state.cancel_requested = True
         st.warning("Stop signal sent. Will stop after current file attempt.")
 
+    # ============================================================
+    # 4. PROCESSING LOOP
+    # ============================================================
     if st.session_state.processing:
-        status_text = st.empty()
+        status_text  = st.empty()
         progress_bar = st.progress(0)
-        
-        # Use st.container so logs persist and don't get wiped
         log_container = st.container()
-        
+
         Path(output_folder).mkdir(parents=True, exist_ok=True)
-        all_images = []
+        all_images     = []
         timed_out_files = []
-        failed_files = []
+        failed_files   = []
 
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 total = len(uploaded_files)
-                
+
                 if total == 0:
                     st.warning("No files uploaded!")
                     st.session_state.processing = False
                     st.stop()
 
+                # ── Per-file loop ──────────────────────────────
                 for idx, up_file in enumerate(uploaded_files):
                     if st.session_state.cancel_requested:
                         log_container.warning("🛑 Cancelled by user.")
                         break
 
                     wb_name = Path(up_file.name).stem
-                    status_text.text(f"Processing {idx+1}/{total}: {wb_name}...")
-                    log_container.write(f"---\n📂 Starting: **{wb_name}**")
+                    status_text.text(
+                        f"Processing {idx+1}/{total}: {wb_name}..."
+                    )
+                    log_container.write(
+                        f"---\n📂 Starting: **{wb_name}**"
+                    )
 
-                    # Save uploaded file to temp disk
+                    # Save to temp disk
                     tmp_path = os.path.join(tmp_dir, up_file.name)
                     with open(tmp_path, "wb") as f:
                         f.write(up_file.getbuffer())
-                    
-                    # Verify file was saved correctly
+
                     file_size = os.path.getsize(tmp_path)
-                    log_container.write(f"  💾 Saved to disk: {file_size} bytes at `{tmp_path}`")
-                    
+                    log_container.write(
+                        f"  💾 Saved: {file_size} bytes → `{tmp_path}`"
+                    )
+
                     if file_size == 0:
-                        log_container.error(f"  ❌ File is empty after saving! Skipping.")
+                        log_container.error("  ❌ Empty file! Skipping.")
                         failed_files.append((wb_name, "Empty file after save"))
                         continue
 
                     # Run in thread with timeout
-                    res_dict = {
-                        "images": [],
-                        "success": False,
-                        "error": None
-                    }
-                    
+                    res_dict = {"images": [], "success": False, "error": None}
+
                     thread = threading.Thread(
                         target=process_single_file_wrapper,
                         args=(
@@ -322,11 +462,11 @@ elif choice == "Send_Recaps":
                             wb_name,
                             output_folder,
                             last_table_tail_cols,
-                            lambda msg: log_container.write(f"  📝 {msg}")  # thread-safe enough for logging
+                            lambda msg: log_container.write(f"  📝 {msg}"),
                         ),
-                        daemon=True  # Dies if main app dies
+                        daemon=True,
                     )
-                    
+
                     start_time = time.time()
                     thread.start()
                     thread.join(timeout=float(file_timeout))
@@ -334,45 +474,146 @@ elif choice == "Send_Recaps":
 
                     if thread.is_alive():
                         log_container.warning(
-                            f"  ⏱️ TIMEOUT after {elapsed:.1f}s (limit: {file_timeout}s) — **{wb_name}** skipped"
+                            f"  ⏱️ TIMEOUT after {elapsed:.1f}s "
+                            f"(limit: {file_timeout}s) — **{wb_name}** skipped"
                         )
                         timed_out_files.append(wb_name)
+
                     else:
-                        log_container.write(f"  ⏱️ Completed in {elapsed:.1f}s")
-                        
+                        log_container.write(
+                            f"  ⏱️ Completed in {elapsed:.1f}s"
+                        )
+
                         if res_dict["success"]:
                             imgs = res_dict.get("images", [])
-                            log_container.write(f"  ✅ Success — {len(imgs)} image(s) generated")
-                            
-                            # Verify images actually exist on disk
                             valid_imgs = []
+
                             for img_path in imgs:
                                 if os.path.exists(img_path):
                                     valid_imgs.append(img_path)
                                 else:
-                                    log_container.warning(f"  ⚠️ Image path not found on disk: `{img_path}`")
-                            
+                                    log_container.warning(
+                                        f"  ⚠️ Missing: `{img_path}`"
+                                    )
+
+                            log_container.write(
+                                f"  ✅ Success — {len(valid_imgs)} image(s)"
+                            )
                             all_images.extend(valid_imgs)
+
                         else:
                             error_detail = res_dict.get("error", "Unknown error")
                             log_container.error(f"  ❌ FAILED: {wb_name}")
-                            # Show full traceback in expander
-                            with log_container.expander(f"🔍 Full error for {wb_name}"):
+                            with log_container.expander(
+                                f"🔍 Full error for {wb_name}"
+                            ):
                                 st.code(error_detail, language="python")
                             failed_files.append((wb_name, error_detail))
 
                     progress_bar.progress((idx + 1) / total)
 
-            # Summary
+            # ============================================================
+            # 5. WHATSAPP SENDING BLOCK
+            # ============================================================
+            if (
+                send_to_whatsapp
+                and all_images
+                and id_instance
+                and api_token
+                and selected_chat_id
+                and not st.session_state.cancel_requested
+            ):
+                st.divider()
+                st.subheader("📱 Sending to WhatsApp...")
+
+                wa_status   = st.empty()
+                wa_progress = st.progress(0)
+                wa_log      = st.container()
+
+                wa_total = len(all_images)
+
+                wa_success, wa_fail = 0, 0
+
+                for i, img_path in enumerate(all_images, start=1):
+
+                    # Respect cancel between sends
+                    if st.session_state.cancel_requested:
+                        wa_log.warning("🛑 WhatsApp sending cancelled.")
+                        break
+
+                    caption = Path(img_path).stem.replace("__", " | ")
+                    wa_status.text(
+                        f"📤 Sending image {i}/{wa_total}: "
+                        f"{Path(img_path).name}"
+                    )
+
+                    try:
+                        result = send_image_to_whatsapp_greenapi(
+                            image_path=img_path,
+                            chat_id=selected_chat_id,
+                            caption=caption,
+                            id_instance=id_instance,
+                            api_token=api_token,
+                        )
+
+                        if "idMessage" in result:
+                            wa_log.write(
+                                f"  ✅ Sent ({i}/{wa_total}): "
+                                f"{Path(img_path).name}"
+                            )
+                            wa_success += 1
+                        else:
+                            wa_log.warning(
+                                f"  ⚠️ Failed ({i}/{wa_total}): "
+                                f"{Path(img_path).name} → {result}"
+                            )
+                            wa_fail += 1
+
+                    except Exception as wa_exc:
+                        wa_log.error(
+                            f"  ❌ Error sending "
+                            f"{Path(img_path).name}: {wa_exc}"
+                        )
+                        wa_fail += 1
+
+                    wa_progress.progress(i / wa_total)
+
+                    # Delay between sends (skip after last)
+                    if i < wa_total:
+                        time.sleep(wa_delay)
+
+                # WhatsApp summary
+                wa_col_a, wa_col_b = st.columns(2)
+                wa_col_a.metric("✅ WA Sent",   wa_success)
+                wa_col_b.metric("❌ WA Failed", wa_fail)
+
+                if wa_fail == 0:
+                    wa_status.success(
+                        f"🎉 All {wa_success} images sent to WhatsApp!"
+                    )
+                else:
+                    wa_status.warning(
+                        f"⚠️ {wa_success} sent, {wa_fail} failed."
+                    )
+
+            elif send_to_whatsapp and not all_images:
+                st.info("ℹ️ No images to send to WhatsApp.")
+
+            elif send_to_whatsapp and st.session_state.cancel_requested:
+                st.warning("🛑 WhatsApp sending skipped — cancelled.")
+
+            # ============================================================
+            # 6. SUMMARY & ZIP DOWNLOAD
+            # ============================================================
             st.divider()
             col1, col2, col3 = st.columns(3)
             col1.metric("✅ Images Generated", len(all_images))
-            col2.metric("⏱️ Timed Out", len(timed_out_files))
-            col3.metric("❌ Failed", len(failed_files))
+            col2.metric("⏱️ Timed Out",        len(timed_out_files))
+            col3.metric("❌ Failed",            len(failed_files))
 
             if timed_out_files:
                 st.warning(f"**Timed out:** {', '.join(timed_out_files)}")
-            
+
             if failed_files:
                 st.error("**Failed files:**")
                 for fname, err in failed_files:
@@ -381,22 +622,31 @@ elif choice == "Send_Recaps":
 
             if all_images:
                 zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                with zipfile.ZipFile(
+                    zip_buf, "w", zipfile.ZIP_DEFLATED
+                ) as zf:
                     for img in all_images:
                         zf.write(img, arcname=Path(img).name)
                 st.session_state.zip_buffer = zip_buf.getvalue()
-                status_text.text(f"✅ Done! {len(all_images)} images ready.")
+                status_text.text(
+                    f"✅ Done! {len(all_images)} images ready."
+                )
             else:
-                status_text.text("⚠️ No images generated. Check errors above.")
+                status_text.text(
+                    "⚠️ No images generated. Check errors above."
+                )
 
         except Exception as e:
             import traceback
             st.error(f"**Critical Error:** {e}")
             st.code(traceback.format_exc(), language="python")
+
         finally:
             st.session_state.processing = False
 
-    # 5. Persistent Download Button
+    # ============================================================
+    # 7. PERSISTENT DOWNLOAD BUTTON
+    # ============================================================
     if st.session_state.get("zip_buffer"):
         st.download_button(
             label="⬇️ Download All Images (ZIP)",
