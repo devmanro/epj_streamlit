@@ -13,7 +13,8 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import numpy as np
 from tools.tools import ensure_directories
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE 
+
 import concurrent.futures
 import threading
 import time
@@ -259,21 +260,23 @@ elif choice == "Send_Recaps":
     wa_col1, wa_col2 = st.columns(2)
 
     with wa_col1:
-        id_instance = st.text_input(
-            "Green API — ID Instance",
-            value=st.session_state.get("wa_id_instance", ""),
-            placeholder="e.g. 1101234567",
-            help="Found in your Green API dashboard",
-        )
+        id_instance = ID_INSTANCE
+        # st.text_input(
+        #     "Green API — ID Instance",
+        #     value=st.session_state.get(API_TOKEN,ID_INSTANCE, ""),
+        #     placeholder="e.g. 1101234567",
+        #     help="Found in your Green API dashboard",
+        # )
 
     with wa_col2:
-        api_token = st.text_input(
-            "Green API — API Token",
-            value=st.session_state.get("wa_api_token", ""),
-            placeholder="e.g. abc123xyz...",
-            type="password",
-            help="Found in your Green API dashboard",
-        )
+        api_token=API_TOKEN
+        # = st.text_input(
+        #     "Green API — API Token",
+        #     value=st.session_state.get("wa_api_token", ""),
+        #     placeholder="e.g. abc123xyz...",
+        #     type="password",
+        #     help="Found in your Green API dashboard",
+        # )
 
     # Save credentials to session state so they survive reruns
     if id_instance:
