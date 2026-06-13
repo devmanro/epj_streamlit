@@ -1,5 +1,9 @@
 from pathlib import Path
 
+ID_INSTANCE = "7107651033"          # ← paste yours
+API_TOKEN   = "9d9983de28a546eeab96421d62ebac6d30e27257edb147589c" # ← paste yours
+
+
 #PATH_REPORTS="reports/"
 PATH_BRDX = "reports/bordereaux"
 PATH_PVS = "reports/pvs"
