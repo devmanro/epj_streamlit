@@ -85,6 +85,10 @@ def send_images_to_whatsapp(
                 api_token=api_token,
             )
 
+            
+
+
+            
             if "idMessage" in result:
                 log_fn(f"✅ Sent ({i}/{len(image_paths)}): {Path(img_path).name}")
                 success += 1
@@ -118,6 +122,37 @@ def get_whatsapp_groups_greenapi(
         ]
     except Exception:
         return []
+
+
+
+def get_whatsapp_group_metadata_greenapi(
+    group_id: str,
+    id_instance: str,
+    api_token: str,
+) -> dict:
+    """
+    Get metadata for a specific group (name, participants, etc.).
+    """
+    url = (
+        f"https://api.green-api.com"
+        f"/waInstance{id_instance}"
+        f"/getGroupMetadata"
+        f"/{api_token}"
+    )
+    payload = {"groupJid": group_id}
+    resp = requests.post(url, json=payload, timeout=30)
+    try:
+        return resp.json()
+    except Exception:
+        return {"error": resp.text}
+
+
+
+
+
+
+
+
 
 
 # ============================================================
