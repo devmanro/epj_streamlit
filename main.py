@@ -12,9 +12,9 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
 import numpy as np
-from tools.whatsapp import send_image_to_whatsapp_greenapi
+from tools.whatsapp import send_image_to_whatsapp_greenapi ,get_whatsapp_group_metadata_greenapi
 from tools.tools import ensure_directories
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE 
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE
 
 import concurrent.futures
 import threading
@@ -258,27 +258,29 @@ elif choice == "Send_Recaps":
     # ============================================================
     st.subheader("📱 WhatsApp Settings")
 
-    wa_col1, wa_col2 = st.columns(2)
+    # wa_col1, wa_col2 = st.columns(2)
+    
+    # with wa_col1:
+    #     id_instance = ID_INSTANCE
+    #     # st.text_input(
+    #     #     "Green API — ID Instance",
+    #     #     value=st.session_state.get(API_TOKEN,ID_INSTANCE, ""),
+    #     #     placeholder="e.g. 1101234567",
+    #     #     help="Found in your Green API dashboard",
+    #     # )
 
-    with wa_col1:
-        id_instance = ID_INSTANCE
-        # st.text_input(
-        #     "Green API — ID Instance",
-        #     value=st.session_state.get(API_TOKEN,ID_INSTANCE, ""),
-        #     placeholder="e.g. 1101234567",
-        #     help="Found in your Green API dashboard",
-        # )
+    # with wa_col2:
+    #     api_token=API_TOKEN
+    #     # = st.text_input(
+    #     #     "Green API — API Token",
+    #     #     value=st.session_state.get("wa_api_token", ""),
+    #     #     placeholder="e.g. abc123xyz...",
+    #     #     type="password",
+    #     #     help="Found in your Green API dashboard",
+    #     # )
 
-    with wa_col2:
-        api_token=API_TOKEN
-        # = st.text_input(
-        #     "Green API — API Token",
-        #     value=st.session_state.get("wa_api_token", ""),
-        #     placeholder="e.g. abc123xyz...",
-        #     type="password",
-        #     help="Found in your Green API dashboard",
-        # )
-
+    id_instance = ID_INSTANCE
+    api_token=API_TOKEN
     # Save credentials to session state so they survive reruns
     if id_instance:
         st.session_state.wa_id_instance = id_instance
@@ -560,6 +562,19 @@ elif choice == "Send_Recaps":
                             api_token=api_token,
                         )
 
+                        group_id = "120363425604830968@g.us"
+                        
+                        meta = get_whatsapp_group_metadata_greenapi(
+                            group_id=group_id,
+                            id_instance=id_instance,
+                            api_token=api_token,
+                        )
+
+                        print("Group metadata:", meta)
+                        print("Group name:", meta.get("subject") or meta.get("name") or "unknown")
+                        print("Participants:", meta.get("participants", []))
+                        print("Description:", meta.get("description") or "no description")
+                        
                         if "idMessage" in result:
                             wa_log.write(
                                 f"  ✅ Sent ({i}/{wa_total}): "
