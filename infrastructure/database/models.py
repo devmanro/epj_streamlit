@@ -35,7 +35,7 @@ class ManifestLine(Base):
     # Classification
     produit = Column(String, nullable=True)               # PRODUIT
     modele = Column(String, nullable=True)                # MODELE
-    type_ = Column(String, String, nullable=True)         # TYPE (conditionnement)
+    type_ = Column(String, nullable=True)                 # TYPE (conditionnement)
     cargo_type = Column(String, nullable=True)            # CARGO_TYPE (manifest category)
     chassis_serial = Column(String, nullable=True)        # CHASSIS/SERIAL
 

@@ -18,26 +18,163 @@ from assets.constants.constants import (
     COL_QUANTITE,
     COL_TONAGE,
     COL_BL,
-    DB_PATH, COLUMNS,
+    DB_PATH, 
+    COLUMNS,
     # add COL_VALUES here if you have such a column name
     COL_TYPE,
     COL_PRODUIT,
     COMMODITY_TYPES,
-    UNIT_CARGO_TYPES,
+    GOODS__TYPES, 
     UNITS_TYPES,
     PACKAGES_TYPES,
-    GOODS__TYPES, COL_DESIGNATION,
     KEYWORD_RULES,
+    UNIT_CARGO_TYPES,
+    PACKAGE_CARGO_TYPES,
+    COL_DESIGNATION,
     numeric_cols,
     date_cols,
     category_cols,
     text_cols,
-    PACKAGE_CARGO_TYPES,
-    UNIT_CARGO_TYPES,
     LIST_OF_PATHS
 )
 
 
+import httpx
+import asyncio
+
+BASE = "https://devmanro-my-fastapi-app.hf.space"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Wake + Poll server
+# ══════════════════════════════════════════════════════════════════════════════
+async def wait_for_server(set_msg=print):
+    set_msg("Waking up prediction server…")
+
+    # Fire initial wake ping
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.get(f"{BASE}/health", timeout=3.0)
+    except Exception:
+        pass
+
+    MAX_ATTEMPTS = 10
+    for attempt in range(MAX_ATTEMPTS):
+        await asyncio.sleep(3)
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.get(f"{BASE}/health", timeout=5.0)
+                if res.status_code == 200:
+                    json_data = res.json()
+                    if json_data.get("status") == "ok":
+                        print(f"✅ Server ready after ~{(attempt + 1) * 3}s")
+                        set_msg("Server is ready — running predictions…")
+                        return True
+        except Exception:
+            pass
+
+        waited = (attempt + 1) * 3
+        set_msg(f"Server is starting… ({waited}s elapsed, please wait)")
+        print(f"⏳ Waiting for server... attempt {attempt + 1}/{MAX_ATTEMPTS}")
+
+    raise Exception("Server did not respond after 30 seconds. Please try again.")
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Bulk prediction
+# ══════════════════════════════════════════════════════════════════════════════
+async def predict_rows(rows, set_msg=print):
+    """
+    rows: list of dicts with 'marchandise' key
+    returns: list of predictions
+    """
+    await wait_for_server(set_msg)
+
+    set_msg("Sending data to prediction API…")
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{BASE}/predict",
+                json={"rows": [{"marchandise": r["marchandise"]} for r in rows]},
+            )
+
+            if response.status_code != 200:
+                raise Exception(f"HTTP {response.status_code}: {response.text}")
+
+            json_data = response.json()
+            print("RAW PREDICTION RESPONSE:", json_data)
+            return json_data.get("predictions", [])
+
+    except httpx.TimeoutException:
+        raise Exception("Prediction request timed out after 1 minute.")
+
+
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Updated align_data using predictions instead of find_type_and_produit
+# ══════════════════════════════════════════════════════════════════════════════
+def align_data(uploaded_df, mapping):
+    try:
+        valid_mappings_count = sum(
+            1 for value in mapping.values() if value is not None
+        )
+
+        if valid_mappings_count <= 2:
+            return uploaded_df, False
+
+        # Rename columns based on the mapping
+        df_mapped = uploaded_df.rename(columns=mapping)
+
+        final_cols = [value for key, value in mapping.items() if value is not None]
+
+        # Keep only the required columns
+        df_aligned = df_mapped[final_cols].copy()
+
+        if COL_DESIGNATION in df_aligned.columns:
+
+            # --- 1. BYPASS: Save existing values before overwriting ---
+            orig_type    = df_aligned[COL_TYPE].copy()    if COL_TYPE    in df_aligned.columns else None
+            orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
+
+            # --- 2. BUILD rows for prediction API ---
+            rows = [
+                {"marchandise": val if isinstance(val, str) else ""}
+                for val in df_aligned[COL_DESIGNATION]
+            ]
+
+            # --- 3. CALL prediction API ---
+            predictions = asyncio.run(predict_rows(rows))
+
+            # --- 4. APPLY predictions ---
+            # predictions is expected to be a list of dicts:
+            # [{"cargo_type": "COIL", "produit": "UNIT"}, ...]
+            df_aligned[COL_TYPE]    = [p.get("Produits", None) for p in predictions]
+            df_aligned[COL_PRODUIT] = [p.get("Details", None)    for p in predictions]
+
+            # --- 5. REINSERT: Put back original values where they were not null ---
+            if orig_type is not None:
+                mask = orig_type.notna() & (orig_type != '')
+                df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
+
+            if orig_produit is not None:
+                mask = orig_produit.notna() & (orig_produit != '')
+                df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
+
+        else:
+            for col in [COL_TYPE, COL_PRODUIT]:
+                if col not in df_aligned.columns:
+                    df_aligned[col] = 'None'
+                else:
+                    df_aligned[col] = df_aligned[col].fillna('None')
+
+        return df_aligned, True
+
+    except Exception as e:
+        print(f"Error during alignment: {e}")
+        return uploaded_df, False
 
 def get_manual_color(product_name):
     """Maps product names to specific hex colors as requested."""
@@ -191,7 +328,7 @@ def clean_dataframe_types(datasource , only_cols=None):
 
         # --- Handle Category Columns ---
         elif col in category_cols:
-            default_val = "Divers" if col == "TYPE" else ("En attente" if col == "SITUATION" else "N/A")
+            default_val = "En attente" if col == "SITUATION" else "N/A" 
             datasource[col] = datasource[col].astype(str).replace(['nan', 'None', 'NaN'], default_val)
 
     return datasource
@@ -285,58 +422,58 @@ def find_type_and_produit(designation):
 
     return pd.Series([cargo_type, produit])
 
-def align_data(uploaded_df, mapping):
+# def align_data(uploaded_df, mapping):
     
-    try:
-        valid_mappings_count = sum(
-            1 for value in mapping.values() if value is not None)
+#     try:
+#         valid_mappings_count = sum(
+#             1 for value in mapping.values() if value is not None)
 
-        if valid_mappings_count <= 2:
-            return uploaded_df, False
+#         if valid_mappings_count <= 2:
+#             return uploaded_df, False
 
-        # Rename columns based on the mapping
-        df_mapped = uploaded_df.rename(columns=mapping)
+#         # Rename columns based on the mapping
+#         df_mapped = uploaded_df.rename(columns=mapping)
 
-        final_cols = [value for key, value in mapping.items()
-                      if value is not None]
+#         final_cols = [value for key, value in mapping.items()
+#                       if value is not None]
 
-        # Keep only the required columns
-        df_aligned = df_mapped[final_cols].copy()
+#         # Keep only the required columns
+#         df_aligned = df_mapped[final_cols].copy()
 
-        # Ensure COL_DESIGNATION exists in the aligned DataFrame
-        if COL_DESIGNATION in df_aligned.columns:
+#         # Ensure COL_DESIGNATION exists in the aligned DataFrame
+#         if COL_DESIGNATION in df_aligned.columns:
 
-            # --- 1. BYPASS: Save existing values before overwriting ---
-            orig_type   = df_aligned[COL_TYPE].copy()   if COL_TYPE   in df_aligned.columns else None
-            orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
+#             # --- 1. BYPASS: Save existing values before overwriting ---
+#             orig_type   = df_aligned[COL_TYPE].copy()   if COL_TYPE   in df_aligned.columns else None
+#             orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
 
-            # --- 2. COMPUTE: Simple list comprehension avoids all Pandas apply shape bugs ---
-            computed = [find_type_and_produit(val) for val in df_aligned[COL_DESIGNATION]]
-            df_aligned[COL_TYPE]    = [res[0] for res in computed]
-            df_aligned[COL_PRODUIT] = [res[1] for res in computed]
+#             # --- 2. COMPUTE: Simple list comprehension avoids all Pandas apply shape bugs ---
+#             computed = [find_type_and_produit(val) for val in df_aligned[COL_DESIGNATION]]
+#             df_aligned[COL_TYPE]    = [res[0] for res in computed]
+#             df_aligned[COL_PRODUIT] = [res[1] for res in computed]
 
-            # --- 3. REINSERT: Put back original values where they were not null ---
-            if orig_type is not None:
-                mask = orig_type.notna() & (orig_type != '')
-                df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
+#             # --- 3. REINSERT: Put back original values where they were not null ---
+#             if orig_type is not None:
+#                 mask = orig_type.notna() & (orig_type != '')
+#                 df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
 
-            if orig_produit is not None:
-                mask = orig_produit.notna() & (orig_produit != '')
-                df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
+#             if orig_produit is not None:
+#                 mask = orig_produit.notna() & (orig_produit != '')
+#                 df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
 
-        else:
-            # If COL_DESIGNATION is not present, fill nulls with 'None'
-            for col in [COL_TYPE, COL_PRODUIT]:
-                if col not in df_aligned.columns:
-                    df_aligned[col] = 'None'
-                else:
-                    df_aligned[col] = df_aligned[col].fillna('None')
+#         else:
+#             # If COL_DESIGNATION is not present, fill nulls with 'None'
+#             for col in [COL_TYPE, COL_PRODUIT]:
+#                 if col not in df_aligned.columns:
+#                     df_aligned[col] = 'None'
+#                 else:
+#                     df_aligned[col] = df_aligned[col].fillna('None')
 
-        return df_aligned, True
+#         return df_aligned, True
 
-    except Exception as e:
-        print(f"Error during alignment: {e}")
-        return uploaded_df, False
+#     except Exception as e:
+#         print(f"Error during alignment: {e}")
+#         return uploaded_df, False
 
 
 
@@ -650,7 +787,6 @@ def aggregate_bl(series):
     unique_bls = list(pd.Series(bl_values).unique())
     return ",".join(unique_bls)
 
-
 def group_sourcefile_by_client(
     input_excel: str,
     sheet_name: int | str = 0,
@@ -658,9 +794,9 @@ def group_sourcefile_by_client(
     bl_aggregated: bool = False,
 ) -> pd.DataFrame:
     df = pd.read_excel(input_excel, sheet_name=sheet_name, engine="openpyxl")
-    print(df[COL_TYPE].unique())
+    # print(df[COL_TYPE].unique())
 
-    print(df[COL_PRODUIT].unique())
+    # print(df[COL_PRODUIT].unique())
       # Skip rows whose commodity type is in UNITS_TYPES or PACKAGES_TYPES
     if skip_units_packages and COL_TYPE in df.columns:
         skip_types = UNITS_TYPES | PACKAGES_TYPES
@@ -686,14 +822,12 @@ def group_sourcefile_by_client(
     # ============================================================
     if COL_TYPE in df.columns:
         df[COL_TYPE] = df[COL_TYPE].apply(normalize_type)
-    
 
     # Base aggregation
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
         COL_BL:aggregate_bl,
-        
     }
 
     skip_cols=[COL_CLIENT, COL_QUANTITE, COL_TONAGE,COL_BL,COL_PRODUIT,COL_TYPE]
@@ -711,10 +845,37 @@ def group_sourcefile_by_client(
             agg_dict[col] = first_non_null
            
     grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False ).agg(agg_dict)
-     
+    SORT_ORDER = {
+        "CTP": 0,
+        "MDF": 1,
+        "PLYWOOD": 2,
+        "BIGBAG": 3,
+        "TUBE": 4,
+        "BEAMS": 5,
+        "FIL M": 6,
+        "COIL": 7,
+        "FORMWORK": 8,
+        "PIPE": 9,
+        "METAL SHEET": 10,
+        "PACKAGES": 97,
+        "UNITS": 98,
+    }
 
+    # 2. Apply priority mapping
+    grouped['sort_priority'] = grouped[COL_TYPE].map(SORT_ORDER).fillna(99)
+
+    # 3. Sort
     sorted_grouped = grouped.sort_values(
-        by=[COL_TYPE,COL_CLIENT], ascending=False, na_position='last').reset_index(drop=True)
+        by=['sort_priority'],
+        ascending=True,
+        na_position='last'
+    ).reset_index(drop=True)
+
+    # 4. Clean up
+    sorted_grouped = sorted_grouped.drop(columns=['sort_priority'])
+
+    # sorted_grouped = grouped.sort_values(
+    #     by=[COL_TYPE], ascending=False, na_position='last').reset_index(drop=True)
     
     
     return sorted_grouped

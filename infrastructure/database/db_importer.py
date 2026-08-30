@@ -253,7 +253,7 @@ def _rows_to_df(rows) -> pd.DataFrame:
             "DESIGNATION":     line.designation,
             "PRODUIT":         line.produit,
             "MODELE":          line.modele,
-            "TYPE":            line.type,
+            "TYPE":            line.type_,
             "CARGO_TYPE":      line.cargo_type,
             "CHASSIS/SERIAL":  line.chassis_serial,
             "QUANTITE":        line.manifested_qty,

@@ -24,7 +24,6 @@ from tools.tools import _compute_commodity_and_received_lines, _fill_entry_table
 if not os.path.exists(PATH_BRDX):
     os.makedirs(PATH_BRDX)
 
-
 def clean_excel_val(val):
     # Convert to string and remove whitespace
     s_val = str(val).strip()
@@ -39,8 +38,6 @@ def clean_excel_val(val):
     
     # Return 0.0 for any other text to prevent crashes
     return 0.0
-
-
 
 
 def format_entry_docx(doc, row):
@@ -128,7 +125,6 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
     doc.save(output_docx)
     # print(f"New File {output_docx} Saved")
 
-
 def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     base_name = os.path.basename(sourcefile)
     file_name_only = os.path.splitext(base_name)[0]
@@ -136,9 +132,10 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     template_path = f"{PATH_TEMPLATES}/{template_name}"
  
     grouped_df = group_sourcefile_by_client(sourcefile, skip_units_packages=False,bl_aggregated=True)
-   
-    excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
     st.dataframe(grouped_df)      #    nicer interactive table
+    
+    excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
+
     return output_docx
 
 # if __name__ == "__main__":
@@ -147,6 +144,3 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     # column_names = ["type", "client", "qte", "poids", "rec_qty"]
     # names=column_names
 #    generate_brd("source.xlsx", sheet_name=0, template_path="template.docx", output_docx="entries.docx")
-
-
-

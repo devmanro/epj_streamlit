@@ -69,10 +69,10 @@ def test_seed_data_has_real_fields(db_session, seed_data):
     """Verify that the new manifest fields are stored and retrieved correctly."""
     line = db_session.query(ManifestLine).filter_by(bl_code="BL123").first()
     assert line.modele == "TOYOTA HILUX"
+    assert line.situation == "EN ATTENTE"
     assert line.produit == "VEHICULE"
     assert line.chassis_serial == "CHASS-XYZ-001"
-    assert line.situation == "EN ATTENTE"
-    # assert line.type == "VEHICULE"
+    assert line.type == "VEHICULE"
     assert line.cargo_type == "RORO"
 
 def test_vessel_has_escale_and_imo(db_session, seed_vessel_with_escale):
