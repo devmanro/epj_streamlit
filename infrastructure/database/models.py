@@ -1,90 +1,133 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, UniqueConstraint
-from sqlalchemy.orm import declarative_base, relationship, synonym
+"""
+infrastructure/database/models.py
+────────────────────────────────────
+ORM models for the Supabase PostgreSQL database.
+
+Tables
+------
+  vessels        — one row per vessel call
+  manifest_lines — one row per cargo line (FK → vessels)
+"""
+
 from datetime import datetime, timezone
-import enum
 
-Base = declarative_base()
+from sqlalchemy import (
+    BigInteger, Boolean, Column, DateTime,
+    Float, ForeignKey, Index, Integer,
+    String, Text, UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
 
-class EventType(str, enum.Enum):
-    LANDED = "LANDED"
-    RECEIVED = "RECEIVED"
+from infrastructure.database.session import Base
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Vessel
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Vessel(Base):
-    __tablename__ = 'vessels'
+    __tablename__ = "vessels"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    escale = Column(String, nullable=True)          # ESCALE — call/stopover reference
-    imo = Column(String, nullable=True)             # IMO_NAVIRE
-    arrival_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id           = Column(BigInteger, primary_key=True, autoincrement=True)
+    name         = Column(String(255),  nullable=False, index=True)
+    escale       = Column(String(100),  nullable=True)
+    imo          = Column(String(20),   nullable=True)
+    arrival_date = Column(DateTime(timezone=True), nullable=True,
+                          default=lambda: datetime.now(timezone.utc))
+    created_at   = Column(DateTime(timezone=True), nullable=False,
+                          default=lambda: datetime.now(timezone.utc))
 
-    manifest_lines = relationship("ManifestLine", back_populates="vessel", cascade="all, delete-orphan")
+    manifest_lines = relationship(
+        "ManifestLine",
+        back_populates="vessel",
+        cascade="all, delete-orphan",
+        lazy="dynamic",          # avoids loading all lines on vessel query
+    )
+
+    __table_args__ = (
+        # A vessel is uniquely identified by name + escale combination
+        UniqueConstraint("name", "escale", name="uq_vessel_name_escale"),
+    )
+
+    def __repr__(self):
+        return f"<Vessel id={self.id} name={self.name!r} escale={self.escale!r}>"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  ManifestLine
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ManifestLine(Base):
-    __tablename__ = 'manifest_lines'
+    __tablename__ = "manifest_lines"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    vessel_id = Column(Integer, ForeignKey('vessels.id'), nullable=False)
+    id         = Column(BigInteger, primary_key=True, autoincrement=True)
+    vessel_id  = Column(
+        BigInteger,
+        ForeignKey("vessels.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
-    # Core identification
-    bl_code = Column(String, nullable=False, index=True)  # B/L
-    article = Column(String, nullable=True)               # ARTICLE
-    client = Column(String, nullable=True)                # CLIENT
-    designation = Column(String, nullable=True)           # DESIGNATION
+    # ── Core cargo fields ─────────────────────────────────────────────────
+    bl_code             = Column(String(100),  nullable=True,  index=True)
+    article             = Column(String(255),  nullable=True)
+    client              = Column(String(255),  nullable=True)
+    designation         = Column(Text,         nullable=True)
+    produit             = Column(String(255),  nullable=True)
+    modele              = Column(String(255),  nullable=True)
+    type_               = Column("type", String(100), nullable=True)
+    cargo_type          = Column(String(100),  nullable=True)
+    chassis_serial      = Column(String(255),  nullable=True)
 
-    # Classification
-    produit = Column(String, nullable=True)               # PRODUIT
-    modele = Column(String, nullable=True)                # MODELE
-    type_ = Column(String, nullable=True)                 # TYPE (conditionnement)
-    cargo_type = Column(String, nullable=True)            # CARGO_TYPE (manifest category)
-    chassis_serial = Column(String, nullable=True)        # CHASSIS/SERIAL
+    # ── Quantities / weights ──────────────────────────────────────────────
+    manifested_qty      = Column(Float, nullable=True, default=0.0)
+    manifested_tonnage  = Column(Float, nullable=True, default=0.0)
+    reste_tp            = Column(Float, nullable=True, default=0.0)
+    surface             = Column(Float, nullable=True, default=0.0)
 
-    
+    # ── Operational fields ────────────────────────────────────────────────
+    situation           = Column(String(255),  nullable=True)
+    observation         = Column(Text,         nullable=True)
+    position            = Column(String(100),  nullable=True)
+    transit             = Column(String(100),  nullable=True)
+    cles                = Column(String(100),  nullable=True)
+    daemo_breaker_type  = Column(String(255),  nullable=True)
 
-    # Quantities
-    manifested_qty = Column(Float, default=0.0)           # QUANTITE
-    manifested_tonnage = Column(Float, default=0.0)       # TONAGE
-    landed_qty = Column(Float, default=0.0)
-    received_qty = Column(Float, default=0.0)
-    reste_tp = Column(Float, default=0.0)                 # RESTE T/P
-    surface = Column(Float, default=0.0)                  # SURFACE
+    # ── Dates ─────────────────────────────────────────────────────────────
+    manifested_date     = Column(DateTime(timezone=True), nullable=True)
+    date_enlevement     = Column(DateTime(timezone=True), nullable=True)
 
-    # Operational fields
-    situation = Column(String, nullable=True)             # SITUATION
-    observation = Column(String, nullable=True)           # OBSERVATION
-    position = Column(String, nullable=True)              # POSITION
-    transit = Column(String, nullable=True)               # TRANSIT
-    cles = Column(String, nullable=True)                  # CLES
-    daemo_breaker_type = Column(String, nullable=True)    # DAEMO BREAKER (DRB) TOP BOX TYPE
+    # ── Landing / receiving counters ──────────────────────────────────────
+    landed_qty          = Column(Float,   nullable=True, default=0.0)
+    received_qty        = Column(Float,   nullable=True, default=0.0)
+    is_fully_delivered  = Column(Boolean, nullable=True, default=False)
 
-    # Dates
-    manifested_date = Column(DateTime, nullable=True)     # DATE
-    date_enlevement = Column(DateTime, nullable=True)     # DATE ENLEV
-
-    # Optimistic Locking
-    version = Column(Integer, default=1, nullable=False)
+    # ── Audit ─────────────────────────────────────────────────────────────
+    created_at  = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at  = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     vessel = relationship("Vessel", back_populates="manifest_lines")
-    movements = relationship("MovementEvent", back_populates="manifest_line", cascade="all, delete-orphan")
 
-    # Removed UniqueConstraint('vessel_id', 'bl_code') to allow multiple chassis/items per B/L
+    __table_args__ = (
+        # Prevent exact duplicates (same vessel + BL + chassis + article)
+        UniqueConstraint(
+            "vessel_id", "bl_code", "chassis_serial", "article",
+            name="uq_manifest_line_identity",
+        ),
+        # Composite index for the most common filter pattern
+        Index("ix_manifest_vessel_bl", "vessel_id", "bl_code"),
+    )
 
-    __mapper_args__ = {
-        "version_id_col": version
-    }
-
-class MovementEvent(Base):
-    __tablename__ = 'movement_events'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    manifest_line_id = Column(Integer, ForeignKey('manifest_lines.id'), nullable=False)
-    event_type = Column(Enum(EventType), nullable=False)
-    quantity = Column(Float, nullable=False)
-    tonnage = Column(Float, default=0.0)
-
-    operator_id = Column(String, nullable=True)
-    shift = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    remarks = Column(String, nullable=True)
-
-    manifest_line = relationship("ManifestLine", back_populates="movements")
+    def __repr__(self):
+        return (
+            f"<ManifestLine id={self.id} bl={self.bl_code!r} "
+            f"client={self.client!r} qty={self.manifested_qty}>"
+        )
