@@ -23,9 +23,17 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 def _get_db_url() -> str:
     # 1. Streamlit secrets (production / Streamlit Cloud)
     try:
-        url = st.secrets["SUPABASE_DB_URL"]
+        url = st.secrets.get("SUPABASE_DB_URL")
         if url:
             return url
+            
+        # Fallback to individual [postgres] table in Streamlit secrets
+        if "postgres" in st.secrets:
+            pg = st.secrets["postgres"]
+            return (
+                f"postgresql+psycopg2://{pg['user']}:{pg['password']}"
+                f"@{pg['host']}:{pg['port']}/{pg['database']}?sslmode=require"
+            )
     except (KeyError, FileNotFoundError, AttributeError):
         pass
 
@@ -36,8 +44,8 @@ def _get_db_url() -> str:
 
     # 3. Hardcoded fallback — REMOVE BEFORE COMMITTING TO GIT
     return (
-        "postgresql://postgres:7vZqYen4xbYPwhVP"
-        "@db.dincofyibvidfiubiqnn.supabase.co:5432/postgres"
+        "postgresql+psycopg2://postgres:7vZqYen4xbYPwhVP"
+        "@db.dincofyibvidfiubiqnn.supabase.co:6543/postgres?sslmode=require"
     )
 
 
