@@ -211,7 +211,12 @@ def _render_sqlite_manager():
 
         # ── reindex to standard columns ───────────────────────────────────
         with st.spinner("Reindexing to standard schema…"):
+            # df_out = molded_df.reindex(columns=COLUMNS).fillna("-")
+            # Drop duplicate columns before reindexing
+            molded_df = molded_df.loc[:, ~molded_df.columns.duplicated()]
+            
             df_out = molded_df.reindex(columns=COLUMNS).fillna("-")
+
             mapped_target_cols = set(final_mp.values()) if final_mp else set()
             unmapped_cols = [
                 col for col in df_out.columns if col not in mapped_target_cols
