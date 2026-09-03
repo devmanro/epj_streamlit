@@ -3,84 +3,120 @@ infrastructure/database/session.py
 ────────────────────────────────────
 SQLAlchemy session factory — Supabase PostgreSQL backend.
 
-Reads connection URL from:
-  1. st.secrets["SUPABASE_DB_URL"]   (Streamlit Cloud)
-  2. os.environ["SUPABASE_DB_URL"]   (local .env / shell)
-  3. Hardcoded fallback               (dev only — remove in prod)
+Supabase exposes two ports:
+  • 5432  → direct connection  (supports keepalives, prepared statements)
+  • 6543  → PgBouncer pooler   (transaction mode — limited feature set)
+
+We use port 5432 with NullPool for Streamlit (stateless, re-entrant env).
 """
 
 import os
 from contextlib import contextmanager
 
 import streamlit as st
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import NullPool
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Connection URL resolution
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_db_url() -> str:
+    """
+    Resolution order:
+      1. st.secrets["postgres"]  table  (Streamlit Cloud secrets.toml)
+      2. SUPABASE_DB_URL env var         (local .env / shell)
+      3. Raise — never silently use hardcoded creds in prod
+    """
     # 1. Streamlit secrets [postgres] table
     try:
-        if "postgres" in st.secrets:
-            pg = st.secrets["postgres"]
+        pg = st.secrets.get("postgres")
+        if pg:
+            host = pg["host"]
+            user = pg["user"]
+            password = pg["password"]
+            database = pg["dbname"]          # note: "dbname" not "database"
+            # Use port 5432 (direct) — avoids PgBouncer quirks
+            port = pg.get("port", 5432)
             return (
-                f"postgresql+psycopg2://{pg['user']}:{pg['password']}"
-                f"@{pg['host']}:{pg['port']}/{pg['database']}?sslmode=require"
+                f"postgresql+psycopg2://{user}:{password}"
+                f"@{host}:{port}/{database}?sslmode=require"
             )
     except (KeyError, FileNotFoundError, AttributeError):
         pass
 
-    # 2. Environment variable (local dev with .env)
-    url = os.environ.get("SUPABASE_DB_URL", "")
+    # 2. Environment variable
+    url = os.environ.get("SUPABASE_DB_URL", "").strip()
     if url:
         return url
 
-    # 3. Hardcoded fallback
-    return (
-        "postgresql+psycopg2://postgres:7vZqYen4xbYPwhVP"
-        "@db.dincofyibvidfiubiqnn.supabase.co:6543/postgres?sslmode=require"
+    # 3. Hard fail — do not silently fall back to hardcoded credentials
+    raise RuntimeError(
+        "Database URL not configured. "
+        "Add a [postgres] section to .streamlit/secrets.toml or "
+        "set the SUPABASE_DB_URL environment variable."
     )
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Engine — connection pool tuned for Supabase (PgBouncer-aware)
+#  Engine
 # ─────────────────────────────────────────────────────────────────────────────
 
-_DB_URL = _get_db_url()
+def _build_engine():
+    """
+    Build SQLAlchemy engine with settings appropriate for Supabase + Streamlit.
 
-# Supabase uses PgBouncer in transaction-pooling mode by default.
-# We must set:
-#   pool_pre_ping     → detect stale connections
-#   connect_args      → keep_alives to avoid idle timeouts
-#   pool_size         → keep small (free tier has connection limits)
-#   max_overflow      → extra connections allowed beyond pool_size
+    Why NullPool?
+    Streamlit reruns the script on every interaction. A persistent connection
+    pool can accumulate stale/leaked connections across reruns, especially on
+    Streamlit Cloud where the process may be shared. NullPool opens a fresh
+    connection per operation and closes it immediately — safer and avoids
+    exceeding Supabase free-tier connection limits.
 
-_engine = create_engine(
-    _DB_URL,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,          # recycle connections every 30 min
-    connect_args={
-        "connect_timeout":    10,
-        "application_name":   "manifest_app",
-        "keepalives":         1,
-        "keepalives_idle":    30,
+    If you need performance, switch to QueuePool with pool_size=2, max_overflow=3
+    and add @st.cache_resource around the engine creation.
+    """
+    url = _get_db_url()
+
+    # connect_args for DIRECT connections (port 5432)
+    # Do NOT use these with PgBouncer port 6543
+    connect_args = {
+        "connect_timeout":     10,
+        "application_name":    "manifest_app",
+        "sslmode":             "require",
+        # TCP keepalives — only valid on direct connections
+        "keepalives":          1,
+        "keepalives_idle":     30,
         "keepalives_interval": 5,
-        "keepalives_count":   5,
-        "options":            "-c statement_timeout=60000",  # 60s query timeout
-    },
-    echo=False,                 # set True to log SQL in dev
-)
+        "keepalives_count":    5,
+    }
+
+    return create_engine(
+        url,
+        poolclass=NullPool,          # no persistent pool — safe for Streamlit
+        connect_args=connect_args,
+        echo=False,                  # set True to log SQL in dev
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Session factory
+#  Cached engine + session factory
+#  @st.cache_resource ensures a single instance per Streamlit session server
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SessionFactory = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
+@st.cache_resource(show_spinner=False)
+def _get_engine():
+    return _build_engine()
+
+
+def _get_session_factory():
+    return sessionmaker(
+        bind=_get_engine(),
+        autocommit=False,
+        autoflush=False,
+    )
+
 
 # Shared declarative base — import this in models.py
 Base = declarative_base()
@@ -99,7 +135,8 @@ def get_session():
         with get_session() as session:
             session.add(some_object)
     """
-    session = _SessionFactory()
+    factory = _get_session_factory()
+    session = factory()
     try:
         yield session
         session.commit()
@@ -113,27 +150,25 @@ def get_session():
 def init_db():
     """
     Create all tables defined in models.py if they do not exist yet.
-    Safe to call multiple times (uses CREATE TABLE IF NOT EXISTS semantics).
+    Safe to call multiple times (CREATE TABLE IF NOT EXISTS semantics).
     """
-    # Import models here to ensure they are registered on Base before create_all
-    from infrastructure.database import models  # noqa: F401
-    Base.metadata.create_all(bind=_engine)
+    from infrastructure.database import models  # noqa: F401 — registers models on Base
+    Base.metadata.create_all(bind=_get_engine())
 
 
 def get_engine():
-    """Return the shared engine (useful for pd.read_sql)."""
-    return _engine
+    """Return the shared engine (useful for pd.read_sql, Alembic, etc.)."""
+    return _get_engine()
 
 
 def test_connection() -> tuple[bool, str]:
     """
-    Ping the database.  Returns (True, version_string) or (False, error_msg).
-    Useful for a health-check page.
+    Ping the database.
+    Returns (True, version_string) or (False, error_message).
     """
     try:
-        with _engine.connect() as conn:
-            result = conn.execute(text("SELECT version()"))
-            version = result.scalar()
+        with _get_engine().connect() as conn:
+            version = conn.execute(text("SELECT version()")).scalar()
         return True, version
     except Exception as exc:
         return False, str(exc)
