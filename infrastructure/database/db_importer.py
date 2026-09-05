@@ -334,6 +334,106 @@ def delete_vessel(vessel_id: int) -> None:
         # commit happens automatically via get_session() context manager
 
 
+def update_vessel_name(vessel_id: int, new_name: str) -> bool:
+    """
+    Rename a vessel record in-place.
+
+    Useful for correcting entries that were stored as "UNKNOWN" when the
+    file had no vessel name column.
+
+    Parameters
+    ----------
+    vessel_id : int   — PK of the Vessel row to update
+    new_name  : str   — the replacement name (must be non-empty)
+
+    Returns
+    -------
+    True if the vessel was found and renamed, False otherwise.
+    """
+    new_name = new_name.strip()
+    if not new_name:
+        return False
+    with get_session() as session:
+        vessel = session.query(Vessel).filter_by(id=vessel_id).first()
+        if vessel is None:
+            return False
+        vessel.name = new_name
+        return True
+
+
+def replace_vessel_lines(
+    df: pd.DataFrame,
+    vessel_id: int,
+) -> tuple[int, list[str]]:
+    """
+    Replace all manifest lines for *vessel_id* with the rows in *df*.
+
+    Steps:
+        1. Delete every existing ManifestLine for the vessel.
+        2. Re-insert each row from *df* using the same field mapping as
+           import_manifest_to_db().
+
+    Used by the Single File Manager "Save Changes" button so that inline
+    edits made in st.data_editor are persisted back to SQLite.
+
+    Parameters
+    ----------
+    df        : DataFrame with the edited manifest rows (standard COLUMNS)
+    vessel_id : integer PK of the target Vessel record
+
+    Returns
+    -------
+    (inserted, errors)
+        inserted — number of rows written
+        errors   — list of per-row error strings
+    """
+    inserted = 0
+    errors: list[str] = []
+
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    with get_session() as session:
+        # 1. Verify the vessel exists
+        vessel = session.query(Vessel).filter_by(id=vessel_id).first()
+        if vessel is None:
+            return 0, [f"Vessel ID {vessel_id} not found in database."]
+
+        # 2. Delete all existing lines for this vessel
+        for line in list(vessel.manifest_lines):
+            session.delete(line)
+        session.flush()
+
+        # 3. Re-insert rows from df
+        for idx, row in df.iterrows():
+            try:
+                fields = {}
+                for excel_col, orm_field in _COL_MAP.items():
+                    if excel_col not in df.columns:
+                        continue
+                    val = row[excel_col]
+                    if orm_field in ("manifested_qty", "manifested_tonnage",
+                                     "reste_tp", "surface"):
+                        fields[orm_field] = _safe_float(val)
+                    elif orm_field in ("manifested_date", "date_enlevement"):
+                        fields[orm_field] = _safe_date(val)
+                    else:
+                        fields[orm_field] = _safe_str(val)
+
+                # B/L is required; generate a placeholder if truly missing
+                if not fields.get("bl_code"):
+                    fields["bl_code"] = f"_ROW_{idx}"
+
+                line = ManifestLine(vessel_id=vessel.id, **fields)
+                session.add(line)
+                inserted += 1
+
+            except Exception as exc:
+                errors.append(f"Row {idx}: {exc}")
+
+    return inserted, errors
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  INTERNAL: ORM rows → DataFrame
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,6 +443,15 @@ def _rows_to_df(rows: list) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
 
+    def _strip_tz(dt):
+        if dt is None or pd.isna(dt):
+            return None
+        if hasattr(dt, "tz_localize") and getattr(dt, "tzinfo", None) is not None:
+            return dt.tz_localize(None)
+        if hasattr(dt, "replace") and getattr(dt, "tzinfo", None) is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+
     records = []
     for line, vessel in rows:
         records.append({
@@ -350,7 +459,7 @@ def _rows_to_df(rows: list) -> pd.DataFrame:
             "NAVIRE":        vessel.name,
             "ESCALE":        vessel.escale,
             "IMO_NAVIRE":    vessel.imo,
-            "ARRIVAL_DATE":  vessel.arrival_date,
+            "ARRIVAL_DATE":  _strip_tz(vessel.arrival_date),
             # ── Cargo identity ────────────────────────────────────────────
             "B/L":           line.bl_code,
             "ARTICLE":       line.article,
@@ -374,8 +483,8 @@ def _rows_to_df(rows: list) -> pd.DataFrame:
             "CLES":          line.cles,
             "DAEMO BREAKER (DRB) TOP BOX TYPE": line.daemo_breaker_type,
             # ── Dates ─────────────────────────────────────────────────────
-            "DATE":          line.manifested_date,
-            "DATE ENLEV":    line.date_enlevement,
+            "DATE":          _strip_tz(line.manifested_date),
+            "DATE ENLEV":    _strip_tz(line.date_enlevement),
             # ── Counters ──────────────────────────────────────────────────
             "landed_qty":    line.landed_qty,
             "received_qty":  line.received_qty,
@@ -384,3 +493,118 @@ def _rows_to_df(rows: list) -> pd.DataFrame:
         })
 
     return pd.DataFrame(records)
+
+
+def update_changed_manifest_lines(
+    updates: list[dict],
+    additions: list[dict] = None,
+    deletions: list[int] = None,
+) -> tuple[int, int, int, list[str]]:
+    """
+    Update only the changed, added, or deleted manifest lines in SQLite.
+
+    Parameters
+    ----------
+    updates   : list of {"_db_id": int, "changes": {col_name: new_val}}
+    additions : list of dicts with column names/values for new rows
+    deletions : list of integer ManifestLine primary keys to delete
+
+    Returns
+    -------
+    (updated_count, added_count, deleted_count, errors)
+    """
+    updated_count = 0
+    added_count = 0
+    deleted_count = 0
+    errors: list[str] = []
+
+    with get_session() as session:
+        # 1. Process updates
+        for item in (updates or []):
+            line_id = item.get("_db_id")
+            changes = item.get("changes", {})
+            if not line_id or not changes:
+                continue
+
+            try:
+                line = session.query(ManifestLine).filter_by(id=int(line_id)).first()
+                if not line:
+                    errors.append(f"Line ID {line_id} not found.")
+                    continue
+
+                line_updated = False
+                for col_name, new_val in changes.items():
+                    col_clean = str(col_name).strip()
+                    if col_clean == "NAVIRE" and new_val:
+                        v_name = str(new_val).strip()
+                        vessel = session.query(Vessel).filter_by(name=v_name).first()
+                        if not vessel:
+                            vessel = Vessel(name=v_name)
+                            session.add(vessel)
+                            session.flush()
+                        line.vessel_id = vessel.id
+                        line_updated = True
+                    elif col_clean == "ESCALE" and line.vessel:
+                        line.vessel.escale = _safe_str(new_val)
+                        line_updated = True
+                    elif col_clean == "IMO_NAVIRE" and line.vessel:
+                        line.vessel.imo = _safe_str(new_val)
+                        line_updated = True
+                    elif col_clean in _COL_MAP:
+                        orm_field = _COL_MAP[col_clean]
+                        if orm_field in ("manifested_qty", "manifested_tonnage", "reste_tp", "surface", "landed_qty", "received_qty"):
+                            setattr(line, orm_field, _safe_float(new_val))
+                        elif orm_field in ("manifested_date", "date_enlevement"):
+                            setattr(line, orm_field, _safe_date(new_val))
+                        else:
+                            setattr(line, orm_field, _safe_str(new_val))
+                        line_updated = True
+
+                if line_updated:
+                    updated_count += 1
+            except Exception as exc:
+                errors.append(f"Update error for line {line_id}: {exc}")
+
+        # 2. Process deletions
+        for line_id in (deletions or []):
+            try:
+                line = session.query(ManifestLine).filter_by(id=int(line_id)).first()
+                if line:
+                    session.delete(line)
+                    deleted_count += 1
+            except Exception as exc:
+                errors.append(f"Delete error for line {line_id}: {exc}")
+
+        # 3. Process additions
+        for row in (additions or []):
+            try:
+                v_name = _safe_str(row.get("NAVIRE")) or "UNKNOWN"
+                vessel = session.query(Vessel).filter_by(name=v_name).first()
+                if not vessel:
+                    vessel = Vessel(name=v_name)
+                    session.add(vessel)
+                    session.flush()
+
+                fields = {}
+                for excel_col, orm_field in _COL_MAP.items():
+                    if excel_col not in row:
+                        continue
+                    val = row[excel_col]
+                    if orm_field in ("manifested_qty", "manifested_tonnage", "reste_tp", "surface"):
+                        fields[orm_field] = _safe_float(val)
+                    elif orm_field in ("manifested_date", "date_enlevement"):
+                        fields[orm_field] = _safe_date(val)
+                    else:
+                        fields[orm_field] = _safe_str(val)
+
+                if not fields.get("bl_code"):
+                    fields["bl_code"] = f"_ADD_{datetime.now(timezone.utc).timestamp()}"
+
+                line = ManifestLine(vessel_id=vessel.id, **fields)
+                session.add(line)
+                added_count += 1
+            except Exception as exc:
+                errors.append(f"Addition error for row: {exc}")
+
+    return updated_count, added_count, deleted_count, errors
+

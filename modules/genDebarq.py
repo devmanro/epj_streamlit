@@ -382,8 +382,10 @@ def gen_table_deb(filepath=None):
             cell = ws_bl.cell(row=r_idx, column=c_idx)
 
             # ── Value ──
-            # Force CLIENT column to uppercase string
-            if zero_idx == client_col_idx and value is not None:
+            # Strip timezone if value is datetime, or force CLIENT to uppercase
+            if hasattr(value, "tzinfo") and getattr(value, "tzinfo", None) is not None:
+                cell.value = value.tz_localize(None) if hasattr(value, "tz_localize") else value.replace(tzinfo=None)
+            elif zero_idx == client_col_idx and value is not None:
                 cell.value = str(value).upper()
             else:
                 cell.value = value

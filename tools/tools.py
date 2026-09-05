@@ -182,12 +182,12 @@ def get_manual_color(product_name):
     
     # Group products by color
     color_groups = {
-        "92D050": ["CTP", "PLYWOOD", "MDF"],                      # Greenish
-        "538DD5": ["BIG BAG", "BAG", "PIPE","CORNIERS"],          # Blue
-        "C65911": ["TUBE", "FORMWORK","POUTRELLE"],               # Brown/Orange
-        "948A54": ["BOB", "COIL", "METAL SHEET", "STEEL BEAMS"],  # Tan/Gold
-        "DDD9C4": ["BEAMS", "FIL", "FIL M"],                      # Grey/Beige
-        "FFDC6B": ["COLI","UNIT"],                      # GOLD
+        "92D050": ["CTP", "PLYWOOD", "MDF", "FFP", "MDF + PLYWOOD"],                      # Greenish
+        "538DD5": ["BIG BAG", "BAG", "PIPE", "CORNIERE", "CORNIERS"],                      # Blue
+        "C65911": ["TUBE", "FORMWORK", "POUTRELLE"],                                       # Brown/Orange
+        "948A54": ["BOB", "BOBINE", "COIL", "METAL SHEET", "STEEL BEAMS"],                 # Tan/Gold
+        "DDD9C4": ["BEAMS", "FIL", "FIL M"],                                              # Grey/Beige
+        "FFDC6B": ["COLI", "COLIS", "UNIT", "BUS", "MINI BUS", "CAMIONS", "CAMION POMPE A BETON", "REMORQUES", "EXCAVATEUR", "BULLDOZER", "CHARGEUR", "COMPACTEUR", "FINISSEUR", "CAMION GRUE", "CHARIOT ELEVATEUR", "NIVELEUSE"], # GOLD
     }
 
     
@@ -265,22 +265,6 @@ def apply_summary_conditional_formatting(ws, summary_rows, start_col, clients):
             fill=yellow_fill
         )
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # @st.cache_resource
@@ -421,59 +405,6 @@ def find_type_and_produit(designation):
         produit = cargo_type  # Unknown → flag for manual review
 
     return pd.Series([cargo_type, produit])
-
-# def align_data(uploaded_df, mapping):
-    
-#     try:
-#         valid_mappings_count = sum(
-#             1 for value in mapping.values() if value is not None)
-
-#         if valid_mappings_count <= 2:
-#             return uploaded_df, False
-
-#         # Rename columns based on the mapping
-#         df_mapped = uploaded_df.rename(columns=mapping)
-
-#         final_cols = [value for key, value in mapping.items()
-#                       if value is not None]
-
-#         # Keep only the required columns
-#         df_aligned = df_mapped[final_cols].copy()
-
-#         # Ensure COL_DESIGNATION exists in the aligned DataFrame
-#         if COL_DESIGNATION in df_aligned.columns:
-
-#             # --- 1. BYPASS: Save existing values before overwriting ---
-#             orig_type   = df_aligned[COL_TYPE].copy()   if COL_TYPE   in df_aligned.columns else None
-#             orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
-
-#             # --- 2. COMPUTE: Simple list comprehension avoids all Pandas apply shape bugs ---
-#             computed = [find_type_and_produit(val) for val in df_aligned[COL_DESIGNATION]]
-#             df_aligned[COL_TYPE]    = [res[0] for res in computed]
-#             df_aligned[COL_PRODUIT] = [res[1] for res in computed]
-
-#             # --- 3. REINSERT: Put back original values where they were not null ---
-#             if orig_type is not None:
-#                 mask = orig_type.notna() & (orig_type != '')
-#                 df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
-
-#             if orig_produit is not None:
-#                 mask = orig_produit.notna() & (orig_produit != '')
-#                 df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
-
-#         else:
-#             # If COL_DESIGNATION is not present, fill nulls with 'None'
-#             for col in [COL_TYPE, COL_PRODUIT]:
-#                 if col not in df_aligned.columns:
-#                     df_aligned[col] = 'None'
-#                 else:
-#                     df_aligned[col] = df_aligned[col].fillna('None')
-
-#         return df_aligned, True
-
-#     except Exception as e:
-#         print(f"Error during alignment: {e}")
-#         return uploaded_df, False
 
 
 
@@ -846,17 +777,15 @@ def group_sourcefile_by_client(
            
     grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False ).agg(agg_dict)
     SORT_ORDER = {
-        "CTP": 0,
-        "MDF": 1,
-        "PLYWOOD": 2,
-        "BIGBAG": 3,
-        "TUBE": 4,
-        "BEAMS": 5,
-        "FIL M": 6,
-        "COIL": 7,
-        "FORMWORK": 8,
-        "PIPE": 9,
-        "METAL SHEET": 10,
+        "COLIS": 0,
+        "TUBE": 1,
+        "POUTRELLE": 2,
+        "CORNIERE": 3,
+        "BOBINE": 4,
+        "CTP": 5,
+        "MDF": 6,
+        "FFP": 7,
+        "MDF + PLYWOOD": 8,
         "PACKAGES": 97,
         "UNITS": 98,
     }
