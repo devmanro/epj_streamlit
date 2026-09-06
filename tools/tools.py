@@ -459,6 +459,180 @@ def show_mapping_dialog(uploaded_df):
         st.rerun()
 
 
+# ---------------------------------------------------------------------------
+# Commodity / received-lines helpers.
+# The classification below mirrors the strategy used by modules/genDebarq.py:
+#   * KEYWORD_RULES          -> canonical, ordered cargo-type vocabulary
+#   * GOODS__TYPES           -> known general-cargo / break-bulk families
+#   * COMMODITY_TYPES        -> full authoritative commodity list
+#   * UNIT/PACKAGE_CARGO_TYPES -> generic unit / package buckets
+# Matching is exhaustive: every known family is considered before falling back
+# to generic Unit / Package / General Cargo.
+# ---------------------------------------------------------------------------
+
+def _normalize_commodity_text(value):
+    """Normalize a commodity cell value for deterministic matching."""
+    if value is None:
+        return ""
+    text = re.sub(r"\s+", " ", str(value)).strip().upper()
+    return text
+
+
+def _matches_keyword(text, keyword):
+    """Case-insensitive substring match after normalizing both sides."""
+    if not text:
+        return False
+    kw = _normalize_commodity_text(keyword)
+    return bool(kw) and kw in text
+
+
+def _classify_commodity(raw_commodity):
+    """
+    Return (family, source) where family is the normalized commodity type and
+    source is 'family' (direct GOODS__TYPES/COMMODITY_TYPES match) or 'rule'
+    (KEYWORD_RULES match). More specific labels are tried first.
+    """
+    text = _normalize_commodity_text(raw_commodity)
+    if not text:
+        return None, None
+
+    # Direct known families. These are the product groups rendered by
+    # genDebarq.py, plus explicit cargo labels that appear in the manifests.
+    known_families = list(COMMODITY_TYPES) + list(GOODS__TYPES) + [
+        "BIG BAG",
+        "PLYWOOD",
+        "PIPE",
+        "BEAMS",
+        "METAL SHEET",
+        "STEEL BEAMS",
+        "FORMWORK",
+        "FIL M",
+        "COIL",
+        "WHITE WOOD",
+        "BEECH WOOD",
+        "RED WOOD",
+        "BRIDGE COMP",
+    ]
+    # Sort by normalized length so compound entries (e.g. "MDF + PLYWOOD",
+    # "MINI BUS", "CAMION POMPE A BETON") are checked before their shorter
+    # generic counterparts ("MDF", "BUS", "CAMIONS").
+    known_families.sort(key=lambda family: len(_normalize_commodity_text(family)), reverse=True)
+
+    for family in known_families:
+        if _matches_keyword(text, family):
+            return family.upper(), "family"
+
+    # Canonical KEYWORD_RULES fallback. The rules are intended to be
+    # "specific first"; use the same ordered table as genDebarq, but sort
+    # all keyword/type pairs by keyword length so genuinely longer (more
+    # specific) phrases win over short broad tokens. This prevents e.g.
+    # "FILM FACED" from being captured by the short "FIL" keyword before the
+    # more specific MDF/FILM rule.
+    keyword_rules = [
+        (keyword, cargo_type)
+        for keywords, cargo_type in KEYWORD_RULES
+        for keyword in keywords
+    ]
+    keyword_rules.sort(
+        key=lambda item: len(_normalize_commodity_text(item[0])),
+        reverse=True,
+    )
+    for keyword, cargo_type in keyword_rules:
+        if _matches_keyword(text, keyword):
+            return cargo_type, "rule"
+
+    return None, None
+
+
+def _big_bags_received_template(rec_str):
+    commodity = "BIG BAGS"
+    received_lines = [
+        "BIG BAGS FOUND TORN ON BOARD",
+        "BIG BAGS FOUND BROKEN ON BOARD",
+        "EMPTY BAG ON BOARD",
+    ]
+    total_rec_str = f"{rec_str}  Big Bags"
+    return commodity, received_lines, total_rec_str
+
+
+def _crates_received_template(display_name, rec_str):
+    commodity = display_name or "CRATES"
+    received_lines = [
+        f"Crates of {commodity} Found Dismembered on board",
+        f"Crates of {commodity} wet on board (Packing and/or Contents)",
+        f"Crates of {commodity} moldy on board (Packing and/or Contents)",
+    ]
+    total_rec_str = f"{rec_str}  Crates of {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _bundles_received_template(display_name, rec_str, bundle_label=None):
+    label = bundle_label or display_name
+    commodity = f"Bundles of {label}"
+    received_lines = [
+        f"{commodity}.",
+        f"{commodity} Found Dismembered on board",
+    ]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _lumber_received_template(display_name, rec_str):
+    """Wood/lumber (white/beech/red wood) uses the bundle + wet/mouldy wording."""
+    commodity = "BUNDLES"
+    received_lines = [
+        f"Bundles of {display_name} Found Dismembered on board",
+        f"Bundles of {display_name} wet on board (Packing and/or Contents)",
+        f"Bundles of {display_name} moldy on board (Packing and/or Contents)",
+    ]
+    total_rec_str = f"{rec_str}  Bundles of {display_name}"
+    return commodity, received_lines, total_rec_str
+
+
+def _coils_received_template(rec_str):
+    commodity = "COILS"
+    received_lines = [
+        "Coils Found Rusty on board",
+        "Coils Packaging damaged on board",
+    ]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _simple_received_template(rec_str, commodity):
+    received_lines = [commodity, f"{commodity} Damaged on board"]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _unit_received_template(rec_str):
+    commodity = "Unit"
+    received_lines = [commodity, f"{commodity} Damaged on board"]
+    total_rec_str = f"{rec_str}  Units"
+    return commodity, received_lines, total_rec_str
+
+
+def _package_received_template(rec_str):
+    commodity = "package"
+    received_lines = [commodity, f"{commodity} Damaged on board"]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _unit_package_received_template(rec_str):
+    commodity = "Units + Package"
+    received_lines = [commodity, f"{commodity} Damaged on board"]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
+def _general_cargo_received_template(rec_str, display_name):
+    commodity = display_name or "General Cargo"
+    received_lines = ["Packaging damaged on board"]
+    total_rec_str = f"{rec_str}  {commodity}"
+    return commodity, received_lines, total_rec_str
+
+
 def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
     """
     Given the raw commodity string from Excel and the received quantity string (rec_str),
@@ -466,94 +640,109 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
       - normalized commodity name
       - list of 'received' description lines
       - total_rec_str string to be displayed under 'Total Received'
+
+    The classification exhaustively considers:
+      1. the authoritative COMMODITY_TYPES / GOODS__TYPES lists,
+      2. the ordered KEYWORD_RULES lookup table,
+      3. UNIT_CARGO_TYPES / PACKAGE_CARGO_TYPES buckets,
+      4. a General Cargo fallback.
     """
-    # capital_comodity=raw_commodity.upper()
-    commodity = raw_commodity
-    received_lines = []
-    total_rec_str = rec_str
+    raw_text = _normalize_commodity_text(raw_commodity)
+    display_name = raw_text or "General Cargo"
 
-    if matches_any_constant(raw_commodity, {"BAG", "BIG","BIG BAG","Calcined", "Anthracite", "Coal"}):
-        commodity = "BIG BAGS"
-        total_rec_str = f"{rec_str}  Big Bags"
-        received_lines = [
-            "BIG BAGS FOUND TORN ON BOARD",
-            "BIG BAGS FOUND BROKEN ON BOARD",
-            "EMPTY BAG ON BOARD",
-        ]
+    family, _ = _classify_commodity(raw_commodity)
 
-    elif matches_any_constant(raw_commodity, {"PLYWOOD", "MDF", "CTP"}):
-        commodity = raw_commodity.upper()
-        received_lines = [
-            f"Crates of {commodity} Found Dismembered on board",
-            f"Crates of {commodity} wet on board (Packing and/or Contents)",
-            f"Crates of {commodity} moldy on board (Packing and/or Contents)",
-        ]
-        total_rec_str = f"{rec_str}  Crates of {commodity}"
+    # ----------------------------------------------------------------
+    # 1. Specific product families / KEYWORD_RULE canonical groups
+    # ----------------------------------------------------------------
+    if family == "BIG BAG":
+        return _big_bags_received_template(rec_str)
 
-    elif matches_any_constant(raw_commodity, {"PIPE", "TUBE" }):
+    if family in {"MDF", "CTP", "FFP", "MDF + PLYWOOD", "PLYWOOD"}:
+        return _crates_received_template(display_name, rec_str)
+
+    if family in {"PIPE", "TUBE"}:
         commodity = "TUBES"
         received_lines = ["TUBES.", "TUBES Damaged on board"]
         total_rec_str = f"{rec_str}  {commodity}"
+        return commodity, received_lines, total_rec_str
 
-    elif matches_any_constant(raw_commodity, {"BEAMS"}):
-        commodity = "Bundles of BEAMS"
-        received_lines = ["Bundles of BEAMS.",
-                          "Bundles of BEAMS Found Dismembered on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
+    if family == "COLIS":
+        return _simple_received_template(rec_str, commodity="COLIS")
 
-    elif matches_any_constant(raw_commodity, {"METAL SHEET"}):
-        commodity = "Bundles of METAL SHEET"
-        received_lines = ["Bundles of METAL SHEET.",
-                          "Bundles of METAL SHEET Found Dismembered on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
-    elif matches_any_constant(raw_commodity, {"formwork","steel moulds"}):
-        commodity = "Bundles of formwork"
-        received_lines = ["Bundles of formwork.",
-                          "Bundles of formwork Found Dismembered on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
-    
-    elif matches_any_constant(raw_commodity, {"FILE MACHINE", "FIL","STEEL WIRE","WIRE","FIL M"}):
+    if family == "POUTRELLE":
+        return _simple_received_template(rec_str, commodity="POUTRELLES")
+
+    if family == "CORNIERE":
+        return _simple_received_template(rec_str, commodity="CORNIERES")
+
+    if family in {"STEEL BEAMS", "BEAMS"}:
+        return _bundles_received_template(display_name, rec_str, bundle_label="BEAMS")
+
+    if family == "METAL SHEET":
+        return _bundles_received_template(display_name, rec_str, bundle_label="METAL SHEET")
+
+    if family == "FORMWORK":
+        return _bundles_received_template(display_name, rec_str, bundle_label="formwork")
+
+    if family == "FIL M":
         commodity = "FIL MACHINE"
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
+        return commodity, received_lines, total_rec_str
 
-    elif matches_any_constant(raw_commodity, {"COIL", "BOB", "BOBINE"}):
-        commodity = "COILS"
-        received_lines = ["Coils Found Rusty on board",
-                          "Coils Packaging damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
+    if family in {"COIL", "BOBINE"}:
+        return _coils_received_template(rec_str)
 
-    elif matches_any_constant(raw_commodity, {"WHITE WOOD", "BEECH WOOD", "RED WOOD"}):
-        commodity = "BUNDLES"
-        received_lines = [
-            f"Bundles of {raw_commodity} Found Dismembered on board",
-            f"Bundles of {raw_commodity} wet on board (Packing and/or Contents)",
-            f"Bundles of {raw_commodity} moldy on board (Packing and/or Contents)",
-        ]
-        total_rec_str = f"{rec_str}  Bundles of {raw_commodity}"
+    if family in {"WHITE WOOD", "BEECH WOOD", "RED WOOD"}:
+        return _lumber_received_template(display_name, rec_str)
 
-    elif matches_any_constant(raw_commodity, UNIT_CARGO_TYPES) and matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES):
-        commodity = "Units + Package"
-        received_lines = [commodity, f"{commodity} Damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
+    if family == "BRIDGE COMP":
+        return _bundles_received_template(display_name, rec_str)
 
-    elif matches_any_constant(raw_commodity, PACKAGE_CARGO_TYPES):
-        commodity = "package"
-        received_lines = [commodity, f"{commodity} Damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
+    # ----------------------------------------------------------------
+    # 2. Unit / package buckets (exhaustive KEYWORD_RULES + fragment
+    #    matching, as used by the genDebarq normalization helpers)
+    # ----------------------------------------------------------------
+    unit_hit = False
+    package_hit = False
 
-     # Handle UNIT cargo types (vehicles, equipment, trailers)
-    elif matches_any_constant(raw_commodity, UNIT_CARGO_TYPES):
-        commodity = "Unit"
-        received_lines = [commodity, f"{commodity} Damaged on board"]
-        total_rec_str = f"{rec_str}  Units"
-    
-    else:
-        commodity = raw_commodity if raw_commodity else "General Cargo"
-        received_lines = ["Packaging damaged on board"]
-        total_rec_str = f"{rec_str}  {commodity}"
-        
-    return commodity, received_lines, total_rec_str
+    # Avoid the Python quirk where an empty string is a substring of every
+    # constant ('' in 'BUS' is True), which would misclassify empty cells.
+    if raw_text:
+        unit_hit = matches_any_constant(raw_text, UNIT_CARGO_TYPES)
+        package_hit = matches_any_constant(raw_text, PACKAGE_CARGO_TYPES)
+
+    if family:
+        unit_hit = unit_hit or matches_any_constant(family, UNIT_CARGO_TYPES)
+        package_hit = package_hit or matches_any_constant(family, PACKAGE_CARGO_TYPES)
+
+    # Explicit unit commodities listed in COMMODITY_TYPES (CAMIONS,
+    # REMORQUES, EXCAVATEUR, CHARGEUR, ...) are not all present verbatim
+    # in UNIT_CARGO_TYPES, so treat the non-goods portion of COMMODITY_TYPES
+    # as unit cargo.
+    if family in COMMODITY_TYPES and family not in GOODS__TYPES:
+        unit_hit = True
+
+    if unit_hit and package_hit:
+        return _unit_package_received_template(rec_str)
+    if package_hit:
+        return _package_received_template(rec_str)
+    if unit_hit:
+        return _unit_received_template(rec_str)
+
+    # ----------------------------------------------------------------
+    # 3. General cargo fallback
+    # ----------------------------------------------------------------
+    return _general_cargo_received_template(rec_str, display_name)
+
+
+def computecommodity_and_received_lines(raw_commodity: str, rec_str: str):
+    """
+    Public compatibility wrapper for the non-underscore function name.
+    Retains the original signature and return tuple.
+    """
+    return _compute_commodity_and_received_lines(raw_commodity, rec_str)
 
 
 def _fill_entry_table(
