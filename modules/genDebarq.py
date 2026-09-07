@@ -407,7 +407,8 @@ def gen_table_deb(filepath=None):
     # ─── Rest of the function (ws / deb sheet) is unchanged ──────────────────
     style_header_cell(ws, ship_name_placeholder)
 
-    specific_keywords = GOODS__TYPES
+    # Only genuine structural break-bulk families get individual tables
+    specific_keywords = [k for k in GOODS__TYPES if k.upper() not in {"COLIS", "COLI", "PACKAGE", "PACKAGES"}]
 
     start_col = 1
     all_matched_indices = pd.Index([])
