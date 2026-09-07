@@ -305,10 +305,10 @@ def gen_table_deb(filepath=None):
 
     list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
 
-    source_df = group_sourcefile_by_client(filepath, skip_units_packages=True, bl_aggregated=False)
+    source_df = group_sourcefile_by_client(filepath, skip_units_packages=False, bl_aggregated=True)
     
     source_df.columns = source_df.columns.str.strip().str.upper()
-    st.dataframe(source_df)
+    st.dataframe(source_df)  
 
     list_bl.columns = list_bl.columns.str.strip().str.upper()
     
