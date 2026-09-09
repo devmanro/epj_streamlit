@@ -29,6 +29,7 @@ from tools.tools import (
     show_mapping_dialog,
     clean_dataframe_types,
     get_display_name,
+    expand_manifest_packages,
 )
 from assets.constants.constants import UPLOAD_DIR, COLUMNS
 from infrastructure.database.db_importer import (
@@ -226,6 +227,18 @@ def _render_import_panel():
                 st.error(f"Cannot read file: {exc}")
                 _sfm_clear_upload()
                 return
+
+        with st.spinner("Pre-aligning manifest blocks (filtering + package expansion)..."):
+            df_raw, pre_report = expand_manifest_packages(df_raw, final_mp)
+
+        if pre_report.get("rows_added") or pre_report.get("client_cells_filled"):
+            st.toast(f"📦 Pre-alignment: {pre_report['note']}")
+        if not pre_report.get("ok"):
+            st.toast(f"📦 Pre-alignment skipped: {pre_report.get('note')}")
+        for _w in (pre_report.get("warnings") or [])[:3]:
+            st.toast(f"📦 Pre-alignment: {_w}")
+        if len(pre_report.get("warnings") or []) > 3:
+            st.toast(f"📦 Pre-alignment: +{len(pre_report['warnings']) - 3} more warning(s)")
 
         with st.spinner("Aligning columns and running cargo-type prediction..."):
             try:
