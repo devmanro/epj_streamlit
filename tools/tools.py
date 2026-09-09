@@ -1,3 +1,4 @@
+from pandas.core.interchange import dataframe
 import streamlit as st
 import re
 import os
@@ -19,6 +20,7 @@ from assets.constants.constants import (
     COL_QUANTITE,
     COL_TONAGE,
     COL_BL,
+    COL_CHASSIS_SERIAL,
     DB_PATH, 
     COLUMNS,
     # add COL_VALUES here if you have such a column name
@@ -391,9 +393,11 @@ def find_type_and_produit(designation):
     # Step 3: Also check cargo_type itself against category sets
     if cargo_type is not None:
         if not is_unit:
-            is_unit = matches_any_constant(cargo_type, UNIT_CARGO_TYPES)
+            unit_matched, _ = matches_any_constant(cargo_type, UNIT_CARGO_TYPES)
+            is_unit = unit_matched
         if not is_package:
-            is_package = matches_any_constant(cargo_type, PACKAGE_CARGO_TYPES)
+            pkg_matched, _ = matches_any_constant(cargo_type, PACKAGE_CARGO_TYPES)
+            is_package = pkg_matched
 
     # Step 4: Determine PRODUIT
     if is_package and is_unit:
@@ -487,19 +491,63 @@ def _normalize_match_text(value):
     return re.sub(r"\s+", " ", text).strip()
 
 
+# Placeholders that appear in CHASSIS/SERIAL but are not real serials.
+_CHASSIS_PLACEHOLDERS = {"", "-", "--", "—", "–", "N/A", "NA", "NONE", "NULL", "NAN", ".", "/"}
+
+# Structural / break-bulk families — never bucketed as UNITS/PACKAGES.
+_STRUCTURAL_TYPE_LABELS = {
+    "CTP", "BOBINE", "PIPE", "POUTRELLE", "CORNIERE",
+    "MDF", "PLYWOOD", "FFP", "MDF + PLYWOOD",
+    "BEAMS", "STEEL BEAMS", "METAL SHEET",
+    "FORMWORK", "FIL M", "BRIDGE COMP", "BIG BAG",
+    "COIL", "TUBE", "WHITE WOOD", "BEECH WOOD", "RED WOOD",
+}
+
+# French / English equipment names commonly found in source files (singular+plural stems).
+_UNIT_EQUIPMENT_STEMS = {
+    "CAMION", "BULLDOZER", "EXCAVATEUR", "EXCAVATOR", "CHARGEUR", "LOADER",
+    "REMORQUE", "TRAILER", "FINISSEUR", "COMPACTEUR", "NIVELEUSE", "GRADER",
+    "GRUE", "CRANE", "CHARIOT", "FORKLIFT", "BUS", "MINIBUS", "TRACTEUR",
+    "PELLE", "ROLLER", "MIXER", "BENNE", "ENGIN", "LOURD", "NIVEL",
+}
+
+
+def _is_blank_chassis(value) -> bool:
+    """True when a chassis/serial cell is empty or a non-serial placeholder (e.g. '-')."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return True
+    if pd.isna(value):
+        return True
+    text = str(value).strip().upper()
+    return text in _CHASSIS_PLACEHOLDERS
+
+
+def _count_real_chassis(series) -> int:
+    """Count non-empty, non-placeholder chassis/serial values."""
+    if series is None:
+        return 0
+    count = 0
+    for val in series:
+        if not _is_blank_chassis(val):
+            count += 1
+    return count
+
+
 def _is_package_type(text):
     """
     Check if text denotes a package/colis in French or English, singular or plural.
     e.g. COLIS, COLI, PACKAGE, PACKAGES, PKG, PKGS, CAISSE, CAISSES, CARTON, CARTONS, BOX, BOXES.
     """
-    norm = _normalize_match_text(text)
+    matched, norm = matches_any_constant(text, PACKAGE_CARGO_TYPES)
     if not norm:
         return False
+    if matched:
+        return True
     words = norm.split()
     package_keywords = {
         "COLIS", "COLI", "PACKAGE", "PACKAGES", "PKG", "PKGS",
         "CAISSE", "CAISSES", "CARTON", "CARTONS", "BOX", "BOXES",
-        "SPARE_PARTS", "SPARE PART", "SPARE PARTS"
+        "SPARE_PARTS", "SPARE PART", "SPARE PARTS",
     }
     for w in words:
         if w in package_keywords:
@@ -511,17 +559,67 @@ def _is_unit_type(text):
     """
     Check if text denotes a unit/unite in French or English, singular or plural,
     or matches unit machinery/vehicles.
-    e.g. UNIT, UNITS, UNITE, UNITES, or machinery categories.
+    e.g. UNIT, UNITS, UNITE, UNITES, CAMIONS, EXCAVATEURS, BULLDOZERS, …
     """
-    norm = _normalize_match_text(text)
+    matched, norm = matches_any_constant(text, UNIT_CARGO_TYPES)
     if not norm:
         return False
+    if matched:
+        return True
+
     words = norm.split()
     unit_keywords = {"UNIT", "UNITS", "UNITE", "UNITES"}
     for w in words:
         if w in unit_keywords:
             return True
+
+    # French/English equipment stems (EXCAVATEURS, CHARGEURS, REMORQUES, FINISSEUR, …)
+    compact = norm.replace(" ", "")
+    for stem in _UNIT_EQUIPMENT_STEMS:
+        if compact.startswith(stem) or stem in words or stem in compact:
+            return True
+
+    # COMMODITY_TYPES equipment entries that are not structural goods
+    for commodity in COMMODITY_TYPES:
+        c_norm = _normalize_match_text(commodity)
+        if not c_norm or c_norm in _STRUCTURAL_TYPE_LABELS:
+            continue
+        if c_norm in norm or norm in c_norm:
+            return True
+
     return False
+
+
+def _is_unit_or_package_bucket(type_value) -> bool:
+    """True when a (possibly already-normalized) TYPE belongs to the unit/package family."""
+    if type_value is None or (isinstance(type_value, float) and pd.isna(type_value)):
+        return False
+    text = _normalize_commodity_text(type_value)
+    if not text:
+        return False
+    if text in {"UNITS", "PACKAGES", "UNITS + PACKAGES", "UNITS + PACKAGE"}:
+        return True
+    if text in _STRUCTURAL_TYPE_LABELS:
+        return False
+    return _is_unit_type(text) or _is_package_type(text)
+
+
+def _decide_client_unit_package_label(has_unit: bool, has_pkg: bool, quantite: int, chassis_count: int) -> str:
+    """
+    Decide UNITS / PACKAGES / UNITS + PACKAGES for one client from their
+    unit/package rows only (structural commodities are handled separately).
+
+    Combined only when the client has both unit-type and package-type cargo.
+    Chassis count alone does not invent packages (source files often list
+    chassis on qty=0 rows and the quantity on a separate row).
+    """
+    if has_unit and has_pkg:
+        return "UNITS + PACKAGES"
+    if has_unit or chassis_count > 0:
+        return "UNITS"
+    if has_pkg:
+        return "PACKAGES"
+    return "UNITS"
 
 
 def _is_unit_package_combined(value):
@@ -529,12 +627,11 @@ def _is_unit_package_combined(value):
     text = _normalize_commodity_text(value)
     if not text:
         return False
-    # Normalise '+' spacing so 'UNITS + PACKAGES' and 'UNITS+PACKAGES' both work.
     text = re.sub(r"\s*\+\s*", " + ", text)
     text = re.sub(r"\s+", " ", text).strip()
     has_unit = ("UNIT" in text or "UNITE" in text)
     has_pkg = ("PACKAGE" in text or "COLI" in text or "CAISSE" in text or "PKG" in text)
-    return has_unit and has_pkg
+    return bool(has_unit and has_pkg)
 
 
 def _matches_keyword(text, keyword):
@@ -582,7 +679,6 @@ def _classify_commodity(raw_commodity):
         "WHITE WOOD",
         "BEECH WOOD",
         "RED WOOD",
-        "BRIDGE COMP",
     ]
     # Sort by normalized length so compound entries are checked first
     known_families.sort(key=lambda family: len(_normalize_commodity_text(family)), reverse=True)
@@ -736,44 +832,45 @@ def _compute_commodity_and_received_lines(raw_commodity: str, rec_str: str):
 
     if family == "METAL SHEET":
         return _bundles_received_template(display_name, rec_str, bundle_label="METAL SHEET")
-
-    if family == "FORMWORK":
-        return _bundles_received_template(display_name, rec_str, bundle_label="formwork")
-
-    if family == "FIL M":
+ 
+    if family in {"FIL M", "FILM", "FIL MACHINE"}:
         commodity = "FIL MACHINE"
         received_lines = ["RLX FOUND DISMEMBERED ON BOARD"]
         total_rec_str = f"{rec_str}  {commodity}"
         return commodity, received_lines, total_rec_str
 
-    if family in {"COIL", "BOBINE", "BOB"}:
+    if family in {"COILS", "BOBINES", "BOB"}:
         return _coils_received_template(rec_str)
 
     if family in {"WHITE WOOD", "BEECH WOOD", "RED WOOD"}:
         return _lumber_received_template(display_name, rec_str)
 
-    if family == "BRIDGE COMP":
-        return _bundles_received_template(display_name, rec_str)
+    # if family == "FORMWORK":
+    #     return _bundles_received_template(display_name, rec_str, bundle_label="formwork")
+
+
+    # if family == "BRIDGE COMP":
+    #     return _bundles_received_template(display_name, rec_str)
 
     # ----------------------------------------------------------------
     # 2. Unit / package buckets (multilingual + singular/plural)
     # ----------------------------------------------------------------
-    if _is_unit_package_combined(raw_text):
-        return _unit_package_received_template(rec_str)
+    # if _is_unit_package_combined(raw_text):
+    #     return _unit_package_received_template(rec_str)
 
     unit_hit = _is_unit_type(raw_text) or _is_unit_type(family or "")
     package_hit = _is_package_type(raw_text) or _is_package_type(family or "")
 
-    if raw_text:
-        unit_hit = unit_hit or matches_any_constant(raw_text, UNIT_CARGO_TYPES)
-        package_hit = package_hit or matches_any_constant(raw_text, PACKAGE_CARGO_TYPES)
+    # if raw_text:
+    #     unit_hit = unit_hit or matches_any_constant(raw_text, UNIT_CARGO_TYPES)
+    #     package_hit = package_hit or matches_any_constant(raw_text, PACKAGE_CARGO_TYPES)
 
-    if family:
-        unit_hit = unit_hit or matches_any_constant(family, UNIT_CARGO_TYPES)
-        package_hit = package_hit or matches_any_constant(family, PACKAGE_CARGO_TYPES)
+    # if family:
+    #     unit_hit = unit_hit or matches_any_constant(family, UNIT_CARGO_TYPES)
+    #     package_hit = package_hit or matches_any_constant(family, PACKAGE_CARGO_TYPES)  
 
-    if family in COMMODITY_TYPES and family not in GOODS__TYPES:
-        unit_hit = True
+    # if family in COMMODITY_TYPES and family not in GOODS__TYPES:
+    #     unit_hit = True
 
     if unit_hit and package_hit:
         return _unit_package_received_template(rec_str)
@@ -916,25 +1013,29 @@ def matches_any_constant(type_str, constants_set):
     """
     type_str_upper = _normalize_match_text(type_str)
     if not type_str_upper:
-        return False
+        return False, ""
 
-    for constant in constants_set:
+    for constant in constants_set:  
         constant_upper = _normalize_match_text(constant)
         if not constant_upper:
             continue
         if constant_upper in type_str_upper:
-            return True
+            return True, type_str_upper
         if type_str_upper in constant_upper:
-            return True
-    return False
+            return True, type_str_upper
+    return False, type_str_upper
 
 
-def normalize_type(type_value):
+def normalize_type(type_value, has_chassis=False, quantite=0, chassis_count=0):
     """
     Normalize TYPE value to standard categories.
     Recognizes French and English, singular and plural.
-    Groups units and packages into 'UNITS + PACKAGES' so the same client
-    has all units + packages aggregated under one entry.
+    Groups units and packages into 'UNITS + PACKAGES' or 'UNITS' or 'PACKAGES'
+    using keywords or chassis and quantity comparisons.
+
+    When called without chassis context (defaults), unit/package rows become
+    UNITS or PACKAGES only. Combined UNITS + PACKAGES is decided later at
+    client level in group_sourcefile_by_client.
     """
     if pd.isna(type_value):
         return None
@@ -943,11 +1044,15 @@ def normalize_type(type_value):
     if not type_str:
         return type_str
 
-    # 1. Combined unit+package group
-    if _is_unit_package_combined(type_str):
+    # Already-normalized buckets
+    if type_str in {"UNITS + PACKAGES", "UNITS + PACKAGE"}:
         return "UNITS + PACKAGES"
+    if type_str == "UNITS":
+        return "UNITS"
+    if type_str == "PACKAGES":
+        return "PACKAGES"
 
-    # 2. Structural/goods families first (BOBINE/COIL, PIPE/TUBE, POUTRELLE, CORNIERE, CTP, MDF, etc.)
+    # Structural/goods families first (BOBINE/COIL, PIPE/TUBE, POUTRELLE, CORNIERE, CTP, MDF, etc.)
     if _matches_keyword(type_str, "CTP"):
         return "CTP"
     if _matches_keyword(type_str, "BOBINE") or _matches_keyword(type_str, "BOB") or _matches_keyword(type_str, "COIL"):
@@ -958,19 +1063,13 @@ def normalize_type(type_value):
         return "POUTRELLE"
     if _matches_keyword(type_str, "CORNIERE") or _matches_keyword(type_str, "CORNIER"):
         return "CORNIERE"
+    if _matches_keyword(type_str, "COFFRAGE") or _matches_keyword(type_str, "FORMWORK"):
+        return "FORMWORK"
 
     structural_families = [
-        "MDF + PLYWOOD",
-        "MDF",
-        "PLYWOOD",
-        "FFP",
-        "BEAMS",
-        "STEEL BEAMS",
-        "METAL SHEET",
-        "FORMWORK",
-        "FIL M",
-        "BRIDGE COMP",
-        "BIG BAG",
+        "MDF + PLYWOOD", "MDF", "PLYWOOD", "FFP",
+        "BEAMS", "STEEL BEAMS", "METAL SHEET",
+        "FORMWORK", "FIL M", "BRIDGE COMP", "BIG BAG",
     ]
     structural_families.sort(
         key=lambda family: len(_normalize_commodity_text(family)),
@@ -980,20 +1079,25 @@ def normalize_type(type_value):
         if _matches_keyword(type_str, family):
             return family.upper()
 
-    # 3. Units and Packages classification (multilingual + singular/plural)
-    is_pkg = _is_package_type(type_str) or matches_any_constant(type_str, PACKAGE_CARGO_TYPES)
-    is_unit = _is_unit_type(type_str) or matches_any_constant(type_str, UNIT_CARGO_TYPES)
-
-    family, _ = _classify_commodity(type_str)
-    if family:
-        is_pkg = is_pkg or _is_package_type(family) or matches_any_constant(family, PACKAGE_CARGO_TYPES)
-        is_unit = is_unit or _is_unit_type(family) or matches_any_constant(family, UNIT_CARGO_TYPES)
-
-    if family in COMMODITY_TYPES and family not in GOODS__TYPES:
-        is_unit = True
+    # Units and Packages classification
+    is_unit = _is_unit_type(type_str)
+    is_pkg = _is_package_type(type_str)
 
     if is_unit or is_pkg:
-        return "UNITS + PACKAGES"
+        # Optional chassis/quantity context (legacy / single-row callers)
+        if has_chassis:
+            if quantite > chassis_count:
+                return "UNITS + PACKAGES"
+            if is_unit or chassis_count > 0:
+                return "UNITS"
+            if is_pkg:
+                return "PACKAGES"
+        if is_unit and is_pkg:
+            return "UNITS + PACKAGES"
+        if is_unit:
+            return "UNITS"
+        if is_pkg:
+            return "PACKAGES"
 
     return type_str
 
@@ -1051,9 +1155,7 @@ def _canonical_sort_group(type_value):
     if not text:
         return "OTHER"
 
-    # Combined unit+package label
-    if _is_unit_package_combined(text):
-        return "UNITS + PACKAGES"
+   
 
     # Specified structural commodities and their aliases (FR + EN, sing + plur)
     if _matches_keyword(text, "CTP"):
@@ -1090,13 +1192,10 @@ def _canonical_sort_group(type_value):
 
     # Generic unit / package buckets
     family, _ = _classify_commodity(text)
-    is_unit = _is_unit_type(text) or _is_unit_type(family or "") or matches_any_constant(family or text, UNIT_CARGO_TYPES)
-    is_package = _is_package_type(text) or _is_package_type(family or "") or matches_any_constant(family or text, PACKAGE_CARGO_TYPES)
+    is_unit = _is_unit_type(text) or _is_unit_type(family or "")
+    is_package = _is_package_type(text) or _is_package_type(family or "")
 
-    if family in COMMODITY_TYPES and family not in GOODS__TYPES:
-        is_unit = True
-
-    if is_unit and is_package:
+    if text in {"UNITS + PACKAGES", "UNITS + PACKAGE"} or (is_unit and is_package):
         return "UNITS + PACKAGES"
     if is_unit:
         return "UNITS"
@@ -1148,12 +1247,83 @@ def group_sourcefile_by_client(
     # Short B/L into the same column
     if COL_BL in df.columns:
         df[COL_BL] = df[COL_BL].apply(_shorten_bl_code)
-    
-    # Normalize TYPE column before grouping
-    if COL_TYPE in df.columns:
-        df[COL_TYPE] = df[COL_TYPE].apply(normalize_type)
 
-    # Base aggregation
+    # ── Fill missing TYPE from PRODUIT before normalization ──────────────
+    if COL_TYPE in df.columns and COL_PRODUIT in df.columns:
+        missing_type_mask = df[COL_TYPE].isna() | (df[COL_TYPE].astype(str).str.strip() == '')
+        df.loc[missing_type_mask, COL_TYPE] = df.loc[missing_type_mask, COL_PRODUIT]
+        has_chassis_col = COL_CHASSIS_SERIAL in df.columns
+
+        # PASS 1 ─ keyword-only normalize (no chassis context)
+        # e.g. BULLDOZER/CAMION/EXCAVATEURS → UNITS, COLIS → PACKAGES
+        df["_norm_type"] = df[COL_TYPE].apply(lambda v: normalize_type(v))
+
+        # PASS 2 ─ for each CLIENT, merge ALL unit/package rows into one label:
+        # UNITS / PACKAGES / UNITS + PACKAGES. Structural rows keep Pass-1 type.
+        def _apply_client_buckets(client_df: pd.DataFrame) -> pd.Series:
+            
+            # Check TYPE column for unit/package
+            type_mask = client_df["_norm_type"].apply(_is_unit_or_package_bucket)
+            
+            # Also check PRODUIT column as fallback for rows where TYPE was empty
+            produit_mask = pd.Series(False, index=client_df.index)
+            if COL_PRODUIT in client_df.columns:
+                produit_mask = client_df[COL_PRODUIT].apply(
+                    lambda v: _is_unit_or_package_bucket(normalize_type(v)) 
+                            if pd.notna(v) and str(v).strip() != '' 
+                            else False
+                )
+            
+            unit_pkg_mask = type_mask | produit_mask  # ← combine both
+            labels = client_df["_norm_type"].copy()
+
+            if not unit_pkg_mask.any():
+                return labels
+
+            subset = client_df.loc[unit_pkg_mask]
+            quantite = int(subset[COL_QUANTITE].sum()) if COL_QUANTITE in subset.columns else 0
+            chassis_count = (
+                _count_real_chassis(subset[COL_CHASSIS_SERIAL]) if has_chassis_col else 0
+            )
+
+            has_unit = False
+            has_pkg = False
+            for idx, row in subset.iterrows():
+                t_norm = _normalize_commodity_text(row["_norm_type"])
+                p_norm = _normalize_commodity_text(row.get(COL_PRODUIT, "")) if COL_PRODUIT in subset.columns else ""
+                
+                # Check TYPE
+                if _is_unit_type(t_norm) or t_norm in {"UNITS", "UNITS + PACKAGES"}:
+                    has_unit = True
+                if _is_package_type(t_norm) or t_norm in {"PACKAGES", "UNITS + PACKAGES"}:
+                    has_pkg = True
+                
+                # Check PRODUIT as fallback
+                if _is_unit_type(p_norm):
+                    has_unit = True
+                if _is_package_type(p_norm):
+                    has_pkg = True
+                
+                # Chassis = unit
+                if has_chassis_col and not _is_blank_chassis(row.get(COL_CHASSIS_SERIAL)):
+                    has_unit = True
+
+            final_label = _decide_client_unit_package_label(
+                has_unit=has_unit,
+                has_pkg=has_pkg,
+                quantite=quantite,
+                chassis_count=chassis_count,
+            )
+            labels.loc[unit_pkg_mask] = final_label
+            return labels
+
+        df[COL_TYPE] = (
+            df.groupby(COL_CLIENT, dropna=False, group_keys=False)
+            .apply(_apply_client_buckets, include_groups=False)
+        )
+        df = df.drop(columns=["_norm_type"])
+
+    # ── Aggregation ───────────────────────────────────────────────────────
     agg_dict = {
         COL_QUANTITE: "sum",
         COL_TONAGE: "sum",
@@ -1161,33 +1331,28 @@ def group_sourcefile_by_client(
     }
 
     skip_cols = [COL_CLIENT, COL_QUANTITE, COL_TONAGE, COL_BL, COL_PRODUIT, COL_TYPE]
-    
+
     if not bl_aggregated:
         skip_cols.remove(COL_BL)
         agg_dict.pop(COL_BL, None)
 
-    # For all other columns, keep first non-null value
     for col in COLUMNS:
         if col in skip_cols:
             continue
-        
         if col in df.columns:
             agg_dict[col] = first_non_null
-           
+
     grouped = df.groupby([COL_CLIENT, COL_TYPE], as_index=False).agg(agg_dict)
 
-    # Apply the shared commodity ordering used by both document types
-    grouped['sort_priority'] = grouped[COL_TYPE].apply(_apply_commodity_sort)
+    grouped["sort_priority"] = grouped[COL_TYPE].apply(_apply_commodity_sort)
 
-    # Sort
     sorted_grouped = grouped.sort_values(
-        by=['sort_priority', COL_CLIENT],
+        by=["sort_priority", COL_CLIENT],
         ascending=[True, True],
-        na_position='last'
+        na_position="last",
     ).reset_index(drop=True)
 
-    # Clean up
-    sorted_grouped = sorted_grouped.drop(columns=['sort_priority'])
-    
+    sorted_grouped = sorted_grouped.drop(columns=["sort_priority"])
+
     return sorted_grouped
 

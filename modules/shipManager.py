@@ -40,7 +40,7 @@ from infrastructure.database.db_importer import (
     replace_vessel_lines,
 )
 from modules.json_to_excel import extract_to_excel_flattened as gen_excel
-from modules.Bl_tracking import render_tracking_ui
+# from modules.Bl_tracking import render_tracking_ui
 
 # downstream generators
 from modules.genDebarq import gen_table_deb
@@ -64,7 +64,7 @@ def render_single_file_manager(clear_downloads_func):
 
     with tab_track:
         st.subheader("📊 Landing / Stock Tracking")
-        render_tracking_ui(None, None)
+        # render_tracking_ui(None, None)
 
 
 # =============================================================================
