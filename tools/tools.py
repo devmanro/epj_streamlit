@@ -1370,9 +1370,6 @@ def group_sourcefile_by_client(
 
 
 
-
-
-
 def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
     """
     Pre-process a source file (xlsx / json) BEFORE mapping.
