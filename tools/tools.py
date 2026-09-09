@@ -1356,3 +1356,185 @@ def group_sourcefile_by_client(
 
     return sorted_grouped
 
+
+
+
+
+
+def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Pre-process a source file (xlsx / json) BEFORE mapping.
+
+    For each BL group:
+      - keep EVERY chassis row as-is (all original columns, no edits)
+      - if nombre_colis > chassis_count, and no COLIS row already exists
+        for that client in the group, insert one extra COLIS row
+        immediately after the last chassis row
+
+    Output has the exact same columns (names + order) as the input.
+    The only structural change is the extra COLIS row.
+    """
+
+    if input_df is None or input_df.empty:
+        return input_df.copy() if input_df is not None else pd.DataFrame()
+
+    # ── Resolve source columns (mapped names OR raw file headers) ─────────
+    def _resolve(fallbacks):
+        lower_map = {str(c).strip().lower(): c for c in input_df.columns}
+        for name in fallbacks:
+            if name is None:
+                continue
+            if name in input_df.columns:
+                return name
+            key = str(name).strip().lower()
+            if key in lower_map:
+                return lower_map[key]
+        return None
+
+    col_bl = _resolve([
+        COL_BL, "N° BL", "N°BL", "BL", "B/L", "bl",
+    ])
+    col_qty = _resolve([
+        COL_QUANTITE, "nombre colis", "nombre coli", "nbColis", "nb_colis",
+    ])
+    col_chassis = _resolve([
+        COL_CHASSIS_SERIAL, "Némuro de chassis", "Numero de chassis",
+        "Numéro de chassis", "CHASSIS/SERIAL", "chassis",
+    ])
+    col_client = _resolve([COL_CLIENT, "Client", "client"])
+    col_type = _resolve([COL_TYPE, "PRODUITS", "TYPE", "type"])
+    col_produit = _resolve([
+        COL_PRODUIT, "Détails PRODUITS", "PRODUIT", "details",
+    ])
+    col_tonage = _resolve([
+        COL_TONAGE, "Poids brute", "Poids brut", "TONAGE", "poidsBrute",
+    ])
+
+    if col_bl is None:
+        return input_df.copy()
+
+    input_columns = list(input_df.columns)
+
+    def _cell(row, col):
+        if col is None or col not in row.index:
+            return ""
+        val = row[col]
+        if val is None or (isinstance(val, float) and pd.isna(val)) or pd.isna(val):
+            return ""
+        return val
+
+    def _text(row, col):
+        return str(_cell(row, col) or "").strip()
+
+    def _is_colis_value(value) -> bool:
+        t = str(value or "").strip().upper()
+        return t in {
+            "COLIS", "COLI", "PACKAGE", "PACKAGES",
+            "PKG", "PKGS", "CAISSE", "CAISSES",
+        }
+
+    def _has_chassis(row) -> bool:
+        if col_chassis is None:
+            return False
+        return not _is_blank_chassis(_cell(row, col_chassis))
+
+    def _to_int(value) -> int:
+        try:
+            text = str(value or "").strip()
+            if text == "":
+                return 0
+            return int(float(text))
+        except (ValueError, TypeError):
+            return 0
+
+    def _row_as_dict(row) -> dict:
+        """Exact copy of every input column, original values untouched."""
+        return {col: row[col] for col in input_columns}
+
+    def _blank_row() -> dict:
+        """Same columns as input, empty values — used only for the extra COLIS row."""
+        return {col: "" for col in input_columns}
+
+    # ── Step 1: Group rows by BL (same BL, or empty-BL sub-rows) ──────────
+    # Handles both:
+    #   JS style  : header BL filled, sub-rows BL empty
+    #   Excel style: BL repeated on every chassis row
+    bl_order = []
+    bl_groups = {}  # bl → [index, ...]
+
+    current_bl = None
+    for idx, row in input_df.iterrows():
+        bl = _text(row, col_bl)
+        if bl != "":
+            if bl not in bl_groups:
+                bl_groups[bl] = []
+                bl_order.append(bl)
+            current_bl = bl
+            bl_groups[bl].append(idx)
+        elif current_bl is not None:
+            bl_groups[current_bl].append(idx)
+
+    if not bl_order:
+        return input_df.copy()
+
+    output_rows = []
+
+    # ── Step 2: Process each BL group ─────────────────────────────────────
+    for this_bl in bl_order:
+        group_indices = bl_groups[this_bl]
+        group_rows = [input_df.loc[i] for i in group_indices]
+        header_row = group_rows[0]
+
+        nombre_colis = _to_int(_cell(header_row, col_qty)) if col_qty else 0
+
+        chassis_rows = [r for r in group_rows if _has_chassis(r)]
+        other_rows   = [r for r in group_rows if not _has_chassis(r)]
+        chassis_count = len(chassis_rows)
+        colis_remains = nombre_colis - chassis_count
+
+        already_has_colis = False
+        client_name = _text(header_row, col_client).upper()
+        for r in group_rows:
+            same_client = _text(r, col_client).upper() == client_name
+            type_is_colis = _is_colis_value(_cell(r, col_type))
+            produit_is_colis = _is_colis_value(_cell(r, col_produit))
+            if same_client and (type_is_colis or produit_is_colis):
+                already_has_colis = True
+                break
+
+        # ── CASE 1: No chassis → copy every row of the group as-is ───────
+        if chassis_count == 0:
+            for r in group_rows:
+                output_rows.append(_row_as_dict(r))
+            continue
+
+        # ── CASE 2: Has chassis → keep ALL chassis rows untouched ─────────
+        for r in chassis_rows:
+            output_rows.append(_row_as_dict(r))
+
+        # Keep any already-existing non-chassis rows (e.g. a COLIS row
+        # that was already in the source file) — still no edits
+        for r in other_rows:
+            output_rows.append(_row_as_dict(r))
+
+        # ── Insert extra COLIS row only when needed ───────────────────────
+        if colis_remains > 0 and not already_has_colis:
+            extra = _blank_row()
+            extra[col_bl] = this_bl
+            if col_qty:
+                extra[col_qty] = colis_remains
+            if col_tonage:
+                extra[col_tonage] = 0
+            if col_client:
+                extra[col_client] = _cell(header_row, col_client)
+            if col_type:
+                extra[col_type] = "COLIS"
+            if col_chassis:
+                extra[col_chassis] = ""
+            if col_produit:
+                extra[col_produit] = _cell(header_row, col_produit)
+            output_rows.append(extra)
+
+    output_df = pd.DataFrame(output_rows, columns=input_columns)
+    return output_df.reset_index(drop=True)
+

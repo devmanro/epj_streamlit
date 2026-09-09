@@ -106,18 +106,6 @@ def docGeneration(clear_downloads_func):
 
             final_mp = st.session_state.get("final_mapping", {})
 
-            # Pre-alignment: filter empty rows, attach continuation rows to
-            # their client block, align nombre colis / poids brute and expand
-            # implicit package quantities into explicit COLIS rows.
-            df_raw, pre_report = expand_manifest_packages(df_raw, final_mp)
-            if pre_report.get("rows_added") or pre_report.get("client_cells_filled"):
-                st.toast(f"📦 Pre-alignment: {pre_report['note']}")
-            if not pre_report.get("ok"):
-                st.toast(f"📦 Pre-alignment skipped: {pre_report.get('note')}")
-            if pre_report.get("warnings"):
-                # st.rerun() below would wipe inline warnings → show them after.
-                st.session_state.prealign_warnings = pre_report["warnings"]
-
             # success=False
             molded_df, success = align_data(df_raw, final_mp)
             if os.path.exists(file_path):
@@ -142,9 +130,7 @@ def docGeneration(clear_downloads_func):
 
         del df_raw
 
-        # Pre-alignment warnings stashed before the rerun (shown once)
-        for _w in st.session_state.pop("prealign_warnings", []) or []:
-            st.warning(f"📦 Pre-alignment: {_w}")
+        
 
         # CRUD Operations
         st.write(f"**Editing:** `{st.session_state.selected_file}`")
