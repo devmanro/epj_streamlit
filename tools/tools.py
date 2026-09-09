@@ -154,8 +154,20 @@ def align_data(uploaded_df, mapping):
             # --- 4. APPLY predictions ---
             # predictions is expected to be a list of dicts:
             # [{"cargo_type": "COIL", "produit": "UNIT"}, ...]
-            df_aligned[COL_TYPE]    = [p.get("Produits", None) for p in predictions]
-            df_aligned[COL_PRODUIT] = [p.get("Details", None)    for p in predictions]
+            # The API may return fewer predictions than rows if it skips blank
+            # / unknown marchandise values — pad the tail so an index-length
+            # mismatch never aborts the whole import (which would otherwise
+            # leave every row without TYPE / PRODUIT).
+            n_rows = len(df_aligned)
+            if len(predictions) >= n_rows:
+                type_vals = [p.get("Produits", None) for p in predictions[:n_rows]]
+                prod_vals = [p.get("Details", None)   for p in predictions[:n_rows]]
+            else:
+                pad = [None] * (n_rows - len(predictions))
+                type_vals = [p.get("Produits", None) for p in predictions] + pad
+                prod_vals = [p.get("Details", None)   for p in predictions] + pad
+            df_aligned[COL_TYPE]    = type_vals
+            df_aligned[COL_PRODUIT] = prod_vals
 
             # --- 5. REINSERT: Put back original values where they were not null ---
             if orig_type is not None:
@@ -1379,6 +1391,9 @@ def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
         return input_df.copy() if input_df is not None else pd.DataFrame()
 
     # ── Resolve source columns (mapped names OR raw file headers) ─────────
+    # Column names come from the COL_* constants in assets/constants/constants.py;
+    # the fallback strings are the raw / French file headers we also accept so
+    # the function keeps working on source files not yet re-mapped to the schema.
     def _resolve(fallbacks):
         lower_map = {str(c).strip().lower(): c for c in input_df.columns}
         for name in fallbacks:
