@@ -246,8 +246,7 @@ def _render_import_panel():
             molded_df = df_raw
 
         with st.spinner("Reindexing to standard schema..."):
-            colis_mask = df_raw.get(COL_TYPE, pd.Series()).astype(str).str.upper().str.contains("COLIS|COLI|PACKAGE")
-            molded_df.loc[colis_mask, COL_TYPE] = df_raw.loc[colis_mask, COL_TYPE]
+           
             df_out = molded_df.reindex(columns=COLUMNS).fillna("-")
             mapped_target_cols = set(final_mp.values()) if final_mp else set()
             unmapped_cols = [
