@@ -5,7 +5,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
-
 from assets.constants.constants import (
     PATH_DEBRQ,
     COMMODITY_TYPES,
@@ -157,9 +156,12 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
     # base_date = product_data[COL_DATE].iloc[0] if not product_data[COL_DATE].empty else datetime.now()
     # Ensure base_date is a datetime object, not a string
     # base_date = pd.to_datetime(product_data[COL_DATE].iloc[0]) if not product_data[COL_DATE].empty else datetime.now()
-    base_date = pd.to_datetime(product_data[COL_DATE].iloc[0], errors='coerce')
-    if pd.isna(base_date):
-        base_date = datetime.now()
+    
+    base_date = datetime.now()
+    if not product_data[COL_DATE].empty:
+        parsed_date = pd.to_datetime(product_data[COL_DATE].iloc[0], errors='coerce')
+        if not pd.isna(parsed_date):
+            base_date = parsed_date
 
     shifts = ["MATIN", "SOIR", "NUIT", "NUIT -2-"]
     data_start_row = 8
@@ -305,7 +307,7 @@ def gen_table_deb(filepath=None):
 
     list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
 
-    source_df = group_sourcefile_by_client(filepath, skip_units_packages=True, bl_aggregated=False)
+    source_df = group_sourcefile_by_client(filepath, skip_units_packages=False, bl_aggregated=False)
     
     source_df.columns = source_df.columns.str.strip().str.upper()
     st.dataframe(source_df)
@@ -344,7 +346,7 @@ def gen_table_deb(filepath=None):
     COL_WIDTH  = 20
 
     # ─── Column-index helpers ─────────────────────────────────────────────────
-    cols = list(list_bl.columns)
+    # cols = list(list_bl.columns)
 
     type_col_idx    = list_bl.columns.get_loc(COL_TYPE)          # 0-based
 

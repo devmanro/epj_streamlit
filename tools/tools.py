@@ -5,6 +5,7 @@ import os
 import unicodedata
 import pandas as pd
 from pyarrow import null
+
 from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -120,37 +121,53 @@ async def predict_rows(rows, set_msg=print):
 # Updated align_data using predictions instead of find_type_and_produit
 # ══════════════════════════════════════════════════════════════════════════════
 def align_data(uploaded_df, mapping):
+
     try:
+
         valid_mappings_count = sum(
+
             1 for value in mapping.values() if value is not None
+
         )
 
         if valid_mappings_count <= 2:
+
             return uploaded_df, False
 
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
-
-        final_cols = [value for key, value in mapping.items() if value is not None]
-
+        final_cols = [value for key, value in mapping.items()
+                      if value is not None]
         # Keep only the required columns
+
         df_aligned = df_mapped[final_cols].copy()
-
         if COL_DESIGNATION in df_aligned.columns:
-
             # --- 1. BYPASS: Save existing values before overwriting ---
-            orig_type    = df_aligned[COL_TYPE].copy()    if COL_TYPE    in df_aligned.columns else None
-            orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
-
+            orig_type = df_aligned[COL_TYPE].copy(
+            ) if COL_TYPE in df_aligned.columns else None
+            orig_produit = df_aligned[COL_PRODUIT].copy(
+            ) if COL_PRODUIT in df_aligned.columns else None
             # --- 2. BUILD rows for prediction API ---
+            # rows = [
+            #     {"marchandise": val if isinstance(val, str) else ""}
+            #     for val in df_aligned[COL_DESIGNATION]
+            # ]
+            # ── identify rows with a real designation ────────────────────────
+            has_designation_mask = (
+                df_aligned[COL_DESIGNATION]
+                .astype(str)
+                .str.strip()
+                .isin(["", "nan", "None", "NaN", "-"])
+                .__invert__()          # True = has a real value
+            )
+            rows_to_predict = df_aligned.loc[has_designation_mask,
+                                             COL_DESIGNATION]
             rows = [
                 {"marchandise": val if isinstance(val, str) else ""}
-                for val in df_aligned[COL_DESIGNATION]
+                for val in rows_to_predict
             ]
-
             # --- 3. CALL prediction API ---
             predictions = asyncio.run(predict_rows(rows))
-
             # --- 4. APPLY predictions ---
             # predictions is expected to be a list of dicts:
             # [{"cargo_type": "COIL", "produit": "UNIT"}, ...]
@@ -158,54 +175,122 @@ def align_data(uploaded_df, mapping):
             # / unknown marchandise values — pad the tail so an index-length
             # mismatch never aborts the whole import (which would otherwise
             # leave every row without TYPE / PRODUIT).
-            n_rows = len(df_aligned)
-            if len(predictions) >= n_rows:
-                type_vals = [p.get("Produits", None) for p in predictions[:n_rows]]
-                prod_vals = [p.get("Details", None)   for p in predictions[:n_rows]]
+            # n_row = len(df_aligned)
+
+            n_predict = has_designation_mask.sum()
+
+            if len(predictions) >= n_predict:
+
+                type_vals = [p.get("Produits", None)
+                             for p in predictions[:n_predict]]
+
+                prod_vals = [p.get("Details", None)
+                             for p in predictions[:n_predict]]
+
             else:
-                pad = [None] * (n_rows - len(predictions))
-                type_vals = [p.get("Produits", None) for p in predictions] + pad
-                prod_vals = [p.get("Details", None)   for p in predictions] + pad
-            df_aligned[COL_TYPE]    = type_vals
-            df_aligned[COL_PRODUIT] = prod_vals
+
+                pad = [None] * (n_predict - len(predictions))
+
+                type_vals = [p.get("Produits", None)
+                             for p in predictions] + pad
+
+                prod_vals = [p.get("Details", None) for p in predictions] + pad
+
+            # if len(predictions) >= n_rows:
+
+            #     type_vals = [p.get("Produits", None) for p in predictions[:n_rows]]
+
+            #     prod_vals = [p.get("Details", None)   for p in predictions[:n_rows]]
+
+            # else:
+
+            #     pad = [None] * (n_rows - len(predictions))
+
+            #     type_vals = [p.get("Produits", None) for p in predictions] + pad
+
+            #     prod_vals = [p.get("Details", None)   for p in predictions] + pad
+
+            # ── write predictions ONLY onto rows that had a designation ──────
+
+            predict_indices = df_aligned.index[has_designation_mask]
+
+            df_aligned.loc[predict_indices, COL_TYPE] = type_vals
+
+            df_aligned.loc[predict_indices, COL_PRODUIT] = prod_vals
+
+            # df_aligned[COL_TYPE]    = type_vals
+
+            # df_aligned[COL_PRODUIT] = prod_vals
 
             # --- 5. REINSERT: Put back original values where they were not null ---
+
+            # if orig_type is not None:
+
+            #     mask = orig_type.notna() & (orig_type != '')
+
+            #     df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
+
+            # if orig_produit is not None:
+
+            #     mask = orig_produit.notna() & (orig_produit != '')
+
+            #     df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
+
+            # ── restore original non-null values as before ───────────────────
+
             if orig_type is not None:
+
                 mask = orig_type.notna() & (orig_type != '')
+
                 df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
 
             if orig_produit is not None:
+
                 mask = orig_produit.notna() & (orig_produit != '')
+
                 df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
 
-        else:
-            for col in [COL_TYPE, COL_PRODUIT]:
-                if col not in df_aligned.columns:
-                    df_aligned[col] = 'None'
-                else:
-                    df_aligned[col] = df_aligned[col].fillna('None')
+        # else:
+
+        #     for col in [COL_TYPE, COL_PRODUIT]:
+
+        #         if col not in df_aligned.columns:
+
+        #             df_aligned[col] = 'None'
+
+        #         else:
+
+        #             df_aligned[col] = df_aligned[col].fillna('None')
 
         return df_aligned, True
 
     except Exception as e:
+
         print(f"Error during alignment: {e}")
+
         return uploaded_df, False
+
 
 def get_manual_color(product_name):
     """Maps product names to specific hex colors as requested."""
     name = str(product_name).upper()
-    
+
     # Group products by color
     color_groups = {
-        "92D050": ["CTP", "PLYWOOD", "MDF", "FFP", "MDF + PLYWOOD"],                      # Greenish
-        "538DD5": ["BIG BAG", "BAG", "PIPE", "CORNIERE", "CORNIERS"],                      # Blue
-        "C65911": ["TUBE", "FORMWORK", "POUTRELLE"],                                       # Brown/Orange
-        "948A54": ["BOB", "BOBINE", "COIL", "METAL SHEET", "STEEL BEAMS"],                 # Tan/Gold
-        "DDD9C4": ["BEAMS", "FIL", "FIL M"],                                              # Grey/Beige
-        "FFDC6B": ["COLI", "COLIS", "UNIT", "BUS", "MINI BUS", "CAMIONS", "CAMION POMPE A BETON", "REMORQUES", "EXCAVATEUR", "BULLDOZER", "CHARGEUR", "COMPACTEUR", "FINISSEUR", "CAMION GRUE", "CHARIOT ELEVATEUR", "NIVELEUSE"], # GOLD
+        # Greenish
+        "92D050": ["CTP", "PLYWOOD", "MDF", "FFP", "MDF + PLYWOOD"],
+        # Blue
+        "538DD5": ["BIG BAG", "BAG", "PIPE", "CORNIERE", "CORNIERS"],
+        # Brown/Orange
+        "C65911": ["TUBE", "FORMWORK", "POUTRELLE"],
+        # Tan/Gold
+        "948A54": ["BOB", "BOBINE", "COIL", "METAL SHEET", "STEEL BEAMS"],
+        # Grey/Beige
+        "DDD9C4": ["BEAMS", "FIL", "FIL M"],
+        "FFDC6B": ["COLI", "COLIS", "UNIT", "BUS", "MINI BUS", "CAMIONS", "CAMION POMPE A BETON", "REMORQUES", "EXCAVATEUR", "BULLDOZER", "CHARGEUR", "COMPACTEUR", "FINISSEUR", "CAMION GRUE", "CHARIOT ELEVATEUR", "NIVELEUSE"],  # GOLD
     }
 
-    
+
     # Find which group the product belongs to
     for color, products in color_groups.items():
         if name in products:
@@ -440,28 +525,20 @@ def show_mapping_dialog(uploaded_df):
 
         for j, req_col in enumerate(batch):
             with row_cols[j]:
-                with st.container(border=True):
-                    st.markdown(f"**{req_col}**")
-
-                    # --- AUTO-MATCH LOGIC ---
-                    # Find first uploaded col that contains the required name (e.g., 'date' in 'date_manifeste')
-                    default_index = 0  # Default to None
-                    for idx, col in enumerate(uploaded_cols):
-                        if req_col.lower() in col.lower():
-                            default_index = idx + 1 # +1 because [None] is at index 0
-                            break
-                    # ------------------------
-
-                    selected_source_column = st.selectbox(
-                        f"Source for {req_col}:",
-                        options=[None] + uploaded_cols,
-                        index=default_index,
-                        key=f"map_{req_col}",
-                        label_visibility="collapsed"
-                    )
+                pass
+                # with st.container(border=True):
+                #     st.markdown(f"**{req_col}**")
                     
-                    if selected_source_column:
-                        mapping[selected_source_column] = req_col
+                #     selected_source_column = st.selectbox(
+                #         f"Source for {req_col}:",
+                #         options=[None] + uploaded_cols,
+                #         index=default_index,
+                #         key=f"map_{req_col}",
+                #         label_visibility="collapsed"
+                #     )
+                    
+                #     if selected_source_column:
+                #         mapping[selected_source_column] = req_col
         
         st.session_state.final_mapping = mapping
 
@@ -1371,64 +1448,26 @@ def group_sourcefile_by_client(
 
 
 def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pre-process a source file (xlsx / json) BEFORE mapping.
+    """Pre-process a source file (xlsx / json) BEFORE mapping.
 
     For each BL group:
-      - keep EVERY chassis row as-is (all original columns, no edits)
+      - keeps EVERY chassis row (first chassis row gets qty = chassis_count, remaining get 0)
       - if nombre_colis > chassis_count, and no COLIS row already exists
-        for that client in the group, insert one extra COLIS row
-        immediately after the last chassis row
+        for that client in the group, inserts one extra COLIS row
+        immediately after the last chassis row with qty = nombre_colis - chassis_count
 
     Output has the exact same columns (names + order) as the input.
-    The only structural change is the extra COLIS row.
     """
-
     if input_df is None or input_df.empty:
         return input_df.copy() if input_df is not None else pd.DataFrame()
 
-    # ── Resolve source columns (mapped names OR raw file headers) ─────────
-    # Column names come from the COL_* constants in assets/constants/constants.py;
-    # the fallback strings are the raw / French file headers we also accept so
-    # the function keeps working on source files not yet re-mapped to the schema.
-    def _resolve(fallbacks):
-        lower_map = {str(c).strip().lower(): c for c in input_df.columns}
-        for name in fallbacks:
-            if name is None:
-                continue
-            if name in input_df.columns:
-                return name
-            key = str(name).strip().lower()
-            if key in lower_map:
-                return lower_map[key]
-        return None
-
-    col_bl = _resolve([
-        COL_BL, "N° BL", "N°BL", "BL", "B/L", "bl",
-    ])
-    col_qty = _resolve([
-        COL_QUANTITE, "nombre colis", "nombre coli", "nbColis", "nb_colis",
-    ])
-    col_chassis = _resolve([
-        COL_CHASSIS_SERIAL, "Némuro de chassis", "Numero de chassis",
-        "Numéro de chassis", "CHASSIS/SERIAL", "chassis",
-    ])
-    col_client = _resolve([COL_CLIENT, "Client", "client"])
-    col_type = _resolve([COL_TYPE, "PRODUITS", "TYPE", "type"])
-    col_produit = _resolve([
-        COL_PRODUIT, "Détails PRODUITS", "PRODUIT", "details",
-    ])
-    col_tonage = _resolve([
-        COL_TONAGE, "Poids brute", "Poids brut", "TONAGE", "poidsBrute",
-    ])
-
-    if col_bl is None:
-        return input_df.copy()
-
     input_columns = list(input_df.columns)
 
+    if COL_BL not in input_df.columns:
+        return input_df.copy()
+
     def _cell(row, col):
-        if col is None or col not in row.index:
+        if col not in row.index:
             return ""
         val = row[col]
         if val is None or (isinstance(val, float) and pd.isna(val)) or pd.isna(val):
@@ -1438,17 +1477,27 @@ def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
     def _text(row, col):
         return str(_cell(row, col) or "").strip()
 
+    def _is_blank_chassis(value) -> bool:
+        v = str(value or "").strip()
+        return v == "" or v in {"-", "/", "N/A", "NONE", "NULL", "0"}
+
     def _is_colis_value(value) -> bool:
         t = str(value or "").strip().upper()
         return t in {
-            "COLIS", "COLI", "PACKAGE", "PACKAGES",
-            "PKG", "PKGS", "CAISSE", "CAISSES",
+            "COLIS",
+            "COLI",
+            "PACKAGE",
+            "PACKAGES",
+            "PKG",
+            "PKGS",
+            "CAISSE",
+            "CAISSES",
         }
 
     def _has_chassis(row) -> bool:
-        if col_chassis is None:
+        if COL_CHASSIS_SERIAL not in input_df.columns:
             return False
-        return not _is_blank_chassis(_cell(row, col_chassis))
+        return not _is_blank_chassis(_cell(row, COL_CHASSIS_SERIAL))
 
     def _to_int(value) -> int:
         try:
@@ -1460,23 +1509,18 @@ def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
             return 0
 
     def _row_as_dict(row) -> dict:
-        """Exact copy of every input column, original values untouched."""
         return {col: row[col] for col in input_columns}
 
     def _blank_row() -> dict:
-        """Same columns as input, empty values — used only for the extra COLIS row."""
         return {col: "" for col in input_columns}
 
-    # ── Step 1: Group rows by BL (same BL, or empty-BL sub-rows) ──────────
-    # Handles both:
-    #   JS style  : header BL filled, sub-rows BL empty
-    #   Excel style: BL repeated on every chassis row
+    # ── Step 1: Group rows by BL ──────────────────────────────────────────
     bl_order = []
-    bl_groups = {}  # bl → [index, ...]
+    bl_groups = {}
 
     current_bl = None
     for idx, row in input_df.iterrows():
-        bl = _text(row, col_bl)
+        bl = _text(row, COL_BL)
         if bl != "":
             if bl not in bl_groups:
                 bl_groups[bl] = []
@@ -1497,55 +1541,81 @@ def process_bl_data(input_df: pd.DataFrame) -> pd.DataFrame:
         group_rows = [input_df.loc[i] for i in group_indices]
         header_row = group_rows[0]
 
-        nombre_colis = _to_int(_cell(header_row, col_qty)) if col_qty else 0
+        nombre_colis = (
+            _to_int(_cell(header_row, COL_QUANTITE))
+            if COL_QUANTITE in input_df.columns
+            else 0
+        )
 
         chassis_rows = [r for r in group_rows if _has_chassis(r)]
-        other_rows   = [r for r in group_rows if not _has_chassis(r)]
+        other_rows = [r for r in group_rows if not _has_chassis(r)]
         chassis_count = len(chassis_rows)
         colis_remains = nombre_colis - chassis_count
 
         already_has_colis = False
-        client_name = _text(header_row, col_client).upper()
+        client_name = (
+            _text(header_row, COL_CLIENT).upper()
+            if COL_CLIENT in input_df.columns
+            else ""
+        )
+
         for r in group_rows:
-            same_client = _text(r, col_client).upper() == client_name
-            type_is_colis = _is_colis_value(_cell(r, col_type))
-            produit_is_colis = _is_colis_value(_cell(r, col_produit))
+            same_client = (
+                _text(r, COL_CLIENT).upper() == client_name
+                if COL_CLIENT in input_df.columns
+                else True
+            )
+            type_is_colis = (
+                _is_colis_value(_cell(r, COL_TYPE))
+                if COL_TYPE in input_df.columns
+                else False
+            )
+            produit_is_colis = (
+                _is_colis_value(_cell(r, COL_PRODUIT))
+                if COL_PRODUIT in input_df.columns
+                else False
+            )
             if same_client and (type_is_colis or produit_is_colis):
                 already_has_colis = True
                 break
 
-        # ── CASE 1: No chassis → copy every row of the group as-is ───────
+        # Case 1: No chassis -> copy all rows as-is
         if chassis_count == 0:
             for r in group_rows:
                 output_rows.append(_row_as_dict(r))
             continue
 
-        # ── CASE 2: Has chassis → keep ALL chassis rows untouched ─────────
-        for r in chassis_rows:
-            output_rows.append(_row_as_dict(r))
+        # Case 2: Has chassis -> first chassis row gets chassis_count, rest get 0
+        for i, r in enumerate(chassis_rows):
+            row_dict = _row_as_dict(r)
+            if COL_QUANTITE in input_df.columns:
+                row_dict[COL_QUANTITE] = chassis_count if i == 0 else 0
+            output_rows.append(row_dict)
 
-        # Keep any already-existing non-chassis rows (e.g. a COLIS row
-        # that was already in the source file) — still no edits
-        for r in other_rows:
-            output_rows.append(_row_as_dict(r))
-
-        # ── Insert extra COLIS row only when needed ───────────────────────
+        # Insert extra COLIS row with qty = (total_qty - chassis_count)
         if colis_remains > 0 and not already_has_colis:
             extra = _blank_row()
-            extra[col_bl] = this_bl
-            if col_qty:
-                extra[col_qty] = colis_remains
-            if col_tonage:
-                extra[col_tonage] = 0
-            if col_client:
-                extra[col_client] = _cell(header_row, col_client)
-            if col_type:
-                extra[col_type] = "COLIS"
-            if col_chassis:
-                extra[col_chassis] = ""
-            if col_produit:
-                extra[col_produit] = _cell(header_row, col_produit)
+            extra[COL_BL] = this_bl
+            if COL_CLIENT in input_df.columns:
+                extra[COL_CLIENT] = _cell(header_row, COL_CLIENT)
+            if COL_QUANTITE in input_df.columns:
+                extra[COL_QUANTITE] = colis_remains
+            if COL_TONAGE in input_df.columns:
+                extra[COL_TONAGE] = 0
+            if COL_TYPE in input_df.columns:
+                extra[COL_TYPE] = "COLIS"
+            if COL_PRODUIT in input_df.columns:
+                extra[COL_PRODUIT] = "PACKAGE"
+            if COL_DESIGNATION in input_df.columns:
+                extra[COL_DESIGNATION] = "COLIS"
+            if COL_CHASSIS_SERIAL in input_df.columns:
+                extra[COL_CHASSIS_SERIAL] = ""
+
             output_rows.append(extra)
+
+        # Append non-chassis rows
+        for r in other_rows:
+            output_rows.append(_row_as_dict(r))
 
     output_df = pd.DataFrame(output_rows, columns=input_columns)
     return output_df.reset_index(drop=True)

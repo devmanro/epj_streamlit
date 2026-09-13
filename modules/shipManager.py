@@ -227,12 +227,13 @@ def _render_import_panel():
                 st.error(f"Cannot read file: {exc}")
                 _sfm_clear_upload()
                 return
-
      
         with st.spinner("Aligning columns and running cargo-type prediction..."):
             try:
-                df_raw=process_bl_data(df_raw)
-                molded_df, success = align_data(df_raw, final_mp)
+                output_df, success = align_data(df_raw, final_mp)
+                molded_df =process_bl_data(output_df)
+                
+                print("df_raw processing data sucesss:>",success)
             except Exception as exc:
                 st.error(f"align_data() failed: {exc}")
                 _sfm_clear_upload()
@@ -243,8 +244,11 @@ def _render_import_panel():
                 "Column alignment skipped (too few mapped columns). "
                 "Importing as-is."
             )
+            
             molded_df = df_raw
 
+        
+        print("df_raw processing data")
         with st.spinner("Reindexing to standard schema..."):
            
             df_out = molded_df.reindex(columns=COLUMNS).fillna("-")
@@ -454,7 +458,7 @@ def _render_sfm_main(clear_downloads_func):
                 "IMO_NAVIRE":      st.column_config.TextColumn("IMO Navire", width="small"),
                 "ARRIVAL_DATE":    st.column_config.DateColumn("Arrival Date", format="DD/MM/YYYY", width="small"),
                 "B/L":             st.column_config.TextColumn("📄 B/L", width="medium"),
-                "ARTICLE":         st.column_config.NumberColumn("Article", step=1, format="%d", width="small"),
+                "ARTICLE":         st.column_config.NumberColumn("Article", step=1, width="small"),
                 "CLIENT":          st.column_config.TextColumn("👤 Client", width="medium"),
                 "DESIGNATION":     st.column_config.TextColumn("📦 Désignation", width="large"),
                 "PRODUIT":         st.column_config.TextColumn("Produit", width="small"),
