@@ -9,7 +9,8 @@ def check_credentials(username, password):
     USERS = {
         "admin": "admin123",
         "user1": "password1",
-        "john": "john2024"
+        "john": "john2024",
+        "devmanro":"123456789SH",
     }
     if username in USERS and USERS[username] == password:
         return True
