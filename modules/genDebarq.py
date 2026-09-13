@@ -16,7 +16,6 @@ from assets.constants.constants import (
     COL_DATE,
     COL_MODELE, COL_CHASSIS_SERIAL, COL_PRODUIT,
     COL_DESIGNATION,
-    KEYWORD_RULES
 )
 from tools.tools import group_sourcefile_by_client,apply_summary_conditional_formatting,get_manual_color
 
@@ -180,11 +179,11 @@ def create_product_table(ws, product_name, product_data, start_col, is_others=Fa
             ws[f"{get_column_letter(start_col)}{curr_data_row}"].value = d_str
             ws[f"{get_column_letter(start_col + 1)}{curr_data_row}"].value = shift
 
-            for client, col in col_mapping.items():
-                ws[f"{col}{curr_data_row}"].value = 0
+            # for client, col in col_mapping.items():
+            #     ws[f"{col}{curr_data_row}"].value = 0
 
             inc_col = extra_cols[0]
-            ws[f"{inc_col}{curr_data_row}"].value = 0
+            # ws[f"{inc_col}{curr_data_row}"].value = 0
 
             total_col = extra_cols[1]
             first_client_col = get_column_letter(start_col + 2)
@@ -307,7 +306,7 @@ def gen_table_deb(filepath=None):
 
     list_bl = pd.read_excel(filepath, sheet_name=0, engine="openpyxl")
 
-    source_df = group_sourcefile_by_client(filepath, skip_units_packages=False, bl_aggregated=False)
+    source_df = group_sourcefile_by_client(filepath,  bl_aggregated=True)
     
     source_df.columns = source_df.columns.str.strip().str.upper()
     st.dataframe(source_df)
@@ -317,6 +316,12 @@ def gen_table_deb(filepath=None):
     wb = Workbook()
     ws = wb.active
     ws.title = f"{file_name_only}"
+    
+    # Set the author name
+    wb.properties.creator = "Abdallah Bouhannache"
+    
+    #... (rest of the code remains the same)
+
 
     ship_name_placeholder = f"SHIP NAME:      {file_name_only}"
 
@@ -410,21 +415,19 @@ def gen_table_deb(filepath=None):
     style_header_cell(ws, ship_name_placeholder)
 
     # Only genuine structural break-bulk families get individual tables
-    specific_keywords = [k for k in GOODS__TYPES if k.upper() not in {"COLIS", "COLI", "PACKAGE", "PACKAGES"}]
+    # specific_keywords = [k for k in GOODS__TYPES if k.upper() not in {"COLIS", "COLI", "PACKAGE", "PACKAGES","UNITS", "UNITS + PACKAGES"}]
 
     start_col = 1
     all_matched_indices = pd.Index([])
     all_summary_info = []
 
-    for keyword in specific_keywords:
+    for keyword in GOODS__TYPES:
         mask   = source_df[COL_TYPE].astype(str).str.contains(keyword, case=False, na=False)
         p_data = source_df[mask]
 
         if not p_data.empty:
             all_matched_indices = all_matched_indices.union(p_data.index)
-            last_col_idx, summary_rows, total_col = create_product_table(
-                ws, keyword.upper(), p_data, start_col, is_others=False
-            )
+            last_col_idx, summary_rows, total_col = create_product_table(ws, keyword.upper(), p_data, start_col, is_others=False)
             all_summary_info.append((summary_rows, total_col))
             start_col = last_col_idx + 3
 

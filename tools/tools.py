@@ -115,44 +115,37 @@ async def predict_rows(rows, set_msg=print):
 
 
 
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # Updated align_data using predictions instead of find_type_and_produit
 # ══════════════════════════════════════════════════════════════════════════════
 def align_data(uploaded_df, mapping):
-
     try:
-
         valid_mappings_count = sum(
-
             1 for value in mapping.values() if value is not None
-
         )
-
         if valid_mappings_count <= 2:
-
             return uploaded_df, False
 
         # Rename columns based on the mapping
         df_mapped = uploaded_df.rename(columns=mapping)
         final_cols = [value for key, value in mapping.items()
                       if value is not None]
-        # Keep only the required columns
 
+        # Keep only the required columns
         df_aligned = df_mapped[final_cols].copy()
+
+        # Ensure COL_TYPE and COL_PRODUIT exist in df_aligned even if they weren't mapped
+        if COL_TYPE not in df_aligned.columns:
+            df_aligned[COL_TYPE] = None
+        if COL_PRODUIT not in df_aligned.columns:
+            df_aligned[COL_PRODUIT] = None
+
         if COL_DESIGNATION in df_aligned.columns:
-            # --- 1. BYPASS: Save existing values before overwriting ---
-            orig_type = df_aligned[COL_TYPE].copy(
-            ) if COL_TYPE in df_aligned.columns else None
-            orig_produit = df_aligned[COL_PRODUIT].copy(
-            ) if COL_PRODUIT in df_aligned.columns else None
-            # --- 2. BUILD rows for prediction API ---
-            # rows = [
-            #     {"marchandise": val if isinstance(val, str) else ""}
-            #     for val in df_aligned[COL_DESIGNATION]
-            # ]
-            # ── identify rows with a real designation ────────────────────────
+            # 1. BYPASS: Save existing values before overwriting
+            orig_type = df_aligned[COL_TYPE].copy() if COL_TYPE in df_aligned.columns else None
+            orig_produit = df_aligned[COL_PRODUIT].copy() if COL_PRODUIT in df_aligned.columns else None
+            # 2. BUILD rows for prediction API
+            # Identify rows with a real designation
             has_designation_mask = (
                 df_aligned[COL_DESIGNATION]
                 .astype(str)
@@ -166,108 +159,42 @@ def align_data(uploaded_df, mapping):
                 {"marchandise": val if isinstance(val, str) else ""}
                 for val in rows_to_predict
             ]
-            # --- 3. CALL prediction API ---
+            # 3. CALL prediction API
             predictions = asyncio.run(predict_rows(rows))
-            # --- 4. APPLY predictions ---
+            # 4. APPLY predictions
             # predictions is expected to be a list of dicts:
             # [{"cargo_type": "COIL", "produit": "UNIT"}, ...]
-            # The API may return fewer predictions than rows if it skips blank
-            # / unknown marchandise values — pad the tail so an index-length
-            # mismatch never aborts the whole import (which would otherwise
-            # leave every row without TYPE / PRODUIT).
-            # n_row = len(df_aligned)
-
             n_predict = has_designation_mask.sum()
 
             if len(predictions) >= n_predict:
-
                 type_vals = [p.get("Produits", None)
                              for p in predictions[:n_predict]]
-
                 prod_vals = [p.get("Details", None)
                              for p in predictions[:n_predict]]
-
             else:
-
                 pad = [None] * (n_predict - len(predictions))
-
                 type_vals = [p.get("Produits", None)
                              for p in predictions] + pad
-
                 prod_vals = [p.get("Details", None) for p in predictions] + pad
 
-            # if len(predictions) >= n_rows:
-
-            #     type_vals = [p.get("Produits", None) for p in predictions[:n_rows]]
-
-            #     prod_vals = [p.get("Details", None)   for p in predictions[:n_rows]]
-
-            # else:
-
-            #     pad = [None] * (n_rows - len(predictions))
-
-            #     type_vals = [p.get("Produits", None) for p in predictions] + pad
-
-            #     prod_vals = [p.get("Details", None)   for p in predictions] + pad
-
-            # ── write predictions ONLY onto rows that had a designation ──────
-
+            # Write predictions ONLY onto rows that had a designation
             predict_indices = df_aligned.index[has_designation_mask]
-
             df_aligned.loc[predict_indices, COL_TYPE] = type_vals
-
             df_aligned.loc[predict_indices, COL_PRODUIT] = prod_vals
 
-            # df_aligned[COL_TYPE]    = type_vals
-
-            # df_aligned[COL_PRODUIT] = prod_vals
-
-            # --- 5. REINSERT: Put back original values where they were not null ---
-
-            # if orig_type is not None:
-
-            #     mask = orig_type.notna() & (orig_type != '')
-
-            #     df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
-
-            # if orig_produit is not None:
-
-            #     mask = orig_produit.notna() & (orig_produit != '')
-
-            #     df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
-
-            # ── restore original non-null values as before ───────────────────
-
+            # 5. REINSERT: Put back original values where they were not null
             if orig_type is not None:
-
                 mask = orig_type.notna() & (orig_type != '')
-
                 df_aligned.loc[mask, COL_TYPE] = orig_type[mask]
 
             if orig_produit is not None:
-
                 mask = orig_produit.notna() & (orig_produit != '')
-
                 df_aligned.loc[mask, COL_PRODUIT] = orig_produit[mask]
-
-        # else:
-
-        #     for col in [COL_TYPE, COL_PRODUIT]:
-
-        #         if col not in df_aligned.columns:
-
-        #             df_aligned[col] = 'None'
-
-        #         else:
-
-        #             df_aligned[col] = df_aligned[col].fillna('None')
 
         return df_aligned, True
 
     except Exception as e:
-
         print(f"Error during alignment: {e}")
-
         return uploaded_df, False
 
 
@@ -456,57 +383,57 @@ def create_mapping_ui(uploaded_df, required_columns=COLUMNS):
     return mapping
 
 
-def find_type_and_produit(designation):
-    """
-    Return (CARGO_TYPE, PRODUIT_CATEGORY) by matching keywords against the designation.
-    Rules are checked in order — first match wins for cargo_type.
-    PRODUIT scans the full designation against UNIT and PACKAGE sets.
-    """
-    if not isinstance(designation, str):
-        return pd.Series([None, None])
+# def find_type_and_produit(designation):
+#     """
+#     Return (CARGO_TYPE, PRODUIT_CATEGORY) by matching keywords against the designation.
+#     Rules are checked in order — first match wins for cargo_type.
+#     PRODUIT scans the full designation against UNIT and PACKAGE sets.
+#     """
+#     if not isinstance(designation, str):
+#         return pd.Series([None, None])
 
-    designation_upper = designation.upper()
+#     designation_upper = designation.upper()
 
-    # Step 1: Find cargo_type from KEYWORD_RULES (first match wins)
-    cargo_type = None
-    for keywords, ctype in KEYWORD_RULES:
-        for keyword in keywords:
-            if keyword.upper() in designation_upper:
-                cargo_type = ctype
-                break
-        if cargo_type is not None:
-            break
+#     # Step 1: Find cargo_type from KEYWORD_RULES (first match wins)
+#     cargo_type = None
+#     for keywords, ctype in KEYWORD_RULES:
+#         for keyword in keywords:
+#             if keyword.upper() in designation_upper:
+#                 cargo_type = ctype
+#                 break
+#         if cargo_type is not None:
+#             break
 
-    # Step 2: Check designation directly against BOTH category sets
-    is_unit = any(
-        constant.upper() in designation_upper
-        for constant in UNIT_CARGO_TYPES
-    )
-    is_package = any(
-        constant.upper() in designation_upper
-        for constant in PACKAGE_CARGO_TYPES
-    )
+#     # Step 2: Check designation directly against BOTH category sets
+#     is_unit = any(
+#         constant.upper() in designation_upper
+#         for constant in UNIT_CARGO_TYPES
+#     )
+#     is_package = any(
+#         constant.upper() in designation_upper
+#         for constant in PACKAGE_CARGO_TYPES
+#     )
 
-    # Step 3: Also check cargo_type itself against category sets
-    if cargo_type is not None:
-        if not is_unit:
-            unit_matched, _ = matches_any_constant(cargo_type, UNIT_CARGO_TYPES)
-            is_unit = unit_matched
-        if not is_package:
-            pkg_matched, _ = matches_any_constant(cargo_type, PACKAGE_CARGO_TYPES)
-            is_package = pkg_matched
+#     # Step 3: Also check cargo_type itself against category sets
+#     if cargo_type is not None:
+#         if not is_unit:
+#             unit_matched, _ = matches_any_constant(cargo_type, UNIT_CARGO_TYPES)
+#             is_unit = unit_matched
+#         if not is_package:
+#             pkg_matched, _ = matches_any_constant(cargo_type, PACKAGE_CARGO_TYPES)
+#             is_package = pkg_matched
 
-    # Step 4: Determine PRODUIT
-    if is_package and is_unit:
-        produit = "UNIT + PACKAGE"
-    elif is_package:
-        produit = "PACKAGE"
-    elif is_unit:
-        produit = "UNIT"
-    else:
-        produit = cargo_type  # Unknown → flag for manual review
+#     # Step 4: Determine PRODUIT
+#     if is_package and is_unit:
+#         produit = "UNIT + PACKAGE"
+#     elif is_package:
+#         produit = "PACKAGE"
+#     elif is_unit:
+#         produit = "UNIT"
+#     else:
+#         produit = cargo_type  # Unknown → flag for manual review
 
-    return pd.Series([cargo_type, produit])
+#     return pd.Series([cargo_type, produit])
 
 
 
@@ -525,20 +452,28 @@ def show_mapping_dialog(uploaded_df):
 
         for j, req_col in enumerate(batch):
             with row_cols[j]:
-                pass
-                # with st.container(border=True):
-                #     st.markdown(f"**{req_col}**")
+                with st.container(border=True):
+                    st.markdown(f"**{req_col}**")
+
+                    # --- AUTO-MATCH LOGIC ---
+                    # Find first uploaded col that contains the required name (e.g., 'date' in 'date_manifeste')
+                    default_index = 0  # Default to None
+                    for idx, col in enumerate(uploaded_cols):
+                        if req_col.lower() in col.lower():
+                            default_index = idx + 1 # +1 because [None] is at index 0
+                            break
+                    # ------------------------
+
+                    selected_source_column = st.selectbox(
+                        f"Source for {req_col}:",
+                        options=[None] + uploaded_cols,
+                        index=default_index,
+                        key=f"map_{req_col}",
+                        label_visibility="collapsed"
+                    )
                     
-                #     selected_source_column = st.selectbox(
-                #         f"Source for {req_col}:",
-                #         options=[None] + uploaded_cols,
-                #         index=default_index,
-                #         key=f"map_{req_col}",
-                #         label_visibility="collapsed"
-                #     )
-                    
-                #     if selected_source_column:
-                #         mapping[selected_source_column] = req_col
+                    if selected_source_column:
+                        mapping[selected_source_column] = req_col
         
         st.session_state.final_mapping = mapping
 

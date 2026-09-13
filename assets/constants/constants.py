@@ -66,20 +66,61 @@ COMMODITY_TYPES = [ "TUBE", "POUTRELLE", "CORNIERE", "BOBINE", "CTP", "MDF", "FF
   "EXCAVATEUR", "BULLDOZER", "CHARGEUR", "COMPACTEUR", "FINISSEUR", "CAMION GRUE",
    "CHARIOT ELEVATEUR", "NIVELEUSE",  "GRUES",]
 
+
+
+# types shoul be normalized to the following list:
 GOODS__TYPES = [
-    "LOURD",
-    "ENGINS",
-    "UNITS",
-    "COLIS",
+    "BIG BAG",
+    "PLYWOOD",
+    "PIPE",
     "TUBE",
+    "BEAMS",
+    "METAL SHEET",
+    "STEEL BEAMS",
+    "FIL M",
+    "COIL",
+    "BOBINE",
     "POUTRELLE",
     "CORNIERE",
-    "BOBINE",
     "CTP",
     "MDF",
     "FFP",
-    "MDF + PLYWOOD",
+    "WOOD",
+    # "BEECH WOOD",
+    # "RED WOOD",
+    # "MDF + PLYWOOD",
+    # "LOURD",
+    # "ENGINS",
+    # "UNITS",
+    # "COLIS",
 ]
+
+
+
+
+# Define cargo type categories based on KEYWORD_RULES
+UNIT_CARGO_TYPES = {
+    "BUS", "MIXER_TRUCK", "CTRN_TRUCK", "DUMP_TRUCK", "TRACTOR_TRUCK",
+    "SPECIAL_TRUCK", "MINING_TRUCK", "LIGHT_TRUCK", "CARGO_TRUCK",
+    "LOWBED_TRAILER", "DUMP_TRAILER", "CEMENT_TRAILER", "CTRN", "SEMI_TRAILER",
+    "EXCAVATOR", "LOADER", "BULLDOZER", "ROLLER", "GRADER", "CRANE",
+    "FORKLIFT", "CONCRETE_PUMP", "CRUSHER", "DRILLING_RIG", "BACKHOE",
+    "ASPHALT_EQUIP", "SELF_LOADER", "BREAKER",
+    "WELL_LOG_TRUCK", "PUMP_SKID", "CAMP",  "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL",
+}
+
+PACKAGE_CARGO_TYPES = {
+    "SPARE_PARTS", "WELDING_EQUIP", "ROLLER_PAD", "COOLED_PANEL", "ZINC_KETTLE",
+    "COLI", "PACKAGE","PKGS" ,"CAISSE","FORMWORK"
+}
+
+
+
+#  "PACKAGES"
+UNITS_TYPES = { "LOURD","ENGIN","UNIT", }  #"GRUE","EXV","CAM","RMQ","NVL", to be checked later  "UNITS + PACKAGES"
+PACKAGES_TYPES = {"COLIS", "COLI", "PACKAGE", "PACKAGES", "CAISSE"}
+
+
 
 # "OTHERS"
 (   
@@ -137,28 +178,7 @@ text_cols = [
 ]
 
 
-# Define cargo type categories based on KEYWORD_RULES
-UNIT_CARGO_TYPES = {
-    "BUS", "MIXER_TRUCK", "CTRN_TRUCK", "DUMP_TRUCK", "TRACTOR_TRUCK",
-    "SPECIAL_TRUCK", "MINING_TRUCK", "LIGHT_TRUCK", "CARGO_TRUCK",
-    "LOWBED_TRAILER", "DUMP_TRAILER", "CEMENT_TRAILER", "CTRN", "SEMI_TRAILER",
-    "EXCAVATOR", "LOADER", "BULLDOZER", "ROLLER", "GRADER", "CRANE",
-    "FORKLIFT", "CONCRETE_PUMP", "CRUSHER", "DRILLING_RIG", "BACKHOE",
-    "ASPHALT_EQUIP", "SELF_LOADER", "BREAKER",
-    "WELL_LOG_TRUCK", "PUMP_SKID", "CAMP",  "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL",
-}
-
-PACKAGE_CARGO_TYPES = {
-    "SPARE_PARTS", "WELDING_EQUIP", "ROLLER_PAD", "COOLED_PANEL", "ZINC_KETTLE",
-    "COLI", "PACKAGE","PKGS" ,"CAISSE"
-}
-
-
-#  "PACKAGES"
-UNITS_TYPES = { "LOURD","ENGIN","GRUE","EXV","CAM","RMQ","NVL","UNIT"}
-PACKAGES_TYPES = {"COLI",  "PACKAGE", "CAISSE"}
-
-
+# to generate product_details  
 KEYWORD_RULES = [
     # ══════════════════════════════════════════════════════════
     # ORDER MATTERS! More specific rules MUST come first.
@@ -275,9 +295,8 @@ KEYWORD_RULES = [
 
     (["STEEL FORMWORK","FORMWORK","STEEL MOULDS", "STEEL TEMPLATE",
       "HOLLOW PIER STEEL"], "FORMWORK"),
-      
+     
     
-
     # ── WOOD / PANEL PRODUCTS ─────────────────────────────────
     (["PLYWOOD","FILM","FILM FACED","COMMERCIAL","MDF"], "MDF"),
     (["VENEER","EDGE GLUED","BLOCKBOARD","CTP"], "CTP"),
