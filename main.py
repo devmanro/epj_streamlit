@@ -1,5 +1,5 @@
 import streamlit as st
-import show_main_app from showmain
+from showmain import show_main_app 
 # ============================================
 #           LOGIN FUNCTION
 # ============================================
