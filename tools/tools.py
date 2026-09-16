@@ -928,84 +928,104 @@ def _fill_entry_table(
     total_rec_str: str,
 ):
     """
-    Fill the 5-row table in the DOCX document for a single cargo entry.
-    Handles:
-      - Receiver / Commodity
-      - Manifested Quantity / Tonnage
-      - Dynamic 'Received:' lines
-      - Total Received line
-      - Final note and separator
+    DEPRECATED/REPLACED: Signature compatibility wrapper.
+    Renders cargo entries using paragraphs instead of tables.
     """
-    # Row 0: Receiver / Commodity
-    row0 = table.rows[0].cells
-    row0[0].width = Cm(9)
-    p0 = row0[0].paragraphs[0]
-    p0.add_run("Receiver : ").bold = True
-    p0.add_run(client)
-    p0.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    # Just forward arguments to paragraph-based renderer
+    _fill_entry_paragraph(
+        doc=doc,
+        client=client,
+        commodity=commodity,
+        manifest_qty_str=manifest_qty_str,
+        tonnage_str=tonnage_str,
+        received_lines=received_lines,
+        total_rec_str=total_rec_str,
+    )
 
-    row0[1].width = Cm(9)
-    p1 = row0[1].paragraphs[0]
-    p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run_c = p1.add_run("Commodity : ")
-    run_c1 = p1.add_run(commodity)
-    run_c.bold = True
-    run_c.font.name = "Agency FB"
-    run_c1.font.name = "Agency FB"
 
-    # Row 1: Manifested Quantity / Tonnage
-    row1 = table.rows[1].cells
-    row1[0].width = Cm(12)
-    p2 = row1[0].paragraphs[0]
-    p2.add_run("Manifested Quantity : ").bold = True
-    p2.add_run(f"{manifest_qty_str} {commodity}")
-    p2.alignment = WD_ALIGN_PARAGRAPH.LEFT
+def _fill_entry_paragraph(
+    doc,
+    client: str,
+    commodity: str,
+    manifest_qty_str: str,
+    tonnage_str: str,
+    received_lines,
+    total_rec_str: str,
+):
+    """
+    Fill a cargo entry in the DOCX document using text paragraphs with full A4 width,
+    right-aligned tab stops, and keep-with-next page-break protection.
+    Margins are managed globally at document load time to protect headers/footers.
+    """
+    from docx.enum.text import WD_TAB_ALIGNMENT
+    from docx.shared import Inches
 
-    row1[1].width = Cm(5)
-    p3 = row1[1].paragraphs[0]
-    p3.add_run("Tonnage : ").bold = True
-    p3.add_run(f"{tonnage_str} Mt")
-    p3.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    # Dynamically calculate right tab position based on current section printable width
+    section = doc.sections[0]
+    right_tab_position = section.page_width - section.left_margin - section.right_margin
 
-    # --- DYNAMIC RECEIVED AREA (Row 2) ---
-    row2 = table.rows[2].cells
-    row2[0].width = Cm(30)
-
-    row2_cell = table.rows[2].cells[0]
-
-    # Clear default paragraph and add the formatted lines
-    row2_cell.paragraphs[0].clear()
-    for i, line in enumerate(received_lines):
-        if i == 0:
-            p = row2_cell.paragraphs[0]
-        else:
-            p = row2_cell.add_paragraph()
-
-        run_label = p.add_run("Received:    ")
-        run_label.bold = True
-        p.add_run(line)
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
-    # Row 3: Total Received
-    row3 = table.rows[3].cells
-    row3[0].width = Cm(12)
-    p4 = row3[0].paragraphs[0]
-    p4.add_run("Total Received: ").bold = True
-    p4.add_run(f" {total_rec_str}")
-    p4.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
-    # Row 4: Final line
-    row4 = table.rows[4].cells
-    row4[0].width = Cm(25)
-    p5 = row4[0].paragraphs[0]
-    full = p5.add_run("The Quantity Will Be confirmed after delivery Cargo.")
-    full.bold = True
-
-    # Border Line
+     # Border / Separator Line
     p_sep = doc.add_paragraph()
     p_sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_sep = p_sep.add_run("=*"*29)
     run_sep.bold = True
+    
+    # Paragraph 0: Receiver (left) & Commodity (right)
+    p0 = doc.add_paragraph()
+    p0.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p0.paragraph_format.tab_stops.add_tab_stop(right_tab_position, WD_TAB_ALIGNMENT.RIGHT)
+    p0.paragraph_format.keep_with_next = True
+
+    run_rec_lbl = p0.add_run("Receiver : ")
+    run_rec_lbl.bold = True
+    p0.add_run(f"{client}\t")
+
+    run_com_lbl = p0.add_run("Commodity : ")
+    run_com_lbl.bold = True
+    run_com_lbl.font.name = "Agency FB"
+
+    run_com_val = p0.add_run(commodity)
+    run_com_val.font.name = "Agency FB"
+
+    # Paragraph 1: Manifested Quantity (left) & Tonnage (right)
+    p1 = doc.add_paragraph()
+    p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p1.paragraph_format.tab_stops.add_tab_stop(right_tab_position, WD_TAB_ALIGNMENT.RIGHT)
+    p1.paragraph_format.keep_with_next = True
+
+    run_mq_lbl = p1.add_run("Manifested Quantity : ")
+    run_mq_lbl.bold = True
+    p1.add_run(f"{manifest_qty_str} {commodity}\t")
+
+    run_ton_lbl = p1.add_run("Tonnage : ")
+    run_ton_lbl.bold = True
+    p1.add_run(f"{tonnage_str} Mt")
+
+    # Paragraphs 2: Dynamic Received lines
+    for line in received_lines:
+        p_rec = doc.add_paragraph()
+        p_rec.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p_rec.paragraph_format.keep_with_next = True
+        run_lbl = p_rec.add_run("Received:    ")
+        run_lbl.bold = True
+        p_rec.add_run(line)
+
+    # Paragraph 3: Total Received
+    p3 = doc.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p3.paragraph_format.keep_with_next = True
+    run_tot_lbl = p3.add_run("Total Received: ")
+    run_tot_lbl.bold = True
+    p3.add_run(f" {total_rec_str}")
+
+    # Paragraph 4: Final note
+    p4 = doc.add_paragraph()
+    p4.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p4.paragraph_format.keep_with_next = True
+    run_note = p4.add_run("The Quantity Will Be confirmed after delivery Cargo.")
+    run_note.bold = True
+
+   
 
 
 def _shorten_bl_code(bl: str) -> str:

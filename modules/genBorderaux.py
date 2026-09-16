@@ -19,7 +19,7 @@ from assets.constants.constants import (
 from modules.M_tracker import COL_PRODUIT
 import streamlit as st
 
-from tools.tools import _compute_commodity_and_received_lines, _fill_entry_table, group_sourcefile_by_client
+from tools.tools import _compute_commodity_and_received_lines, _fill_entry_paragraph, group_sourcefile_by_client
 
 if not os.path.exists(PATH_BRDX):
     os.makedirs(PATH_BRDX)
@@ -59,17 +59,12 @@ def format_entry_docx(doc, row):
     tonnage = clean_excel_val(tonnage)
     rec_qty = clean_excel_val(rec_qty)
 
-    # Create table
-    table = doc.add_table(rows=5, cols=2)
-    table.autofit = True
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-
     tonnage_str = f"{tonnage:.2f}".lstrip(
         "0") if tonnage < 1 else f"{tonnage:.2f}"
     manifest_qty_str = f"{int(nb_colis):02d}"
-    
+
     rec_str = f"{int(float(rec_qty or 0)):02d}"
-    
+
     # Define lines based on type
     # Logic to adjust Commodity name based on type
     # Initialize defaults
@@ -78,10 +73,9 @@ def format_entry_docx(doc, row):
         rec_str,
     )
 
-    # --- use helper to fill the table and separator in the document ---
-    _fill_entry_table(
+    # --- use helper to fill paragraphs instead of table in the document ---
+    _fill_entry_paragraph(
         doc=doc,
-        table=table,
         client=client,
         commodity=commodity,
         manifest_qty_str=manifest_qty_str,
@@ -102,28 +96,59 @@ def excel_to_docx_custom(input_excel, sheet_name=0, template_path=None, output_d
     else:
         df = input_excel  # already a DataFrame
 
-    # df = pd.read_excel(input_excel, sheet_name=sheet_name,
-    #                    engine="openpyxl", header=0)
+        doc = Document(template_path) if template_path else Document()
 
-    doc = Document(template_path) if template_path else Document()
+    # Set document author metadata
+    doc.core_properties.author = "abdallah bouhannache"
+
+    # Configure global A4 page dimensions and margins once
+    for section in doc.sections:
+        section.page_width = Inches(8.27)
+        section.page_height = Inches(11.69)
+        section.left_margin = Cm(1.5)
+        section.right_margin = Cm(1.5)
+        section.top_margin = Cm(5.0)
+        section.bottom_margin = Cm(4.5)
+
+        # Remove all leading empty paragraphs from template to prevent leading blank pages
+    while doc.paragraphs and not doc.paragraphs[0].text.strip():
+        p_element = doc.paragraphs[0]._element
+        p_element.getparent().remove(p_element)
 
     style = doc.styles["Normal"]
     font = style.font
     font.name = "Times New Roman"
     font.size = Pt(12)
 
-    for idx, row in df.iterrows():
-        format_entry_docx(doc, row)
-
     style.paragraph_format.space_after = Pt(0)
     style.paragraph_format.line_spacing = 1.0
 
+    # Track vertical height estimation per page (A4 printable height ~ 20.2 cm)
+    current_page_height_cm = 0.0
+    max_page_height_cm = 20.2 # Calculated printable height (29.7 - 5.0 - 4.5)
+
+    for idx, row in df.iterrows():
+        # Pre-calculate entry height: ~2.5cm base + 0.6cm per received line
+        raw_commodity = str(row.get(COL_TYPE, "")).strip().upper()
+        rec_qty = clean_excel_val(row.get(COL_RESTE_TP))
+        rec_str = f"{int(float(rec_qty or 0)):02d}"
+        _, received_lines, _ = _compute_commodity_and_received_lines(raw_commodity, rec_str)
+        
+        # Estimation: 5 fixed lines + len(received_lines) + separator
+        block_height = 2.5 + (len(received_lines) * 0.6)
+
+        # If adding this block exceeds printable page height, break page
+        if current_page_height_cm + block_height > max_page_height_cm:
+            doc.add_page_break()
+            current_page_height_cm = 0.0
+
+        format_entry_docx(doc, row)
+        current_page_height_cm += block_height
+
     if os.path.exists(output_docx):
         os.remove(output_docx)
-        # print(f"{output_docx} has been deleted.")
 
     doc.save(output_docx)
-    # print(f"New File {output_docx} Saved")
 
 def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     base_name = os.path.basename(sourcefile)
@@ -137,10 +162,3 @@ def generate_brd(sourcefile, sheet_name=0, template_name="template.docx"):
     excel_to_docx_custom(grouped_df, sheet_name, template_path, output_docx)
 
     return output_docx
-
-# if __name__ == "__main__":
-    # Ensure book1.xlsx exists in your directory
-    # excel_to_docx_custom("book1.xlsx", output_docx="entries.docx")
-    # column_names = ["type", "client", "qte", "poids", "rec_qty"]
-    # names=column_names
-#    generate_brd("source.xlsx", sheet_name=0, template_path="template.docx", output_docx="entries.docx")
