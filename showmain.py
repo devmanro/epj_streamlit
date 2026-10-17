@@ -12,7 +12,13 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
 import numpy as np
-from tools.whatsapp import send_image_to_whatsapp_greenapi ,get_whatsapp_group_metadata_greenapi
+#from tools.whatsapp import send_image_to_whatsapp_greenapi ,get_whatsapp_group_metadata_greenapi
+from tools.whatsapp import (
+    get_whatsapp_chats_greenapi, send_text_to_whatsapp_greenapi,
+    send_image_to_whatsapp_greenapi, receive_whatsapp_notification_greenapi,
+    delete_whatsapp_notification_greenapi, parse_incoming_notification,
+)
+
 from tools.tools import ensure_directories
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE
 
@@ -279,75 +285,108 @@ def show_main_app():
         #     #     help="Found in your Green API dashboard",
         #     # )
     
-        id_instance = ID_INSTANCE
-        api_token=API_TOKEN
-        # Save credentials to session state so they survive reruns
+                id_instance = ID_INSTANCE
+        api_token = API_TOKEN
+
         if id_instance:
             st.session_state.wa_id_instance = id_instance
         if api_token:
             st.session_state.wa_api_token = api_token
-    
-        # ── Group Fetcher ──────────────────────────────────────────
-        wa_col3, wa_col4 = st.columns([1, 3])
-    
-        with wa_col3:
-            fetch_groups = st.button(
-                "🔄 Fetch My Groups",
+
+        # ── WhatsApp Chat ──────────────────────────────────────────
+        st.subheader("💬 WhatsApp Chat")
+
+        if "wa_chats" not in st.session_state:
+            st.session_state.wa_chats = []
+        if "wa_messages" not in st.session_state:
+            st.session_state.wa_messages = {}  # chat_id -> list of messages
+        if "wa_seen_message_ids" not in st.session_state:
+            st.session_state.wa_seen_message_ids = set()
+
+        wa_fetch_col, wa_refresh_col = st.columns(2)
+        with wa_fetch_col:
+            fetch_chats = st.button(
+                "🔄 Load contacts and groups",
                 disabled=not (id_instance and api_token),
-                help="Connects to Green API and lists your WhatsApp groups",
+                use_container_width=True,
             )
-    
-        if fetch_groups:
-            with st.spinner("Fetching groups from WhatsApp..."):
-                groups = get_whatsapp_groups_greenapi(id_instance, api_token)
-                if groups:
-                    st.session_state.wa_groups = groups
-                    st.success(f"✅ Found {len(groups)} group(s)")
+        with wa_refresh_col:
+            load_incoming = st.button(
+                "📥 Load incoming messages",
+                disabled=not (id_instance and api_token),
+                use_container_width=True,
+            )
+
+        if fetch_chats:
+            try:
+                with st.spinner("Loading WhatsApp contacts and groups..."):
+                    st.session_state.wa_chats = get_whatsapp_chats_greenapi(id_instance, api_token)
+                if st.session_state.wa_chats:
+                    st.success(f"Loaded {len(st.session_state.wa_chats)} chats.")
                 else:
-                    st.error(
-                        "❌ No groups found. "
-                        "Check your credentials and make sure your instance is active."
-                    )
-                    st.session_state.wa_groups = []
-    
-        # ── Group Selector ─────────────────────────────────────────
-        groups_available = st.session_state.get("wa_groups", [])
-    
-        if groups_available:
-            group_options = {
-                f"{g['name']}  ({g['id']})": g["id"]
-                for g in groups_available
-            }
-    
-            selected_label = st.selectbox(
-                "📋 Select Target WhatsApp Group",
-                options=list(group_options.keys()),
-                index=0,
-            )
-            selected_chat_id = group_options[selected_label]
-    
-        else:
-            # Manual entry fallback
-            selected_chat_id = st.text_input(
-                "📋 WhatsApp Group / Contact Chat ID",
-                value=st.session_state.get("wa_chat_id", ""),
-                placeholder="120363XXXXXXXXXX@g.us  or  972501234567@c.us",
-                help=(
-                    "Group  → ends with @g.us\n"
-                    "Contact → ends with @c.us  (country code, no +)"
-                ),
-            )
-    
-        if selected_chat_id:
+                    st.warning("No chats returned. Check that your Green API instance is connected.")
+            except Exception as exc:
+                st.error(f"Could not load chats: {exc}")
+
+        if load_incoming:
+            loaded_count = 0
+            try:
+                with st.spinner("Checking Green API notification queue..."):
+                    # The queue can contain messages for any chat. Store each message under its chat ID.
+                    # Delete each notification only after it has been read and stored.
+                    for _ in range(100):  # cap each click so the UI does not hang
+                        notification = receive_whatsapp_notification_greenapi(id_instance, api_token)
+                        if not notification:
+                            break
+                        receipt_id = notification.get("receiptId")
+                        parsed = parse_incoming_notification(notification)
+                        if parsed:
+                            message_id = parsed.get("id_message")
+                            if not message_id or message_id not in st.session_state.wa_seen_message_ids:
+                                st.session_state.wa_messages.setdefault(parsed["chat_id"], []).append(parsed)
+                                if message_id:
+                                    st.session_state.wa_seen_message_ids.add(message_id)
+                                loaded_count += 1
+                        if receipt_id:
+                            delete_whatsapp_notification_greenapi(str(receipt_id), id_instance, api_token)
+                        else:
+                            # Avoid repeatedly reading a malformed notification without a receipt ID.
+                            break
+                st.success(f"Loaded {loaded_count} incoming message(s).")
+            except Exception as exc:
+                st.error(f"Could not load incoming messages: {exc}")
+
+        chats = st.session_state.wa_chats
+        chat_options = {
+            f"{'👥' if chat['type'] == 'group' else '👤'} {chat['name']} — {chat['id']}": chat["id"]
+            for chat in chats
+        }
+
+        if chat_options:
+            labels = list(chat_options.keys())
+            previous_id = st.session_state.get("wa_chat_id", "")
+            default_index = next((i for i, label in enumerate(labels)
+                                  if chat_options[label] == previous_id), 0)
+            selected_label = st.selectbox("Chat", labels, index=default_index)
+            selected_chat_id = chat_options[selected_label]
             st.session_state.wa_chat_id = selected_chat_id
-    
+        else:
+            selected_chat_id = st.text_input(
+                "Contact or group chat ID",
+                value=st.session_state.get("wa_chat_id", ""),
+                placeholder="213XXXXXXXXX@c.us or 1203XXXXXXXXX@g.us",
+                help="Use a contact ID ending in @c.us or a group ID ending in @g.us.",
+            ).strip()
+            if selected_chat_id:
+                st.session_state.wa_chat_id = selected_chat_id
+
         # ── Send Options ───────────────────────────────────────────
         send_to_whatsapp = st.checkbox(
-            "📨 Send images to WhatsApp after processing",
+            "📨 Send processed images to the selected WhatsApp chat",
             value=st.session_state.get("send_to_whatsapp", False),
         )
         st.session_state.send_to_whatsapp = send_to_whatsapp
-    
+
         wa_delay = st.slider(
             "⏳ Delay between images (seconds)",
             min_value=1.0,
@@ -357,7 +396,7 @@ def show_main_app():
             disabled=not send_to_whatsapp,
             help="Prevents WhatsApp rate limiting / spam detection",
         )
-    
+
         # Validation warning
         if send_to_whatsapp:
             missing = []
@@ -367,7 +406,7 @@ def show_main_app():
                 missing.append("API Token")
             if not selected_chat_id:
                 missing.append("Chat ID / Group")
-    
+
             if missing:
                 st.warning(f"⚠️ Missing WhatsApp fields: {', '.join(missing)}")
             else:
@@ -375,19 +414,60 @@ def show_main_app():
                     f"📲 Images will be sent to:\n\n"
                     f"`{selected_chat_id}`"
                 )
-    
+
+        # ── Conversation View ────────────────────────────────────────
+        st.caption("Incoming messages are loaded only when you press “Load incoming messages”.")
+        if selected_chat_id:
+            chat_messages = st.session_state.wa_messages.get(selected_chat_id, [])
+            st.markdown("#### Conversation")
+            if not chat_messages:
+                st.info("No incoming messages loaded for this chat yet.")
+            else:
+                for message in chat_messages:
+                    prefix = "You" if message.get("from_me") else message.get("sender_name", "Contact")
+                    st.markdown(f"**{prefix}:** {message.get('text', '')}")
+
+            with st.form("wa_send_text_form", clear_on_submit=True):
+                text_to_send = st.text_area("Message", placeholder="Type a WhatsApp message...", height=80)
+                send_text_clicked = st.form_submit_button(
+                    "Send message", disabled=not (id_instance and api_token and selected_chat_id)
+                )
+            if send_text_clicked:
+                if not text_to_send.strip():
+                    st.warning("Type a message first.")
+                else:
+                    try:
+                        result = send_text_to_whatsapp_greenapi(
+                            text_to_send.strip(), selected_chat_id, id_instance, api_token
+                        )
+                        if result.get("idMessage"):
+                            st.session_state.wa_messages.setdefault(selected_chat_id, []).append({
+                                "chat_id": selected_chat_id,
+                                "text": text_to_send.strip(),
+                                "from_me": True,
+                                "timestamp": None,
+                                "id_message": result["idMessage"],
+                                "sender_name": "You",
+                            })
+                            st.success("Message sent.")
+                            st.rerun()
+                        else:
+                            st.error(f"Green API did not confirm the message: {result}")
+                    except Exception as exc:
+                        st.error(f"Message sending failed: {exc}")
+
         st.divider()
-    
+
         # ============================================================
         # 3. CONTROL BUTTONS
         # ============================================================
         col_start, col_stop = st.columns(2)
-    
+
         if "processing" not in st.session_state:
             st.session_state.processing = False
         if "cancel_requested" not in st.session_state:
             st.session_state.cancel_requested = False
-    
+
         if col_start.button(
             "🚀 Start Processing",
             use_container_width=True,
@@ -397,7 +477,7 @@ def show_main_app():
             st.session_state.cancel_requested = False
             st.session_state.pop("zip_buffer", None)
             st.rerun()
-    
+
         if col_stop.button(
             "🛑 Stop / Cancel",
             use_container_width=True,
@@ -405,7 +485,7 @@ def show_main_app():
         ):
             st.session_state.cancel_requested = True
             st.warning("Stop signal sent. Will stop after current file attempt.")
-    
+
         # ============================================================
         # 4. PROCESSING LOOP
         # ============================================================
@@ -413,27 +493,27 @@ def show_main_app():
             status_text  = st.empty()
             progress_bar = st.progress(0)
             log_container = st.container()
-    
+
             Path(output_folder).mkdir(parents=True, exist_ok=True)
             all_images     = []
             timed_out_files = []
             failed_files   = []
-    
+
             try:
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     total = len(uploaded_files)
-    
+
                     if total == 0:
                         st.warning("No files uploaded!")
                         st.session_state.processing = False
                         st.stop()
-    
+
                     # ── Per-file loop ──────────────────────────────
                     for idx, up_file in enumerate(uploaded_files):
                         if st.session_state.cancel_requested:
                             log_container.warning("🛑 Cancelled by user.")
                             break
-    
+
                         wb_name = Path(up_file.name).stem
                         status_text.text(
                             f"Processing {idx+1}/{total}: {wb_name}..."
@@ -441,25 +521,25 @@ def show_main_app():
                         log_container.write(
                             f"---\n📂 Starting: **{wb_name}**"
                         )
-    
+
                         # Save to temp disk
                         tmp_path = os.path.join(tmp_dir, up_file.name)
                         with open(tmp_path, "wb") as f:
                             f.write(up_file.getbuffer())
-    
+
                         file_size = os.path.getsize(tmp_path)
                         log_container.write(
                             f"  💾 Saved: {file_size} bytes → `{tmp_path}`"
                         )
-    
+
                         if file_size == 0:
                             log_container.error("  ❌ Empty file! Skipping.")
                             failed_files.append((wb_name, "Empty file after save"))
                             continue
-    
+
                         # Run in thread with timeout
                         res_dict = {"images": [], "success": False, "error": None}
-    
+
                         thread = threading.Thread(
                             target=process_single_file_wrapper,
                             args=(
@@ -472,28 +552,28 @@ def show_main_app():
                             ),
                             daemon=True,
                         )
-    
+
                         start_time = time.time()
                         thread.start()
                         thread.join(timeout=float(file_timeout))
                         elapsed = time.time() - start_time
-    
+
                         if thread.is_alive():
                             log_container.warning(
                                 f"  ⏱️ TIMEOUT after {elapsed:.1f}s "
                                 f"(limit: {file_timeout}s) — **{wb_name}** skipped"
                             )
                             timed_out_files.append(wb_name)
-    
+
                         else:
                             log_container.write(
                                 f"  ⏱️ Completed in {elapsed:.1f}s"
                             )
-    
+
                             if res_dict["success"]:
                                 imgs = res_dict.get("images", [])
                                 valid_imgs = []
-    
+
                                 for img_path in imgs:
                                     if os.path.exists(img_path):
                                         valid_imgs.append(img_path)
@@ -501,12 +581,12 @@ def show_main_app():
                                         log_container.warning(
                                             f"  ⚠️ Missing: `{img_path}`"
                                         )
-    
+
                                 log_container.write(
                                     f"  ✅ Success — {len(valid_imgs)} image(s)"
                                 )
                                 all_images.extend(valid_imgs)
-    
+
                             else:
                                 error_detail = res_dict.get("error", "Unknown error")
                                 log_container.error(f"  ❌ FAILED: {wb_name}")
@@ -515,9 +595,9 @@ def show_main_app():
                                 ):
                                     st.code(error_detail, language="python")
                                 failed_files.append((wb_name, error_detail))
-    
+
                         progress_bar.progress((idx + 1) / total)
-    
+
                 # ============================================================
                 # 5. WHATSAPP SENDING BLOCK
                 # ============================================================
@@ -531,28 +611,28 @@ def show_main_app():
                 ):
                     st.divider()
                     st.subheader("📱 Sending to WhatsApp...")
-    
+
                     wa_status   = st.empty()
                     wa_progress = st.progress(0)
                     wa_log      = st.container()
-    
+
                     wa_total = len(all_images)
-    
+
                     wa_success, wa_fail = 0, 0
-    
+
                     for i, img_path in enumerate(all_images, start=1):
-    
+
                         # Respect cancel between sends
                         if st.session_state.cancel_requested:
                             wa_log.warning("🛑 WhatsApp sending cancelled.")
                             break
-    
+
                         caption = Path(img_path).stem.replace("__", " | ")
                         wa_status.text(
                             f"📤 Sending image {i}/{wa_total}: "
                             f"{Path(img_path).name}"
                         )
-    
+
                         try:
                             result = send_image_to_whatsapp_greenapi(
                                 image_path=img_path,
@@ -561,20 +641,7 @@ def show_main_app():
                                 id_instance=id_instance,
                                 api_token=api_token,
                             )
-    
-                            group_id = "120363425604830968@g.us"
-                            
-                            meta = get_whatsapp_group_metadata_greenapi(
-                                group_id=group_id,
-                                id_instance=id_instance,
-                                api_token=api_token,
-                            )
-    
-                            print("Group metadata:", meta)
-                            print("Group name:", meta.get("subject") or meta.get("name") or "unknown")
-                            print("Participants:", meta.get("participants", []))
-                            print("Description:", meta.get("description") or "no description")
-                            
+
                             if "idMessage" in result:
                                 wa_log.write(
                                     f"  ✅ Sent ({i}/{wa_total}): "
@@ -587,25 +654,25 @@ def show_main_app():
                                     f"{Path(img_path).name} → {result}"
                                 )
                                 wa_fail += 1
-    
+
                         except Exception as wa_exc:
                             wa_log.error(
                                 f"  ❌ Error sending "
                                 f"{Path(img_path).name}: {wa_exc}"
                             )
                             wa_fail += 1
-    
+
                         wa_progress.progress(i / wa_total)
-    
+
                         # Delay between sends (skip after last)
                         if i < wa_total:
                             time.sleep(wa_delay)
-    
+
                     # WhatsApp summary
                     wa_col_a, wa_col_b = st.columns(2)
                     wa_col_a.metric("✅ WA Sent",   wa_success)
                     wa_col_b.metric("❌ WA Failed", wa_fail)
-    
+
                     if wa_fail == 0:
                         wa_status.success(
                             f"🎉 All {wa_success} images sent to WhatsApp!"
@@ -614,13 +681,13 @@ def show_main_app():
                         wa_status.warning(
                             f"⚠️ {wa_success} sent, {wa_fail} failed."
                         )
-    
+
                 elif send_to_whatsapp and not all_images:
                     st.info("ℹ️ No images to send to WhatsApp.")
-    
+
                 elif send_to_whatsapp and st.session_state.cancel_requested:
                     st.warning("🛑 WhatsApp sending skipped — cancelled.")
-    
+
                 # ============================================================
                 # 6. SUMMARY & ZIP DOWNLOAD
                 # ============================================================
@@ -629,16 +696,16 @@ def show_main_app():
                 col1.metric("✅ Images Generated", len(all_images))
                 col2.metric("⏱️ Timed Out",        len(timed_out_files))
                 col3.metric("❌ Failed",            len(failed_files))
-    
+
                 if timed_out_files:
                     st.warning(f"**Timed out:** {', '.join(timed_out_files)}")
-    
+
                 if failed_files:
                     st.error("**Failed files:**")
                     for fname, err in failed_files:
                         with st.expander(f"❌ {fname}"):
                             st.code(err, language="python")
-    
+
                 if all_images:
                     zip_buf = io.BytesIO()
                     with zipfile.ZipFile(
@@ -654,15 +721,15 @@ def show_main_app():
                     status_text.text(
                         "⚠️ No images generated. Check errors above."
                     )
-    
+
             except Exception as e:
                 import traceback
                 st.error(f"**Critical Error:** {e}")
                 st.code(traceback.format_exc(), language="python")
-    
+
             finally:
                 st.session_state.processing = False
-    
+
         # ============================================================
         # 7. PERSISTENT DOWNLOAD BUTTON
         # ============================================================
