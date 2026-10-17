@@ -285,7 +285,7 @@ def show_main_app():
         #     #     help="Found in your Green API dashboard",
         #     # )
     
-                id_instance = ID_INSTANCE
+        id_instance = ID_INSTANCE
         api_token = API_TOKEN
 
         if id_instance:
