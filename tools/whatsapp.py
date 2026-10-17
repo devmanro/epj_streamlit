@@ -1,178 +1,251 @@
-import mimetypes
-import time
-from pathlib import Path
-from typing import List, Tuple, Dict, Any
+"""
+whatsapp.py — Green API integration helpers
+"""
 
+import os
+import json
 import requests
 
 GREEN_API_BASE = "https://api.green-api.com"
+GREEN_MEDIA_BASE = "https://media.green-api.com"  # some instances route media here
 
 
-def _api_url(method: str, id_instance: str, api_token: str) -> str:
-    return f"{GREEN_API_BASE}/waInstance{id_instance}/{method}/{api_token}"
+def _base_url(id_instance: str, api_token: str, method: str, media: bool = False) -> str:
+    root = GREEN_MEDIA_BASE if media else GREEN_API_BASE
+    return f"{root}/waInstance{id_instance}/{method}/{api_token}"
 
 
-def _json_response(response: requests.Response) -> dict:
+# ──────────────────────────────────────────────────────────
+# CONTACTS / GROUPS
+# ──────────────────────────────────────────────────────────
+def get_whatsapp_chats_greenapi(id_instance: str, api_token: str) -> list:
+    """
+    Returns a unified list of contacts and groups:
+    [{'id': '...@c.us' or '...@g.us', 'name': '...', 'type': 'contact'|'group'}]
+    """
+    url = _base_url(id_instance, api_token, "getContacts")
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+
     try:
-        data = response.json()
-        return data if isinstance(data, dict) else {"data": data}
-    except ValueError:
-        return {"error": response.text, "status_code": response.status_code}
+        data = resp.json()
+    except json.JSONDecodeError:
+        return []
+
+    chats = []
+    for item in data:
+        chat_id = item.get("id", "")
+        if not chat_id:
+            continue
+        is_group = chat_id.endswith("@g.us")
+        name = item.get("name") or item.get("contactName") or chat_id.split("@")[0]
+        chats.append({
+            "id": chat_id,
+            "name": name,
+            "type": "group" if is_group else "contact",
+        })
+
+    # De-duplicate by id, keep groups first for convenience
+    seen = set()
+    unique_chats = []
+    for c in sorted(chats, key=lambda x: x["type"] != "group"):
+        if c["id"] not in seen:
+            seen.add(c["id"])
+            unique_chats.append(c)
+
+    return unique_chats
+
+
+def get_whatsapp_group_metadata_greenapi(group_id: str, id_instance: str, api_token: str) -> dict:
+    url = _base_url(id_instance, api_token, "getGroupData")
+    resp = requests.post(url, json={"groupId": group_id}, timeout=30)
+    resp.raise_for_status()
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        return {}
+
+
+# ──────────────────────────────────────────────────────────
+# SENDING
+# ──────────────────────────────────────────────────────────
+def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str, api_token: str) -> dict:
+    url = _base_url(id_instance, api_token, "sendMessage")
+    payload = {"chatId": chat_id, "message": message}
+
+    resp = requests.post(url, json=payload, timeout=30)
+
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"{resp.status_code} error from sendMessage: {resp.text}"
+        )
+
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Non-JSON response from sendMessage: {resp.text}")
 
 
 def send_image_to_whatsapp_greenapi(
-    image_path: str, chat_id: str, caption: str,
-    id_instance: str, api_token: str,
+    image_path: str,
+    chat_id: str,
+    caption: str,
+    id_instance: str,
+    api_token: str,
 ) -> dict:
-    url = _api_url("sendFileByUpload", id_instance, api_token)
-    file_name = Path(image_path).name
-    mime_type, _ = mimetypes.guess_type(image_path)
-    with open(image_path, "rb") as file_obj:
-        response = requests.post(
-            url,
-            data={"chatId": chat_id, "caption": caption},
-            files={"file": (file_name, file_obj, mime_type or "application/octet-stream")},
-            timeout=60,
+    """
+    Sends an image via Green API's sendFileByUpload endpoint.
+    Uses proper multipart/form-data — do NOT set a custom Content-Type header,
+    requests will set the correct multipart boundary automatically.
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    url = _base_url(id_instance, api_token, "sendFileByUpload")
+    file_name = os.path.basename(image_path)
+
+    # Guess mime type
+    ext = os.path.splitext(file_name)[1].lower()
+    mime_map = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }
+    mime_type = mime_map.get(ext, "application/octet-stream")
+
+    with open(image_path, "rb") as f:
+        files = {
+            "file": (file_name, f, mime_type),
+        }
+        data = {
+            "chatId": chat_id,
+            "caption": caption or "",
+            "fileName": file_name,   # Green API requires this explicitly
+        }
+
+        resp = requests.post(url, data=data, files=files, timeout=60)
+
+    if resp.status_code != 200:
+        # Surface the ACTUAL error body from Green API instead of a generic 500
+        raise RuntimeError(
+            f"{resp.status_code} error from sendFileByUpload for '{file_name}': {resp.text}"
         )
-    response.raise_for_status()
-    return _json_response(response)
+
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            f"Non-JSON response from sendFileByUpload: {resp.text}"
+        )
 
 
-def send_text_to_whatsapp_greenapi(
-    message: str, chat_id: str, id_instance: str, api_token: str,
-) -> dict:
-    response = requests.post(
-        _api_url("sendMessage", id_instance, api_token),
-        json={"chatId": chat_id, "message": message},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return _json_response(response)
+# ──────────────────────────────────────────────────────────
+# RECEIVING NOTIFICATIONS
+# ──────────────────────────────────────────────────────────
+def receive_whatsapp_notification_greenapi(id_instance: str, api_token: str):
+    """
+    Polls the notification queue. Returns None if there is nothing to read.
+    Handles empty-body / literal 'null' responses which previously caused
+    'Expecting value: line 1 column 1 (char 0)' JSON decode errors.
+    """
+    url = _base_url(id_instance, api_token, "receiveNotification")
+    resp = requests.get(url, timeout=30)
 
-
-def get_whatsapp_chats_greenapi(id_instance: str, api_token: str) -> List[dict]:
-    """Return contacts and groups from Green API getChats."""
-    response = requests.get(_api_url("getChats", id_instance, api_token), timeout=30)
-    response.raise_for_status()
-    data = response.json()
-    if not isinstance(data, list):
-        return []
-    chats = []
-    for item in data:
-        chat_id = item.get("id") or item.get("chatId") or ""
-        if not chat_id:
-            continue
-        chats.append({
-            "id": chat_id,
-            "name": item.get("name") or item.get("contactName") or item.get("subject") or chat_id,
-            "type": "group" if chat_id.endswith("@g.us") else "contact",
-        })
-    return sorted(chats, key=lambda c: (c["type"] != "contact", c["name"].lower()))
-
-
-def get_whatsapp_groups_greenapi(id_instance: str, api_token: str) -> List[dict]:
-    """Backward-compatible helper: return groups only."""
-    return [c for c in get_whatsapp_chats_greenapi(id_instance, api_token)
-            if c["type"] == "group"]
-
-
-def get_whatsapp_group_metadata_greenapi(
-    group_id: str, id_instance: str, api_token: str,
-) -> dict:
-    response = requests.post(
-        _api_url("getGroupMetadata", id_instance, api_token),
-        json={"groupJid": group_id}, timeout=30,
-    )
-    response.raise_for_status()
-    return _json_response(response)
-
-
-def receive_whatsapp_notification_greenapi(
-    id_instance: str, api_token: str,
-) -> dict | None:
-    """Fetch one queued webhook notification. None means queue is empty."""
-    response = requests.get(
-        _api_url("receiveNotification", id_instance, api_token), timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return data if isinstance(data, dict) and data else None
-
-
-def delete_whatsapp_notification_greenapi(
-    receipt_id: str, id_instance: str, api_token: str,
-) -> dict:
-    response = requests.delete(
-        _api_url(f"deleteNotification/{receipt_id}", id_instance, api_token),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return _json_response(response)
-
-
-def parse_incoming_notification(notification: dict) -> dict | None:
-    """Normalize common incoming text notifications into a small chat message."""
-    body = notification.get("body") or {}
-    webhook_type = body.get("typeWebhook", "")
-    if webhook_type not in ("incomingMessageReceived", "incomingMessageReceivedNew"):
+    if resp.status_code == 204:
         return None
 
-    sender = body.get("senderData") or {}
-    chat_id = sender.get("chatId") or ""
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"{resp.status_code} error from receiveNotification: {resp.text}"
+        )
+
+    text = resp.text.strip()
+    if not text or text == "null":
+        return None
+
+    try:
+        data = resp.json()
+    except json.JSONDecodeError:
+        # Defensive fallback — treat malformed body as "nothing to read"
+        return None
+
+    if data is None:
+        return None
+
+    return data
+
+
+def delete_whatsapp_notification_greenapi(receipt_id: str, id_instance: str, api_token: str) -> bool:
+    url = _base_url(id_instance, api_token, "deleteNotification") + f"/{receipt_id}"
+    resp = requests.delete(url, timeout=30)
+
+    if resp.status_code != 200:
+        # Don't crash the polling loop over a failed delete — just report it
+        return False
+
+    try:
+        result = resp.json()
+        return bool(result.get("result", False))
+    except json.JSONDecodeError:
+        return False
+
+
+# ──────────────────────────────────────────────────────────
+# PARSING INCOMING NOTIFICATIONS
+# ──────────────────────────────────────────────────────────
+def parse_incoming_notification(notification: dict) -> dict | None:
+    """
+    Normalizes a Green API webhook/notification body into:
+    {
+        'chat_id': str,
+        'text': str,
+        'from_me': bool,
+        'timestamp': int | None,
+        'id_message': str | None,
+        'sender_name': str,
+    }
+    Returns None if the notification isn't a message we can display
+    (e.g. status updates, delivery receipts, etc.)
+    """
+    if not notification:
+        return None
+
+    body = notification.get("body", {})
+    type_webhook = body.get("typeWebhook")
+
+    if type_webhook not in ("incomingMessageReceived", "outgoingMessageReceived", "outgoingAPIMessageReceived"):
+        return None
+
+    sender_data = body.get("senderData", {})
+    message_data = body.get("messageData", {})
+
+    chat_id = sender_data.get("chatId")
     if not chat_id:
         return None
 
-    message_data = body.get("messageData") or {}
-    message_type = message_data.get("typeMessage", "unknown")
-    text = ""
-    if message_type == "textMessage":
-        text = (message_data.get("textMessageData") or {}).get("textMessage", "")
-    elif message_type == "extendedTextMessage":
-        text = (message_data.get("extendedTextMessageData") or {}).get("text", "")
-    elif message_type == "quotedMessage":
-        quoted = message_data.get("quotedMessage") or {}
-        text = (quoted.get("stanzaId", "") + " " +
-                (quoted.get("textMessage", "") or "")).strip()
-    else:
-        text = f"[{message_type or 'non-text message'}]"
+    msg_type = message_data.get("typeMessage", "")
 
-    timestamp = body.get("timestamp")
+    text = ""
+    if msg_type == "textMessage":
+        text = message_data.get("textMessageData", {}).get("textMessage", "")
+    elif msg_type == "extendedTextMessage":
+        text = message_data.get("extendedTextMessageData", {}).get("text", "")
+    elif msg_type == "imageMessage":
+        caption = message_data.get("fileMessageData", {}).get("caption", "")
+        text = f"[Image] {caption}".strip()
+    else:
+        text = f"[{msg_type}]"
+
     return {
         "chat_id": chat_id,
-        "text": text or "[Empty message]",
-        "from_me": False,
-        "timestamp": timestamp,
-        "id_message": (body.get("idMessage") or ""),
-        "sender_name": sender.get("senderName") or sender.get("chatName") or chat_id,
-        "message_type": message_type,
+        "text": text,
+        "from_me": type_webhook in ("outgoingMessageReceived", "outgoingAPIMessageReceived"),
+        "timestamp": body.get("timestamp"),
+        "id_message": body.get("idMessage"),
+        "sender_name": sender_data.get("senderName") or sender_data.get("sender", "Contact"),
     }
-
-
-def send_images_to_whatsapp(
-    image_paths: List[str], chat_id: str, id_instance: str, api_token: str,
-    log_fn, delay_seconds: float = 1.5,
-) -> Tuple[int, int]:
-    success = fail = 0
-    for i, image_path in enumerate(image_paths, start=1):
-        caption = Path(image_path).stem.replace("__", " | ")
-        try:
-            result = send_image_to_whatsapp_greenapi(
-                image_path, chat_id, caption, id_instance, api_token
-            )
-            if result.get("idMessage"):
-                log_fn(f"✅ Sent ({i}/{len(image_paths)}): {Path(image_path).name}")
-                success += 1
-            else:
-                log_fn(f"⚠️ Failed ({i}/{len(image_paths)}): {Path(image_path).name} → {result}")
-                fail += 1
-        except Exception as exc:
-            log_fn(f"❌ Error sending {Path(image_path).name}: {exc}")
-            fail += 1
-        if i < len(image_paths):
-            time.sleep(delay_seconds)
-    return success, fail
-
-
 
 
 
