@@ -377,7 +377,16 @@ def parse_incoming_notification(notification: dict) -> dict | None:
         "sender_name": sender_data.get("senderName") or sender_data.get("sender", "Contact"),
     }
 
-
+def normalize_message(msg, is_from_me=False):
+    """Normalizes incoming vs history message dictionaries for uniform rendering."""
+    return {
+        "chat_id": msg.get("chatId") or msg.get("chat_id"),
+        "text": msg.get("textMessage") or msg.get("caption") or msg.get("text", ""),
+        "from_me": msg.get("typeWebhook") == "outgoingMessageReceived" or msg.get("from_me", is_from_me),
+        "timestamp": msg.get("timestamp") or 0,
+        "id_message": msg.get("idMessage") or msg.get("id_message"),
+        "sender_name": "You" if (msg.get("from_me", is_from_me)) else msg.get("senderName", msg.get("sender_name", "Contact")),
+    }
 
 # ============================================================
 # ========== YOUR CREDENTIALS ================================
