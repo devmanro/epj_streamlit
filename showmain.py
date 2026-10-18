@@ -244,4 +244,4 @@ def show_main_app():
         page_generate_sheets()     # ← add this line
     
     elif choice == "Send_Recaps":
-        render_send_recaps_tab(ID_INSTANCE,API_TOKEN)
+        render_send_recaps_tab(ID_INSTANCE,API_TOKEN,st)
