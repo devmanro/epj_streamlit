@@ -72,7 +72,7 @@ def drain_log_queue(log_container):
             break
 
 
-def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
+def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
 
     st.header("📤 Send Recaps via WhatsApp")
 
