@@ -19,6 +19,7 @@ from tools.whatsapp import (
     send_image_to_whatsapp_greenapi, receive_whatsapp_notification_greenapi,
     delete_whatsapp_notification_greenapi, parse_incoming_notification,
     get_whatsapp_chat_history_greenapi,
+    normalize_message,
 )
 
 from tools.tools import ensure_directories
