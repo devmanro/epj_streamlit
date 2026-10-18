@@ -20,7 +20,7 @@ from tools.whatsapp import (
 )
 
 # ⚠️ FIX #1: Import get_recap — adjust this path to match where get_recap is actually defined!
-from tools.excel_recap import get_recap
+from modules.get_recap import get_recap
 
 
 # --- Thread-safe log queue ---
