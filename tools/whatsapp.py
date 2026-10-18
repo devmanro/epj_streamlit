@@ -20,8 +20,18 @@ except ImportError:
 GREEN_API_BASE = "https://api.green-api.com"
 
 
+GREEN_API_HOST_OVERRIDE = os.getenv("GREEN_API_HOST", "")
+
 def _base_url(id_instance: str, api_token: str, method: str) -> str:
-    return f"{GREEN_API_BASE}/waInstance{id_instance}/{method}/{api_token}"
+    if GREEN_API_HOST_OVERRIDE:
+        host = GREEN_API_HOST_OVERRIDE.rstrip("/")
+    else:
+        host = f"https://{str(id_instance)[:4]}.api.greenapi.com"
+    return f"{host}/waInstance{id_instance}/{method}/{api_token}"
+    
+
+
+
 
 
 # ──────────────────────────────────────────────────────────
