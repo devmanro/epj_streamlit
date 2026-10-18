@@ -1,4 +1,3 @@
-import st
 import os
 import io
 import time
@@ -73,7 +72,7 @@ def drain_log_queue(log_container):
             break
 
 
-def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
+def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
 
     st.header("📤 Send Recaps via WhatsApp")
 
