@@ -18,6 +18,7 @@ def send_image_to_whatsapp_greenapi(
     api_token: str,
 ) -> dict:
     url = (
+        f"https://api.wa.chat" # or api.green-api.com depending on your instance host
         f"https://api.green-api.com"
         f"/waInstance{id_instance}"
         f"/sendFileByUpload"
@@ -28,15 +29,19 @@ def send_image_to_whatsapp_greenapi(
     mime_type, _ = mimetypes.guess_type(image_path)
     mime_type = mime_type or "image/png"
 
-    with open(image_path, "rb") as f:
-        files = {"file": (file_name, f, mime_type)}
-        data  = {"chatId": chat_id, "caption": caption}
-        response = requests.post(url, data=data, files=files, timeout=60)
-
     try:
+        with open(image_path, "rb") as f:
+            files = {"file": (file_name, f, mime_type)}
+            data  = {"chatId": chat_id, "caption": caption}
+            response = requests.post(url, data=data, files=files, timeout=60)
+            
+        # Check if server returned a success status code before parsing JSON
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}: {response.text[:200]}"}
+            
         return response.json()
-    except Exception:
-        return {"error": response.text}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def send_text_to_whatsapp_greenapi(
