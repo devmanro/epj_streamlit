@@ -13,10 +13,12 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import numpy as np
 #from tools.whatsapp import send_image_to_whatsapp_greenapi ,get_whatsapp_group_metadata_greenapi
+
 from tools.whatsapp import (
     get_whatsapp_chats_greenapi, send_text_to_whatsapp_greenapi,
     send_image_to_whatsapp_greenapi, receive_whatsapp_notification_greenapi,
     delete_whatsapp_notification_greenapi, parse_incoming_notification,
+    get_whatsapp_chat_history_greenapi,
 )
 
 from tools.tools import ensure_directories
@@ -286,6 +288,7 @@ def show_main_app():
         #     # )
     
               # ============================================================
+               # ============================================================
         # SETUP
         # ============================================================
         id_instance = ID_INSTANCE
@@ -299,13 +302,15 @@ def show_main_app():
         if "wa_chats" not in st.session_state:
             st.session_state.wa_chats = []
         if "wa_messages" not in st.session_state:
-            st.session_state.wa_messages = {}  # chat_id -> list of messages
+            st.session_state.wa_messages = {}  # chat_id -> list of live-polled messages
         if "wa_seen_message_ids" not in st.session_state:
             st.session_state.wa_seen_message_ids = set()
         if "processing" not in st.session_state:
             st.session_state.processing = False
         if "cancel_requested" not in st.session_state:
             st.session_state.cancel_requested = False
+        if "wa_history_count" not in st.session_state:
+            st.session_state.wa_history_count = 25
 
         # ============================================================
         # LAYOUT: LEFT = Controls / Buttons, RIGHT = Chat + Processing
@@ -437,6 +442,12 @@ def show_main_app():
                                       if chat_options[label] == previous_id), 0)
                 selected_label = st.selectbox("Chat", labels, index=default_index)
                 selected_chat_id = chat_options[selected_label]
+
+                # Reset pagination window + cache when switching chats
+                if selected_chat_id != st.session_state.get("wa_chat_id"):
+                    st.session_state.wa_history_count = 25
+                    st.session_state.pop(f"wa_history_{selected_chat_id}", None)
+
                 st.session_state.wa_chat_id = selected_chat_id
             else:
                 selected_chat_id = st.text_input(
@@ -467,8 +478,107 @@ def show_main_app():
 
             # ── IMAGE PROCESSING (upper area of messages) ───────
             st.markdown("### 🖼️ Image Processing")
+            processing_placeholder = st.container()
 
-            if st.session_state.processing:
+            st.divider()
+
+            # ── CONVERSATION (bubble-style, lazy-loaded) ────────
+            st.markdown("#### Conversation")
+
+            if selected_chat_id and id_instance and api_token:
+                history_cache_key = f"wa_history_{selected_chat_id}"
+
+                load_older_col, refresh_col = st.columns(2)
+                with load_older_col:
+                    if st.button("⬆️ Load older messages", use_container_width=True):
+                        st.session_state.wa_history_count += 25
+                        st.session_state.pop(history_cache_key, None)
+
+                with refresh_col:
+                    if st.button("🔄 Refresh conversation", use_container_width=True):
+                        st.session_state.pop(history_cache_key, None)
+
+                if history_cache_key not in st.session_state:
+                    try:
+                        with st.spinner("Loading conversation..."):
+                            history = get_whatsapp_chat_history_greenapi(
+                                selected_chat_id, id_instance, api_token,
+                                count=st.session_state.wa_history_count,
+                            )
+                        st.session_state[history_cache_key] = history
+                    except Exception as exc:
+                        st.error(f"Could not load chat history: {exc}")
+                        st.session_state[history_cache_key] = []
+
+                chat_messages = list(st.session_state.get(history_cache_key, []))
+
+                # Merge in any live messages captured via notification polling
+                live_messages = st.session_state.wa_messages.get(selected_chat_id, [])
+                if live_messages:
+                    seen_ids = {m.get("id_message") for m in chat_messages if m.get("id_message")}
+                    for m in live_messages:
+                        if m.get("id_message") not in seen_ids:
+                            chat_messages.append(m)
+                    chat_messages.sort(key=lambda m: m.get("timestamp") or 0)
+
+                # ── Chat bubble rendering ──────────────────────
+                chat_box = st.container(height=400)
+                with chat_box:
+                    if not chat_messages:
+                        st.info("No messages yet for this chat.")
+                    else:
+                        for message in chat_messages:
+                            role = "user" if message.get("from_me") else "assistant"
+                            name = "You" if message.get("from_me") else message.get("sender_name", "Contact")
+                            with st.chat_message(role):
+                                st.markdown(f"**{name}**")
+                                st.write(message.get("text", ""))
+
+                # Auto-scroll to bottom (smooth)
+                st.markdown(
+                    """
+                    <script>
+                        var chatBoxes = window.parent.document.querySelectorAll(
+                            'div[data-testid="stVerticalBlockBorderWrapper"]'
+                        );
+                        if (chatBoxes.length > 0) {
+                            var lastBox = chatBoxes[chatBoxes.length - 1];
+                            lastBox.scrollTo({top: lastBox.scrollHeight, behavior: 'smooth'});
+                        }
+                    </script>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                # ── Message input (chat-bot style) ─────────────
+                text_to_send = st.chat_input("Type a WhatsApp message...")
+                if text_to_send:
+                    try:
+                        result = send_text_to_whatsapp_greenapi(
+                            text_to_send.strip(), selected_chat_id, id_instance, api_token
+                        )
+                        if result.get("idMessage"):
+                            st.session_state.wa_messages.setdefault(selected_chat_id, []).append({
+                                "chat_id": selected_chat_id,
+                                "text": text_to_send.strip(),
+                                "from_me": True,
+                                "timestamp": None,
+                                "id_message": result["idMessage"],
+                                "sender_name": "You",
+                            })
+                            st.rerun()
+                        else:
+                            st.error(f"Green API did not confirm the message: {result}")
+                    except Exception as exc:
+                        st.error(f"Message sending failed: {exc}")
+            else:
+                st.info("Select or enter a chat above to start messaging.")
+
+        # ============================================================
+        # 4. PROCESSING LOOP (renders inside the chat area's upper section)
+        # ============================================================
+        if st.session_state.processing:
+            with processing_placeholder:
                 status_text  = st.empty()
                 progress_bar = st.progress(0)
                 log_container = st.container()
@@ -707,48 +817,6 @@ def show_main_app():
 
                 finally:
                     st.session_state.processing = False
-            else:
+        else:
+            with processing_placeholder:
                 st.caption("No processing in progress. Click **🚀 Start Processing** on the left.")
-
-            st.divider()
-
-            # ── CONVERSATION (bottom of chat area) ──────────────
-            st.caption("Incoming messages are loaded only when you press “Load incoming messages”.")
-            if selected_chat_id:
-                chat_messages = st.session_state.wa_messages.get(selected_chat_id, [])
-                st.markdown("#### Conversation")
-                if not chat_messages:
-                    st.info("No incoming messages loaded for this chat yet.")
-                else:
-                    for message in chat_messages:
-                        prefix = "You" if message.get("from_me") else message.get("sender_name", "Contact")
-                        st.markdown(f"**{prefix}:** {message.get('text', '')}")
-
-                with st.form("wa_send_text_form", clear_on_submit=True):
-                    text_to_send = st.text_area("Message", placeholder="Type a WhatsApp message...", height=80)
-                    send_text_clicked = st.form_submit_button(
-                        "Send message", disabled=not (id_instance and api_token and selected_chat_id)
-                    )
-                if send_text_clicked:
-                    if not text_to_send.strip():
-                        st.warning("Type a message first.")
-                    else:
-                        try:
-                            result = send_text_to_whatsapp_greenapi(
-                                text_to_send.strip(), selected_chat_id, id_instance, api_token
-                            )
-                            if result.get("idMessage"):
-                                st.session_state.wa_messages.setdefault(selected_chat_id, []).append({
-                                    "chat_id": selected_chat_id,
-                                    "text": text_to_send.strip(),
-                                    "from_me": True,
-                                    "timestamp": None,
-                                    "id_message": result["idMessage"],
-                                    "sender_name": "You",
-                                })
-                                st.success("Message sent.")
-                                st.rerun()
-                            else:
-                                st.error(f"Green API did not confirm the message: {result}")
-                        except Exception as exc:
-                            st.error(f"Message sending failed: {exc}")
