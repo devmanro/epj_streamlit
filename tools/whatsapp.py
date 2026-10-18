@@ -6,23 +6,23 @@ import os
 import json
 import requests
 
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 GREEN_API_BASE = "https://api.green-api.com"
-GREEN_MEDIA_BASE = "https://media.green-api.com"  # some instances route media here
 
 
-def _base_url(id_instance: str, api_token: str, method: str, media: bool = False) -> str:
-    root = GREEN_MEDIA_BASE if media else GREEN_API_BASE
-    return f"{root}/waInstance{id_instance}/{method}/{api_token}"
+def _base_url(id_instance: str, api_token: str, method: str) -> str:
+    return f"{GREEN_API_BASE}/waInstance{id_instance}/{method}/{api_token}"
 
 
 # ──────────────────────────────────────────────────────────
 # CONTACTS / GROUPS
 # ──────────────────────────────────────────────────────────
 def get_whatsapp_chats_greenapi(id_instance: str, api_token: str) -> list:
-    """
-    Returns a unified list of contacts and groups:
-    [{'id': '...@c.us' or '...@g.us', 'name': '...', 'type': 'contact'|'group'}]
-    """
     url = _base_url(id_instance, api_token, "getContacts")
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
@@ -45,7 +45,6 @@ def get_whatsapp_chats_greenapi(id_instance: str, api_token: str) -> list:
             "type": "group" if is_group else "contact",
         })
 
-    # De-duplicate by id, keep groups first for convenience
     seen = set()
     unique_chats = []
     for c in sorted(chats, key=lambda x: x["type"] != "group"):
@@ -67,7 +66,84 @@ def get_whatsapp_group_metadata_greenapi(group_id: str, id_instance: str, api_to
 
 
 # ──────────────────────────────────────────────────────────
-# SENDING
+# CHAT HISTORY (for lazy-loaded conversation UI)
+# ──────────────────────────────────────────────────────────
+def get_whatsapp_chat_history_greenapi(
+    chat_id: str, id_instance: str, api_token: str, count: int = 25
+) -> list:
+    """
+    Fetches up to `count` of the most recent messages for a chat.
+    Returns a chronologically ordered list (oldest first), normalized to:
+    {
+        'chat_id', 'text', 'from_me', 'timestamp', 'id_message', 'sender_name'
+    }
+
+    To "load older messages", call again with a larger `count` and
+    merge/dedupe by id_message — Green API doesn't support cursor-based
+    pagination, only a growing window of recent history.
+    """
+    url = _base_url(id_instance, api_token, "getChatHistory")
+    payload = {"chatId": chat_id, "count": count}
+    resp = requests.post(url, json=payload, timeout=30)
+
+    if resp.status_code != 200:
+        raise RuntimeError(f"{resp.status_code} error from getChatHistory: {resp.text}")
+
+    text = resp.text.strip()
+    if not text or text == "null":
+        return []
+
+    try:
+        data = resp.json()
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Non-JSON response from getChatHistory: {resp.text}")
+
+    if not isinstance(data, list):
+        return []
+
+    messages = []
+    for item in data:
+        parsed = _parse_history_item(item, chat_id)
+        if parsed:
+            messages.append(parsed)
+
+    # Green API returns newest-first; reverse to chronological order
+    messages.reverse()
+    return messages
+
+
+def _parse_history_item(item: dict, chat_id: str) -> dict | None:
+    msg_type = item.get("typeMessage", "")
+
+    if msg_type == "textMessage":
+        text = item.get("textMessage", "")
+    elif msg_type == "extendedTextMessage":
+        text = (
+            item.get("extendedTextMessageData", {}).get("text")
+            or item.get("caption", "")
+            or ""
+        )
+    elif msg_type in ("imageMessage", "videoMessage", "documentMessage"):
+        label = msg_type.replace("Message", "").capitalize()
+        caption = item.get("caption", "")
+        text = f"[{label}] {caption}".strip()
+    else:
+        text = item.get("textMessage") or f"[{msg_type or 'message'}]"
+
+    is_outgoing = item.get("type") == "outgoing"
+
+    return {
+        "chat_id": chat_id,
+        "text": text,
+        "from_me": is_outgoing,
+        "timestamp": item.get("timestamp"),
+        "id_message": item.get("idMessage"),
+        "sender_name": item.get("senderName") or ("You" if is_outgoing else "Contact"),
+    }
+
+
+# ──────────────────────────────────────────────────────────
+# SENDING TEXT
 # ──────────────────────────────────────────────────────────
 def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str, api_token: str) -> dict:
     url = _base_url(id_instance, api_token, "sendMessage")
@@ -76,9 +152,7 @@ def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str,
     resp = requests.post(url, json=payload, timeout=30)
 
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"{resp.status_code} error from sendMessage: {resp.text}"
-        )
+        raise RuntimeError(f"{resp.status_code} error from sendMessage: {resp.text}")
 
     try:
         return resp.json()
@@ -86,25 +160,33 @@ def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str,
         raise RuntimeError(f"Non-JSON response from sendMessage: {resp.text}")
 
 
-def send_image_to_whatsapp_greenapi(
-    image_path: str,
-    chat_id: str,
-    caption: str,
-    id_instance: str,
-    api_token: str,
-) -> dict:
+# ──────────────────────────────────────────────────────────
+# SENDING IMAGES — with automatic fallback
+# ──────────────────────────────────────────────────────────
+def _ensure_reasonable_file_size(image_path: str, max_bytes: int = 5 * 1024 * 1024) -> str:
     """
-    Sends an image via Green API's sendFileByUpload endpoint.
-    Uses proper multipart/form-data — do NOT set a custom Content-Type header,
-    requests will set the correct multipart boundary automatically.
+    If the image is larger than max_bytes, compress it to JPEG to reduce
+    the chance of the upload crashing the upstream Green API service.
+    Returns the path to send (original, or a compressed copy).
     """
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
+    size = os.path.getsize(image_path)
+    if size <= max_bytes or not PIL_AVAILABLE:
+        return image_path
 
+    try:
+        img = Image.open(image_path)
+        compressed_path = os.path.splitext(image_path)[0] + "_compressed.jpg"
+        img.convert("RGB").save(compressed_path, "JPEG", quality=85, optimize=True)
+        return compressed_path
+    except Exception:
+        # If compression fails for any reason, just try sending the original
+        return image_path
+
+
+def _send_file_by_upload(image_path: str, chat_id: str, caption: str, id_instance: str, api_token: str) -> dict:
     url = _base_url(id_instance, api_token, "sendFileByUpload")
     file_name = os.path.basename(image_path)
 
-    # Guess mime type
     ext = os.path.splitext(file_name)[1].lower()
     mime_map = {
         ".png": "image/png",
@@ -116,19 +198,15 @@ def send_image_to_whatsapp_greenapi(
     mime_type = mime_map.get(ext, "application/octet-stream")
 
     with open(image_path, "rb") as f:
-        files = {
-            "file": (file_name, f, mime_type),
-        }
+        files = {"file": (file_name, f, mime_type)}
         data = {
             "chatId": chat_id,
             "caption": caption or "",
-            "fileName": file_name,   # Green API requires this explicitly
+            "fileName": file_name,
         }
-
-        resp = requests.post(url, data=data, files=files, timeout=60)
+        resp = requests.post(url, data=data, files=files, timeout=90)
 
     if resp.status_code != 200:
-        # Surface the ACTUAL error body from Green API instead of a generic 500
         raise RuntimeError(
             f"{resp.status_code} error from sendFileByUpload for '{file_name}': {resp.text}"
         )
@@ -136,20 +214,96 @@ def send_image_to_whatsapp_greenapi(
     try:
         return resp.json()
     except json.JSONDecodeError:
-        raise RuntimeError(
-            f"Non-JSON response from sendFileByUpload: {resp.text}"
-        )
+        raise RuntimeError(f"Non-JSON response from sendFileByUpload: {resp.text}")
+
+
+def _send_file_by_url_fallback(image_path: str, chat_id: str, caption: str, id_instance: str, api_token: str) -> dict:
+    """
+    Fallback path: upload file to Green API storage first, then send by URL.
+    More reliable for larger files or when sendFileByUpload crashes upstream.
+    """
+    upload_url = _base_url(id_instance, api_token, "uploadFile")
+    file_name = os.path.basename(image_path)
+
+    with open(image_path, "rb") as f:
+        file_bytes = f.read()
+
+    upload_resp = requests.post(
+        upload_url,
+        data=file_bytes,
+        headers={
+            "Content-Type": "application/octet-stream",
+            "GreenAPI-File-Name": file_name,
+        },
+        timeout=90,
+    )
+
+    if upload_resp.status_code != 200:
+        raise RuntimeError(f"{upload_resp.status_code} error from uploadFile: {upload_resp.text}")
+
+    try:
+        upload_data = upload_resp.json()
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Non-JSON response from uploadFile: {upload_resp.text}")
+
+    file_url = upload_data.get("urlFile")
+    if not file_url:
+        raise RuntimeError(f"uploadFile did not return a urlFile: {upload_data}")
+
+    send_url = _base_url(id_instance, api_token, "sendFileByUrl")
+    payload = {
+        "chatId": chat_id,
+        "urlFile": file_url,
+        "fileName": file_name,
+        "caption": caption or "",
+    }
+    send_resp = requests.post(send_url, json=payload, timeout=30)
+
+    if send_resp.status_code != 200:
+        raise RuntimeError(f"{send_resp.status_code} error from sendFileByUrl: {send_resp.text}")
+
+    try:
+        return send_resp.json()
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Non-JSON response from sendFileByUrl: {send_resp.text}")
+
+
+def send_image_to_whatsapp_greenapi(
+    image_path: str,
+    chat_id: str,
+    caption: str,
+    id_instance: str,
+    api_token: str,
+) -> dict:
+    """
+    Sends an image, trying the direct upload method first.
+    If that fails (e.g. raw 500 from nginx/upstream crash), automatically
+    falls back to the uploadFile + sendFileByUrl two-step method, which
+    is more resilient for larger or problematic files.
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    send_path = _ensure_reasonable_file_size(image_path)
+
+    try:
+        return _send_file_by_upload(send_path, chat_id, caption, id_instance, api_token)
+    except Exception as primary_exc:
+        try:
+            result = _send_file_by_url_fallback(send_path, chat_id, caption, id_instance, api_token)
+            return result
+        except Exception as fallback_exc:
+            raise RuntimeError(
+                f"Both send methods failed.\n"
+                f"Primary (sendFileByUpload) error: {primary_exc}\n"
+                f"Fallback (sendFileByUrl) error: {fallback_exc}"
+            )
 
 
 # ──────────────────────────────────────────────────────────
-# RECEIVING NOTIFICATIONS
+# RECEIVING NOTIFICATIONS (live incoming messages only)
 # ──────────────────────────────────────────────────────────
 def receive_whatsapp_notification_greenapi(id_instance: str, api_token: str):
-    """
-    Polls the notification queue. Returns None if there is nothing to read.
-    Handles empty-body / literal 'null' responses which previously caused
-    'Expecting value: line 1 column 1 (char 0)' JSON decode errors.
-    """
     url = _base_url(id_instance, api_token, "receiveNotification")
     resp = requests.get(url, timeout=30)
 
@@ -157,9 +311,7 @@ def receive_whatsapp_notification_greenapi(id_instance: str, api_token: str):
         return None
 
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"{resp.status_code} error from receiveNotification: {resp.text}"
-        )
+        raise RuntimeError(f"{resp.status_code} error from receiveNotification: {resp.text}")
 
     text = resp.text.strip()
     if not text or text == "null":
@@ -168,13 +320,9 @@ def receive_whatsapp_notification_greenapi(id_instance: str, api_token: str):
     try:
         data = resp.json()
     except json.JSONDecodeError:
-        # Defensive fallback — treat malformed body as "nothing to read"
         return None
 
-    if data is None:
-        return None
-
-    return data
+    return data if data is not None else None
 
 
 def delete_whatsapp_notification_greenapi(receipt_id: str, id_instance: str, api_token: str) -> bool:
@@ -182,7 +330,6 @@ def delete_whatsapp_notification_greenapi(receipt_id: str, id_instance: str, api
     resp = requests.delete(url, timeout=30)
 
     if resp.status_code != 200:
-        # Don't crash the polling loop over a failed delete — just report it
         return False
 
     try:
@@ -192,23 +339,7 @@ def delete_whatsapp_notification_greenapi(receipt_id: str, id_instance: str, api
         return False
 
 
-# ──────────────────────────────────────────────────────────
-# PARSING INCOMING NOTIFICATIONS
-# ──────────────────────────────────────────────────────────
 def parse_incoming_notification(notification: dict) -> dict | None:
-    """
-    Normalizes a Green API webhook/notification body into:
-    {
-        'chat_id': str,
-        'text': str,
-        'from_me': bool,
-        'timestamp': int | None,
-        'id_message': str | None,
-        'sender_name': str,
-    }
-    Returns None if the notification isn't a message we can display
-    (e.g. status updates, delivery receipts, etc.)
-    """
     if not notification:
         return None
 
@@ -227,7 +358,6 @@ def parse_incoming_notification(notification: dict) -> dict | None:
 
     msg_type = message_data.get("typeMessage", "")
 
-    text = ""
     if msg_type == "textMessage":
         text = message_data.get("textMessageData", {}).get("textMessage", "")
     elif msg_type == "extendedTextMessage":
@@ -246,8 +376,6 @@ def parse_incoming_notification(notification: dict) -> dict | None:
         "id_message": body.get("idMessage"),
         "sender_name": sender_data.get("senderName") or sender_data.get("sender", "Contact"),
     }
-
-
 
 
 
