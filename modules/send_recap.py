@@ -4,25 +4,57 @@ import time
 import zipfile
 import tempfile
 import threading
-import queue
 from pathlib import Path
-import streamlit as st
+
+import concurrent.futures
+import threading
+import time
+import queue
 
 from tools.whatsapp import (
-    get_whatsapp_chats_greenapi,
-    send_text_to_whatsapp_greenapi,
-    send_image_to_whatsapp_greenapi,
-    receive_whatsapp_notification_greenapi,
-    delete_whatsapp_notification_greenapi,
-    parse_incoming_notification,
+    get_whatsapp_chats_greenapi, send_text_to_whatsapp_greenapi,
+    send_image_to_whatsapp_greenapi, receive_whatsapp_notification_greenapi,
+    delete_whatsapp_notification_greenapi, parse_incoming_notification,
     get_whatsapp_chat_history_greenapi,
     normalize_message,
 )
 
+# ⚠️ FIX #1: Import get_recap — adjust this path to match where get_recap is actually defined!
+from tools.excel_recap import get_recap
+
+
 # --- Thread-safe log queue ---
 log_queue = queue.Queue()
 
-FILE_TIMEOUT_SECONDS = 30
+# ── Constants ─────────────────────────────────────────────────────────
+FILE_TIMEOUT_SECONDS = 30  # seconds before skipping a file
+
+
+# --- Define this helper OUTSIDE or AT THE TOP of your app script ---
+def process_single_file_wrapper(result_dict, tmp_path, wb_name, output_folder, last_table_tail_cols, log_fn=None):
+    import traceback
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(tmp_path, data_only=True)
+        sheet = wb.worksheets[0]
+
+        # Use the passed-in log_fn if given, otherwise fall back to threadsafe_log
+        active_log_fn = log_fn if log_fn is not None else threadsafe_log
+
+        imgs = get_recap(
+            sheet=sheet,
+            workbook_name=wb_name,
+            output_folder=output_folder,
+            last_table_tail_cols=int(last_table_tail_cols),
+            log_fn=threadsafe_log,  # ✅ thread-safe, no Streamlit context needed
+        )
+        wb.close()
+        result_dict["images"] = imgs
+        result_dict["success"] = True
+    except Exception as e:
+        # Capture FULL traceback, not just the message
+        result_dict["error"] = traceback.format_exc()
+        result_dict["success"] = False
 
 
 def threadsafe_log(msg: str):
@@ -40,28 +72,8 @@ def drain_log_queue(log_container):
             break
 
 
-def process_single_file_wrapper(result_dict, tmp_path, wb_name, output_folder, last_table_tail_cols):
-    import traceback
-    try:
-        import openpyxl
-        wb = openpyxl.load_workbook(tmp_path, data_only=True)
-        sheet = wb.worksheets[0]
-        imgs = get_recap(  # noqa: F821
-            sheet=sheet,
-            workbook_name=wb_name,
-            output_folder=output_folder,
-            last_table_tail_cols=int(last_table_tail_cols),
-            log_fn=threadsafe_log,
-        )
-        wb.close()
-        result_dict["images"] = imgs
-        result_dict["success"] = True
-    except Exception as e:
-        result_dict["error"] = traceback.format_exc()
-        result_dict["success"] = False
+def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
 
-
-def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
     st.header("📤 Send Recaps via WhatsApp")
 
     # ============================================================
@@ -95,6 +107,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
     if api_token:
         st.session_state.wa_api_token = api_token
 
+    # Initialize session states
     if "wa_chats" not in st.session_state:
         st.session_state.wa_chats = []
     if "wa_messages" not in st.session_state:
@@ -108,6 +121,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
     if "wa_history_count" not in st.session_state:
         st.session_state.wa_history_count = 25
 
+    # Contact/Group Fetch controls
     wa_col1, wa_col2 = st.columns(2)
     with wa_col1:
         fetch_chats = st.button(
@@ -129,7 +143,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
             if st.session_state.wa_chats:
                 st.success(f"✅ Loaded {len(st.session_state.wa_chats)} chat(s)")
             else:
-                st.warning("No chats returned.")
+                st.warning("No chats returned. Check that your Green API instance is connected.")
         except Exception as exc:
             st.error(f"Could not load chats: {exc}")
 
@@ -159,6 +173,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
         except Exception as exc:
             st.error(f"Could not load incoming messages: {exc}")
 
+    # Target Chat Selector (contacts + groups, like the original script)
     chats_available = st.session_state.get("wa_chats", [])
     if chats_available:
         chat_options = {
@@ -199,12 +214,13 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
         "⏳ Delay between images (s)",
         min_value=1.0, max_value=10.0, value=2.0, step=0.5,
         disabled=not send_to_whatsapp,
+        help="Prevents WhatsApp rate limiting / spam detection",
     )
 
     st.divider()
 
     # ============================================================
-    # 3. CONTROLS & CHAT LAYOUT
+    # 3. LAYOUT: CONTROLS & CHAT CONVERSATION
     # ============================================================
     left_col, right_col = st.columns([1, 2])
 
@@ -215,7 +231,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
 
         if start_clicked:
             if not uploaded_files:
-                st.error("⚠️ Please select at least one Excel file first!")
+                st.warning("⚠️ Please upload at least one Excel file before starting.")
             else:
                 st.session_state.processing = True
                 st.session_state.cancel_requested = False
@@ -224,7 +240,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
 
         if stop_clicked:
             st.session_state.cancel_requested = True
-            st.warning("Stop signal sent.")
+            st.warning("Stop signal sent. Will stop after current file attempt.")
 
         if st.session_state.get("zip_buffer"):
             st.download_button(
@@ -268,6 +284,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
 
             chat_messages = list(st.session_state.get(history_cache_key, []))
 
+            # Merge live-polled messages
             live_messages = st.session_state.wa_messages.get(selected_chat_id, [])
             if live_messages:
                 seen_ids = {m.get("id_message") for m in chat_messages if m.get("id_message")}
@@ -288,6 +305,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
                             st.markdown(f"**{name}**")
                             st.write(message.get("text", ""))
 
+            # Chat input
             text_to_send = st.chat_input("Type a WhatsApp message...")
             if text_to_send:
                 try:
@@ -312,23 +330,22 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
     # ============================================================
     if st.session_state.processing:
         with processing_placeholder:
-            status_text = st.empty()
+            status_text  = st.empty()
             progress_bar = st.progress(0)
             log_container = st.container()
 
             Path(output_folder).mkdir(parents=True, exist_ok=True)
-            all_images = []
+            all_images      = []
             timed_out_files = []
-            failed_files = []
+            failed_files    = []
 
             try:
-                if not uploaded_files:
-                    st.warning("No files uploaded!")
-                    st.session_state.processing = False
-                    st.stop()
-
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     total = len(uploaded_files)
+                    if total == 0:
+                        st.warning("No files uploaded!")
+                        st.session_state.processing = False
+                        st.stop()
 
                     for idx, up_file in enumerate(uploaded_files):
                         if st.session_state.cancel_requested:
@@ -352,22 +369,23 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
                         res_dict = {"images": [], "success": False, "error": None}
                         thread = threading.Thread(
                             target=process_single_file_wrapper,
-                            args=(res_dict, tmp_path, wb_name, output_folder, last_table_tail_cols),
+                            args=(
+                                res_dict, tmp_path, wb_name, output_folder,
+                                last_table_tail_cols, None,  # log_fn not used directly across threads
+                            ),
                             daemon=True,
                         )
 
                         start_time = time.time()
                         thread.start()
 
-                        # Poll thread & drain thread safe log queue
-                        while thread.is_alive():
-                            thread.join(timeout=0.5)
+                        # ⚠️ FIX #2: Poll + drain log queue while waiting, instead of a single blocking join
+                        while thread.is_alive() and (time.time() - start_time) < float(file_timeout):
                             drain_log_queue(log_container)
-                            if time.time() - start_time > float(file_timeout):
-                                break
+                            thread.join(timeout=0.25)
 
                         elapsed = time.time() - start_time
-                        drain_log_queue(log_container)
+                        drain_log_queue(log_container)  # flush any remaining logs
 
                         if thread.is_alive():
                             log_container.warning(f"  ⏱️ TIMEOUT after {elapsed:.1f}s — **{wb_name}** skipped")
@@ -380,10 +398,24 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
                             else:
                                 err = res_dict.get("error", "Unknown error")
                                 failed_files.append((wb_name, err))
+                                log_container.error(f"  ❌ Failed: {wb_name}")
+                                with log_container.expander(f"Show error for {wb_name}"):
+                                    st.code(err, language="python")
 
                         progress_bar.progress((idx + 1) / total)
 
-                # Send images to WhatsApp
+                # Summary of failures/timeouts
+                if failed_files:
+                    st.subheader("❌ Failed Files")
+                    for name, err in failed_files:
+                        with st.expander(name):
+                            st.code(err, language="python")
+
+                if timed_out_files:
+                    st.subheader("⏱️ Timed Out Files")
+                    st.write(", ".join(timed_out_files))
+
+                # Sending Images to WhatsApp
                 if send_to_whatsapp and all_images and selected_chat_id and not st.session_state.cancel_requested:
                     st.subheader("📱 Sending images to WhatsApp...")
                     wa_status = st.empty()
@@ -423,12 +455,16 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
                     st.metric("✅ WA Sent", wa_success)
                     st.metric("❌ WA Failed", wa_fail)
 
+                # ZIP creation & summary
                 if all_images:
                     zip_buf = io.BytesIO()
                     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
                         for img in all_images:
                             zf.write(img, arcname=Path(img).name)
                     st.session_state.zip_buffer = zip_buf.getvalue()
+                    st.success(f"✅ Done! {len(all_images)} image(s) ready for download.")
+                else:
+                    st.warning("⚠️ No images were generated.")
 
             except Exception as e:
                 import traceback
@@ -436,4 +472,3 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN):
                 st.code(traceback.format_exc(), language="python")
             finally:
                 st.session_state.processing = False
-                st.rerun()
