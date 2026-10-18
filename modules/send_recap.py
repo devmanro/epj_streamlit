@@ -7,8 +7,8 @@ from tools.whatsapp import (
 )
 
 
-def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
-    
+def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
+
     st.header("📤 Send Recaps via WhatsApp")
 
     # ============================================================
@@ -43,8 +43,6 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
         st.session_state.wa_api_token = api_token
 
     # Initialize session states
-    if "wa_groups" not in st.session_state:
-        st.session_state.wa_groups = []
     if "wa_chats" not in st.session_state:
         st.session_state.wa_chats = []
     if "wa_messages" not in st.session_state:
@@ -58,11 +56,11 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
     if "wa_history_count" not in st.session_state:
         st.session_state.wa_history_count = 25
 
-    # Group/Contact Fetch controls
+    # Contact/Group Fetch controls
     wa_col1, wa_col2 = st.columns(2)
     with wa_col1:
-        fetch_groups = st.button(
-            "🔄 Fetch My Groups",
+        fetch_chats = st.button(
+            "🔄 Load contacts and groups",
             disabled=not (id_instance and api_token),
             use_container_width=True,
         )
@@ -73,18 +71,16 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
             use_container_width=True,
         )
 
-    if fetch_groups:
+    if fetch_chats:
         try:
-            with st.spinner("Fetching groups from WhatsApp..."):
-                groups = get_whatsapp_groups_greenapi(id_instance, api_token)
-                if groups:
-                    st.session_state.wa_groups = groups
-                    st.success(f"✅ Found {len(groups)} group(s)")
-                else:
-                    st.warning("No groups found.")
-                    st.session_state.wa_groups = []
+            with st.spinner("Loading WhatsApp contacts and groups..."):
+                st.session_state.wa_chats = get_whatsapp_chats_greenapi(id_instance, api_token)
+            if st.session_state.wa_chats:
+                st.success(f"✅ Loaded {len(st.session_state.wa_chats)} chat(s)")
+            else:
+                st.warning("No chats returned. Check that your Green API instance is connected.")
         except Exception as exc:
-            st.error(f"Could not load groups: {exc}")
+            st.error(f"Could not load chats: {exc}")
 
     if load_incoming:
         loaded_count = 0
@@ -112,12 +108,24 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
         except Exception as exc:
             st.error(f"Could not load incoming messages: {exc}")
 
-    # Target Chat Selector
-    groups_available = st.session_state.get("wa_groups", [])
-    if groups_available:
-        group_options = {f"{g['name']} ({g['id']})": g["id"] for g in groups_available}
-        selected_label = st.selectbox("📋 Select Target WhatsApp Group", options=list(group_options.keys()))
-        selected_chat_id = group_options[selected_label]
+    # Target Chat Selector (contacts + groups, like the original script)
+    chats_available = st.session_state.get("wa_chats", [])
+    if chats_available:
+        chat_options = {
+            f"{'👥' if chat['type'] == 'group' else '👤'} {chat['name']} — {chat['id']}": chat["id"]
+            for chat in chats_available
+        }
+        labels = list(chat_options.keys())
+        previous_id = st.session_state.get("wa_chat_id", "")
+        default_index = next(
+            (i for i, label in enumerate(labels) if chat_options[label] == previous_id), 0
+        )
+        selected_label = st.selectbox(
+            "📋 Select Target WhatsApp Chat (Contact or Group)",
+            options=labels,
+            index=default_index,
+        )
+        selected_chat_id = chat_options[selected_label]
     else:
         selected_chat_id = st.text_input(
             "📋 WhatsApp Group / Contact Chat ID",
@@ -207,7 +215,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN,st):
                     st.session_state[history_cache_key] = []
 
             chat_messages = list(st.session_state.get(history_cache_key, []))
-            
+
             # Merge live-polled messages
             live_messages = st.session_state.wa_messages.get(selected_chat_id, [])
             if live_messages:
