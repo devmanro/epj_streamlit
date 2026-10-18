@@ -8,6 +8,13 @@ from pathlib import Path
 
 
 
+import concurrent.futures
+import threading
+import time
+import queue
+
+
+
 from tools.whatsapp import (
     get_whatsapp_chats_greenapi, send_text_to_whatsapp_greenapi,
     send_image_to_whatsapp_greenapi, receive_whatsapp_notification_greenapi,
@@ -16,6 +23,49 @@ from tools.whatsapp import (
     normalize_message,
 )
 
+
+
+# --- Thread-safe log queue ---
+log_queue = queue.Queue()
+
+    # ── Constants ─────────────────────────────────────────────────────────
+FILE_TIMEOUT_SECONDS = 30  # seconds before skipping a file
+# --- Define this helper OUTSIDE or AT THE TOP of your app script ---
+def process_single_file_wrapper(result_dict, tmp_path, wb_name, output_folder, last_table_tail_cols, log_fn):
+    import traceback
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(tmp_path, data_only=True)
+        sheet = wb.worksheets[0]
+        imgs = get_recap(
+            sheet=sheet,
+            workbook_name=wb_name,
+            output_folder=output_folder,
+            last_table_tail_cols=int(last_table_tail_cols),
+            log_fn=threadsafe_log,  # ✅ thread-safe, no Streamlit context needed
+
+        )
+        wb.close()
+        result_dict["images"] = imgs
+        result_dict["success"] = True
+    except Exception as e:
+        # Capture FULL traceback, not just the message
+        result_dict["error"] = traceback.format_exc()
+        result_dict["success"] = False
+
+
+def threadsafe_log(msg: str):
+    """Put log messages into queue instead of calling Streamlit directly."""
+    log_queue.put(msg)
+
+def drain_log_queue(log_container):
+    """Call this from the main thread to flush pending log messages."""
+    while not log_queue.empty():
+        try:
+            msg = log_queue.get_nowait()
+            log_container.write(f"  📝 {msg}")
+        except queue.Empty:
+            break
 
 def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
 
