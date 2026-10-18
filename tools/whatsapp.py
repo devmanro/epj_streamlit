@@ -6,6 +6,11 @@ import os
 import json
 import requests
 
+import mimetypes
+import time
+from pathlib import Path
+
+
 try:
     from PIL import Image
     PIL_AVAILABLE = True
@@ -268,37 +273,67 @@ def _send_file_by_url_fallback(image_path: str, chat_id: str, caption: str, id_i
         raise RuntimeError(f"Non-JSON response from sendFileByUrl: {send_resp.text}")
 
 
+
+
+
+
 def send_image_to_whatsapp_greenapi(
     image_path: str,
     chat_id: str,
     caption: str,
     id_instance: str,
     api_token: str,
+    max_retries: int = 2,
+    retry_delay: float = 2.0,
 ) -> dict:
     """
-    Sends an image, trying the direct upload method first.
-    If that fails (e.g. raw 500 from nginx/upstream crash), automatically
-    falls back to the uploadFile + sendFileByUrl two-step method, which
-    is more resilient for larger or problematic files.
+    Send an image via Green API's sendFileByUpload endpoint.
+    Simple, single-path implementation (no fragile fallback chain).
     """
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
+    url = (
+        f"https://api.green-api.com"
+        f"/waInstance{id_instance}"
+        f"/sendFileByUpload"
+        f"/{api_token}"
+    )
 
-    send_path = _ensure_reasonable_file_size(image_path)
+    file_name = Path(image_path).name
+    mime_type, _ = mimetypes.guess_type(image_path)
+    mime_type = mime_type or "image/png"
 
-    try:
-        return _send_file_by_upload(send_path, chat_id, caption, id_instance, api_token)
-    except Exception as primary_exc:
+    last_error = None
+
+    for attempt in range(1, max_retries + 2):  # 1 initial + retries
         try:
-            result = _send_file_by_url_fallback(send_path, chat_id, caption, id_instance, api_token)
-            return result
-        except Exception as fallback_exc:
-            raise RuntimeError(
-                f"Both send methods failed.\n"
-                f"Primary (sendFileByUpload) error: {primary_exc}\n"
-                f"Fallback (sendFileByUrl) error: {fallback_exc}"
-            )
+            # IMPORTANT: re-open the file fresh on every attempt —
+            # a file object that was already read/consumed on a previous
+            # attempt will produce an empty/corrupt upload on retry.
+            with open(image_path, "rb") as f:
+                files = {"file": (file_name, f, mime_type)}
+                data = {"chatId": chat_id, "caption": caption}
+                response = requests.post(url, data=data, files=files, timeout=60)
 
+            if response.status_code == 200:
+                try:
+                    result = response.json()
+                except Exception:
+                    result = {"error": response.text}
+
+                if isinstance(result, dict) and result.get("idMessage"):
+                    return result
+                else:
+                    last_error = f"Unexpected response: {result}"
+            else:
+                last_error = f"{response.status_code} error from sendFileByUpload: {response.text[:300]}"
+
+        except Exception as exc:
+            last_error = f"Exception during upload: {exc}"
+
+        if attempt <= max_retries:
+            time.sleep(retry_delay)
+
+    return {"error": last_error}
+    
 
 # ──────────────────────────────────────────────────────────
 # RECEIVING NOTIFICATIONS (live incoming messages only)
