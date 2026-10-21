@@ -301,7 +301,7 @@ def send_image_to_whatsapp_greenapi(
     Simple, single-path implementation (no fragile fallback chain).
     """
     url = (
-        f"https://api.green-api.com"
+        f"https://media.green-api.com"
         f"/waInstance{id_instance}"
         f"/sendFileByUpload"
         f"/{api_token}"
@@ -315,9 +315,6 @@ def send_image_to_whatsapp_greenapi(
 
     for attempt in range(1, max_retries + 2):  # 1 initial + retries
         try:
-            # IMPORTANT: re-open the file fresh on every attempt —
-            # a file object that was already read/consumed on a previous
-            # attempt will produce an empty/corrupt upload on retry.
             with open(image_path, "rb") as f:
                 files = {"file": (file_name, f, mime_type)}
                 data = {"chatId": chat_id, "caption": caption}
