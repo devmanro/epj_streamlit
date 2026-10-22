@@ -12,7 +12,7 @@ We use port 5432 with NullPool for Streamlit (stateless, re-entrant env).
 
 import os
 from contextlib import contextmanager
-
+from dotenv import load_dotenv
 import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -21,13 +21,15 @@ from sqlalchemy.pool import NullPool
 # ─────────────────────────────────────────────────────────────────────────────
 #  Connection URL resolution
 # ─────────────────────────────────────────────────────────────────────────────
+# Load local .env file if it exists
+load_dotenv()
 
 def _get_db_url() -> str:
     """
     Resolution order:
-      1. st.secrets["postgres"]  table  (Streamlit Cloud secrets.toml)
-      2. SUPABASE_DB_URL env var         (local .env / shell)
-      3. Raise — never silently use hardcoded creds in prod
+    1. st.secrets["postgres"] table (Streamlit Cloud secrets.toml)
+    2. SUPABASE_DB_URL env var (local .env / shell)
+    3. Raise — never silently use hardcoded creds in prod
     """
     # 1. Streamlit secrets [postgres] table
     try:
@@ -36,8 +38,7 @@ def _get_db_url() -> str:
             host = pg["host"]
             user = pg["user"]
             password = pg["password"]
-            database = pg["dbname"]          # note: "dbname" not "database"
-            # Use port 5432 (direct) — avoids PgBouncer quirks
+            database = pg["dbname"]
             port = pg.get("port", 5432)
             return (
                 f"postgresql+psycopg2://{user}:{password}"
@@ -46,18 +47,13 @@ def _get_db_url() -> str:
     except (KeyError, FileNotFoundError, AttributeError):
         pass
 
-    # 2. Environment variable
-    url = os.environ.get("SUPABASE_DB_URL", "").strip()
-    if url:
-        return url
+    # 2. SUPABASE_DB_URL env var (Local dev)
+    db_url = os.getenv("SUPABASE_DB_URL")
+    if db_url:
+        return db_url
 
-    # 3. Hard fail — do not silently fall back to hardcoded credentials
-    raise RuntimeError(
-        "Database URL not configured. "
-        "Add a [postgres] section to .streamlit/secrets.toml or "
-        "set the SUPABASE_DB_URL environment variable."
-    )
-
+    # 3. Raise if neither is found
+    raise ValueError("Database credentials not found in st.secrets or environment variables.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Engine

@@ -26,6 +26,7 @@ OUTPUT_FILE     = "output_omar.xlsx"
 
 # ---------------------------------------------------------------------------
 # ══════════════════════════════════════════════════════════════════════════
+# FOR STATE OF ALL SHIPS (OMAR FILE)
 #  FUZZY HEADER RESOLVER
 #  Strategy:
 #   1. Exact match (after strip)

@@ -23,9 +23,10 @@ from tools.whatsapp import (
 )
 
 from tools.tools import ensure_directories
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR ,API_TOKEN,ID_INSTANCE
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE
 
 from modules.send_recap import render_send_recaps_tab
+from modules.whatsapp_chat import render_whatsapp_chat_tab
 
 import concurrent.futures
 import threading
@@ -73,7 +74,6 @@ def drain_log_queue(log_container):
             log_container.write(f"  📝 {msg}")
         except queue.Empty:
             break
-
 
 
 # Import your specific scripts
@@ -129,7 +129,8 @@ def show_main_app():
         "Logistics Tools",
         "Templates",
         "Send_Recaps",
-        "Generate_Sheets",
+        "WhatsApp_Chat",
+        # "Generate_Sheets",
     ]
     # choice = st.sidebar.radio("Navigation", menu)
     choice = st.sidebar.radio("Navigation", menu, index=2)
@@ -236,12 +237,9 @@ def show_main_app():
     # 10. Send_Recaps
     # ---------------------------------------------------------
     # Assumes 'choice' is already defined by your sidebar/menu
-    
-    # ==========================================================
-    # ========== STREAMLIT UI ==================================
-    # ==========================================================
-    elif choice == "Generate_Sheets":
-        page_generate_sheets()     # ← add this line
-    
     elif choice == "Send_Recaps":
         render_send_recaps_tab(ID_INSTANCE,API_TOKEN,st)
+    elif choice == "WhatsApp_Chat":
+        render_whatsapp_chat_tab(ID_INSTANCE, API_TOKEN, st)
+    elif choice == "Generate_Sheets":
+        page_generate_sheets()     # ←FOR OMAR SHEETS(RST,CHASSIS,NAVIRE)
