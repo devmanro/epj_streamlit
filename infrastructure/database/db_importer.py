@@ -22,14 +22,16 @@ Public API
 
 import pandas as pd
 from datetime import datetime, timezone
-
 from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+# from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from infrastructure.database.session import get_session, init_db
 from infrastructure.database.models import Vessel, ManifestLine
 
+# this to be called only one time ,and recalled on purpose later when changes needed ,on the admin side panel 
+
 # Ensure tables exist on first import
+
 init_db()
 
 
