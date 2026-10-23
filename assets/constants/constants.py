@@ -1,7 +1,10 @@
 from pathlib import Path
+import streamlit as st
+import os
 
-ID_INSTANCE = "7107651033"          # ← paste yours
-API_TOKEN   = "9d9983de28a546eeab96421d62ebac6d30e27257edb147589c" # ← paste yours
+# Tries Streamlit secrets first, falls back to environment variables, then defaults to ""
+ID_INSTANCE = st.secrets.get("ID_INSTANCE", os.getenv("ID_INSTANCE", ""))
+API_TOKEN = st.secrets.get("API_TOKEN", os.getenv("API_TOKEN", ""))
 
 
 #PATH_REPORTS="reports/"
