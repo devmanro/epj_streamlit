@@ -25,7 +25,7 @@ DATA_PATH_ARCH = "data/archive"
 UPLOAD_DIR = "data/uploads"
 DB_PATH = "data/database.xlsx"
 
-
+GREEN_API_BASE = "https://api.green-api.com"
 
 # Use .parent for file paths to get their containing directory
 LIST_OF_PATHS = [
