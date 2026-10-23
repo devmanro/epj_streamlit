@@ -17,6 +17,13 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
+# ============================================================
+# ========== YOUR CREDENTIALS ================================
+# ============================================================
+
+ID_INSTANCE =os.getenv("ID_INSTANCE", "") 
+API_TOKEN   = os.getenv("API_TOKEN", "")  
+
 GREEN_API_BASE = "https://api.green-api.com"
 
 
@@ -427,10 +434,5 @@ def normalize_message(msg, is_from_me=False):
         "sender_name": "You" if (msg.get("from_me", is_from_me)) else msg.get("senderName", msg.get("sender_name", "Contact")),
     }
 
-# ============================================================
-# ========== YOUR CREDENTIALS ================================
-# ============================================================
 
-ID_INSTANCE = "7107651033"          # ← paste yours
-API_TOKEN   = "9d9983de28a546eeab96421d62ebac6d30e27257edb147589c" # ← paste yours
 
