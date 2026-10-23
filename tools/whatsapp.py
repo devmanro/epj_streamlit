@@ -17,14 +17,10 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-# ============================================================
-# ========== YOUR CREDENTIALS ================================
-# ============================================================
 
-ID_INSTANCE =os.getenv("ID_INSTANCE", "") 
-API_TOKEN   = os.getenv("API_TOKEN", "")  
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE
 
-GREEN_API_BASE = "https://api.green-api.com"
+
 
 
 GREEN_API_HOST_OVERRIDE = os.getenv("GREEN_API_HOST", "")
