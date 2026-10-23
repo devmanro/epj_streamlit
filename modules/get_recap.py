@@ -14,6 +14,8 @@ from openpyxl.styles.borders import Border
 import pandas as pd
 import matplotlib
 
+from assets.constants.constants import GREEN_API_BASE
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -236,7 +238,7 @@ def send_images_to_whatsapp(
     """
     ok = fail = 0
     upload_url = (
-        f"https://api.green-api.com/waInstance{id_instance}"
+        f"{GREEN_API_BASE}/waInstance{id_instance}"
         f"/sendFileByUpload/{api_token}"
     )
 

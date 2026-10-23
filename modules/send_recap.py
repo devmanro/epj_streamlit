@@ -24,7 +24,7 @@ log_queue = queue.Queue()
 RECAP_LOCK = threading.Lock()
 
 # ── Constants ─────────────────────────────────────────────────────────
-FILE_TIMEOUT_SECONDS = 30  # seconds before skipping a file
+FILE_TIMEOUT_SECONDS = 5  # seconds before skipping a file
 
 
 def process_single_file_wrapper(
@@ -243,7 +243,7 @@ def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
                             break
 
                         wb_name = Path(up_file.name).stem
-                        status_text.text(f"Processing {idx+1}/{total}: {wb_name}...")
+                        # status_text.text(f"Processing {idx+1}/{total}: {wb_name}...")
                         log_container.write(f"---\n📂 Starting: **{wb_name}**")
 
                         tmp_path = os.path.join(tmp_dir, up_file.name)

@@ -1,6 +1,10 @@
 from pathlib import Path
 import streamlit as st
 import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 # Tries Streamlit secrets first, falls back to environment variables, then defaults to ""
 ID_INSTANCE = st.secrets.get("ID_INSTANCE", os.getenv("ID_INSTANCE", ""))
@@ -25,7 +29,8 @@ DATA_PATH_ARCH = "data/archive"
 UPLOAD_DIR = "data/uploads"
 DB_PATH = "data/database.xlsx"
 
-GREEN_API_BASE = "https://api.green-api.com"
+GREEN_API_BASE = "https://7107.api.greenapi.com"
+
 
 # Use .parent for file paths to get their containing directory
 LIST_OF_PATHS = [

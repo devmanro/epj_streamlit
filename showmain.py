@@ -25,6 +25,7 @@ from tools.whatsapp import (
 from tools.tools import ensure_directories
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE
 
+print("API_TOKEN:",API_TOKEN)
 from modules.send_recap import render_send_recaps_tab
 from modules.whatsapp_chat import render_whatsapp_chat_tab
 

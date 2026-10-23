@@ -669,3 +669,80 @@ def gen_table(filepath=None):
         mask = source_df[COL_DESIGNATION].astype(str).str.contains(
             keyword, case=False, na=False
         )
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+in the process generation of debarquements and bordereaux
+
+1 -make the GROUPING OF  unit+package  by client name when same type of comodity union when generating broderaux
+
+2 -make order of list of items on gen debarquement and gen borderaux in this way:
+
+3- CTP,BOBINE,PIPE,POUTRELLE,CORNIERE,  UNITS+PACKAGES, UNITS, PACKAGES (ALWAYS MAKE SURE TO KEEP  "UNITS+PACKAGES, UNITS, PACKAGES" ORDERED AS LAST THE LAST )
+
+
+COMMODITY_TYPES = ["COLIS", "TUBE","PIPE", "POUTRELLE", "CORNIERE", "BOBINE", "CTP", "MDF", "FFP", "MDF + PLYWOOD", "BUS", "MINI BUS", "CAMIONS", "CAMION POMPE A BETON", "REMORQUES", "EXCAVATEUR", "BULLDOZER", "CHARGEUR", "COMPACTEUR", "FINISSEUR", "CAMION GRUE", "CHARIOT ELEVATEUR", "NIVELEUSE"]
+
+
+GOODS__TYPES = [
+    "COLIS",
+    "TUBE",
+    "POUTRELLE",
+    "CORNIERE",
+    "BOBINE",
+    "CTP",
+    "MDF",
+    "FFP",
+    "MDF + PLYWOOD",
+]
+
+
+
+
+
+
+
+
+
+
+
