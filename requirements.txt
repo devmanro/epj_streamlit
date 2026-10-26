@@ -1,3 +1,4 @@
+streamlit==1.66.0
 altair==6.0.0
 altgraph==0.17.5
 attrs==25.4.0
@@ -43,7 +44,6 @@ setuptools==82.0.0
 six==1.17.0
 smmap==5.0.2
 sqlalchemy
-streamlit==1.52.2
 streamlit-aggrid==1.2.1.post2
 streamlit-drawable-canvas==0.9.3
 streamlit-drawable-canvas-fix==0.9.8
