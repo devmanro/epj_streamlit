@@ -175,6 +175,19 @@ def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str,
         raise RuntimeError(f"Non-JSON response from sendMessage: {resp.text}")
 
 
+def send_message(phone: str, message: str) -> dict:
+    response = requests.post(
+        "https://my.wahero.org/api/send-message",
+        headers={
+            "x-api-key": st.secrets["WAHERO_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={"to": phone, "message": message},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
 # ──────────────────────────────────────────────────────────
 # SENDING IMAGES — with automatic fallback
 # ──────────────────────────────────────────────────────────
