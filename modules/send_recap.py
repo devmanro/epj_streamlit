@@ -4,361 +4,327 @@ import time
 import zipfile
 import tempfile
 import threading
+import queue
+import traceback
 from pathlib import Path
 
-import concurrent.futures
-import time
-import queue
+import openpyxl
+import streamlit as st
 
-from tools.whatsapp import (
-    get_whatsapp_chats_greenapi, 
-    send_image_to_whatsapp_greenapi,
+from modules.get_recap import get_recap
+from tools.wahero_client import (
+    send_image as send_image_wahero,
+    send_message as send_message_wahero,
 )
 
-# ⚠️ Import get_recap — adjust this path to match where get_recap is actually defined!
-from modules.get_recap import get_recap
-
-
-# --- Thread-safe log queue ---
 log_queue = queue.Queue()
 RECAP_LOCK = threading.Lock()
 
-# ── Constants ─────────────────────────────────────────────────────────
-FILE_TIMEOUT_SECONDS = 5  # seconds before skipping a file
+
+def threadsafe_log(message):
+    log_queue.put(message)
 
 
-def process_single_file_wrapper(
-    result_dict, tmp_path, wb_name, output_folder,
-    last_table_tail_cols, log_fn=None
+def drain_log_queue(container):
+    while True:
+        try:
+            message = log_queue.get_nowait()
+            container.write(f"📝 {message}")
+        except queue.Empty:
+            break
+
+
+def process_single_file(
+    result, file_path, workbook_name,
+    output_folder, last_table_tail_cols
 ):
-    import traceback
-    wb = None
+    workbook = None
 
     try:
-        import openpyxl
-
         with RECAP_LOCK:
-            wb = openpyxl.load_workbook(tmp_path, data_only=True)
-            sheet = wb.worksheets[0]
+            workbook = openpyxl.load_workbook(
+                file_path, data_only=True
+            )
 
-            imgs = get_recap(
-                sheet=sheet,
-                workbook_name=wb_name,
+            images = get_recap(
+                sheet=workbook.worksheets[0],
+                workbook_name=workbook_name,
                 output_folder=output_folder,
                 last_table_tail_cols=int(last_table_tail_cols),
                 log_fn=threadsafe_log,
             )
 
-            result_dict["images"] = imgs
-            result_dict["success"] = True
+        result["images"] = images
+        result["success"] = True
 
     except Exception:
-        result_dict["error"] = traceback.format_exc()
-        result_dict["success"] = False
+        result["error"] = traceback.format_exc()
+        result["success"] = False
 
     finally:
-        if wb is not None:
-            wb.close()
+        if workbook:
+            workbook.close()
 
 
-def threadsafe_log(msg: str):
-    """Put log messages into queue instead of calling Streamlit directly."""
-    log_queue.put(msg)
+def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
+    st.header("📤 Generate and Send Recaps via WA Hero")
 
-
-def drain_log_queue(log_container):
-    """Call this from the main thread to flush pending log messages."""
-    while not log_queue.empty():
-        try:
-            msg = log_queue.get_nowait()
-            log_container.write(f"  📝 {msg}")
-        except queue.Empty:
-            break
-
-
-def render_send_recaps_tab(ID_INSTANCE, API_TOKEN, st):
-
-    st.header("📤 Send Recaps via WhatsApp")
-
-    # ============================================================
-    # 1. FILE INPUTS
-    # ============================================================
     uploaded_files = st.file_uploader(
-        "Select Excel Files",
-        type=["xlsx", "xlsm", "xls"],
-        accept_multiple_files=True
+        "Select Excel files",
+        type=["xlsx", "xlsm"],
+        accept_multiple_files=True,
     )
-    output_folder = st.text_input("Output Folder Path", value="/tmp/output")
+
+    output_folder = st.text_input(
+        "Output folder", value="/tmp/output"
+    )
+
     last_table_tail_cols = st.number_input(
-        "Ending columns for last table tail", value=6, min_value=1
+        "Ending columns for last table tail",
+        min_value=1,
+        value=6,
     )
-    file_timeout = st.number_input(
-        "⏱️ Per-file timeout (seconds)", value=30, min_value=5
+
+    st.subheader("📱 WA Hero settings")
+
+    image_phone = st.text_input(
+        "Recipient phone number",
+        placeholder="213XXXXXXXXX",
+        help="Country code + number, digits only.",
+        key="wahero_image_phone",
+    ).strip()
+
+    send_images = st.checkbox(
+        "Send generated images through WA Hero",
+        value=True,
     )
 
-    st.divider()
+    image_delay = st.slider(
+        "Delay between images (seconds)",
+        min_value=1.0,
+        max_value=10.0,
+        value=2.0,
+        step=0.5,
+        disabled=not send_images,
+    )
 
-    # ============================================================
-    # 2. WHATSAPP SETTINGS & TARGET CHAT SETUP
-    # ============================================================
-    st.subheader("📱 WhatsApp Settings")
+    send_text = st.checkbox(
+        "Also send a text message",
+        value=False,
+    )
 
-    id_instance = ID_INSTANCE
-    api_token = API_TOKEN
+    text_phone = st.text_input(
+        "Text recipient phone number",
+        placeholder="213XXXXXXXXX",
+        disabled=not send_text,
+    ).strip()
 
-    if id_instance:
-        st.session_state.wa_id_instance = id_instance
-    if api_token:
-        st.session_state.wa_api_token = api_token
+    text_message = st.text_area(
+        "Text message",
+        value="Your recap images have been generated.",
+        disabled=not send_text,
+    )
 
-    # Initialize session states
-    if "wa_chats" not in st.session_state:
-        st.session_state.wa_chats = []
     if "processing" not in st.session_state:
         st.session_state.processing = False
+
     if "cancel_requested" not in st.session_state:
         st.session_state.cancel_requested = False
 
-    # Contact/Group Fetch control
-    fetch_chats = st.button(
-        "🔄 Load contacts and groups",
-        disabled=not (id_instance and api_token),
-        use_container_width=True,
-    )
-
-    if fetch_chats:
-        try:
-            with st.spinner("Loading WhatsApp contacts and groups..."):
-                st.session_state.wa_chats = get_whatsapp_chats_greenapi(id_instance, api_token)
-            if st.session_state.wa_chats:
-                st.success(f"✅ Loaded {len(st.session_state.wa_chats)} chat(s)")
-            else:
-                st.warning("No chats returned. Check that your Green API instance is connected.")
-        except Exception as exc:
-            st.error(f"Could not load chats: {exc}")
-
-    # Target Chat Selector (contacts + groups)
-    chats_available = st.session_state.get("wa_chats", [])
-    if chats_available:
-        chat_options = {
-            f"{'👥' if chat['type'] == 'group' else '👤'} {chat['name']} — {chat['id']}": chat["id"]
-            for chat in chats_available
-        }
-        labels = list(chat_options.keys())
-        previous_id = st.session_state.get("wa_chat_id", "")
-        default_index = next(
-            (i for i, label in enumerate(labels) if chat_options[label] == previous_id), 0
-        )
-        selected_label = st.selectbox(
-            "📋 Select Target WhatsApp Chat (Contact or Group)",
-            options=labels,
-            index=default_index,
-        )
-        selected_chat_id = chat_options[selected_label]
-    else:
-        selected_chat_id = st.text_input(
-            "📋 WhatsApp Group / Contact Chat ID",
-            value=st.session_state.get("wa_chat_id", ""),
-            placeholder="120363XXXXXXXXXX@g.us or 972501234567@c.us",
-        ).strip()
-
-    if selected_chat_id:
-        st.session_state.wa_chat_id = selected_chat_id
-
-    send_to_whatsapp = st.checkbox(
-        "📨 Send processed images to selected chat",
-        value=st.session_state.get("send_to_whatsapp", False),
-    )
-    st.session_state.send_to_whatsapp = send_to_whatsapp
-
-    wa_delay = st.slider(
-        "⏳ Delay between images (s)",
-        min_value=1.0, max_value=10.0, value=2.0, step=0.5,
-        disabled=not send_to_whatsapp,
-        help="Prevents WhatsApp rate limiting / spam detection",
-    )
-
-    st.divider()
-
-    # ============================================================
-    # 3. CONTROLS & EXECUTION
-    # ============================================================
-    st.markdown("### ⚙️ Controls")
-    
     col1, col2 = st.columns(2)
+
     with col1:
-        start_clicked = st.button("🚀 Start Processing", use_container_width=True, disabled=st.session_state.processing)
-    with col2:
-        stop_clicked = st.button("🛑 Stop / Cancel", use_container_width=True, disabled=not st.session_state.processing)
-
-    if start_clicked:
-        if not uploaded_files:
-            st.warning("⚠️ Please upload at least one Excel file before starting.")
-        else:
-            st.session_state.processing = True
-            st.session_state.cancel_requested = False
-            st.session_state.pop("zip_buffer", None)
-            st.rerun()
-
-    if stop_clicked:
-        st.session_state.cancel_requested = True
-        st.warning("Stop signal sent. Will stop after current file attempt.")
-
-    if st.session_state.get("zip_buffer"):
-        st.download_button(
-            label="⬇️ Download All Images (ZIP)",
-            data=st.session_state.zip_buffer,
-            file_name="exported_tables.zip",
-            mime="application/zip",
+        start = st.button(
+            "🚀 Start processing",
+            disabled=st.session_state.processing,
             use_container_width=True,
         )
 
-    processing_placeholder = st.container()
+    with col2:
+        stop = st.button(
+            "🛑 Stop",
+            disabled=not st.session_state.processing,
+            use_container_width=True,
+        )
 
-    # ============================================================
-    # 4. PROCESSING & WHATSAPP SENDING LOOP
-    # ============================================================
-    if st.session_state.processing:
-        with processing_placeholder:
-            status_text  = st.empty()
-            progress_bar = st.progress(0)
-            log_container = st.container()
+    if stop:
+        st.session_state.cancel_requested = True
+        st.warning("Cancellation requested.")
 
-            Path(output_folder).mkdir(parents=True, exist_ok=True)
-            all_images       = []
-            timed_out_files = []
-            failed_files    = []
+    if start:
+        if not uploaded_files:
+            st.warning("Upload at least one Excel file.")
+            return
 
-            try:
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    total = len(uploaded_files)
-                    if total == 0:
-                        st.warning("No files uploaded!")
-                        st.session_state.processing = False
-                        st.stop()
+        if send_images and not image_phone:
+            st.warning("Enter the image recipient's phone number.")
+            return
 
-                    for idx, up_file in enumerate(uploaded_files):
-                        if st.session_state.cancel_requested:
-                            log_container.warning("🛑 Cancelled by user.")
-                            break
+        st.session_state.processing = True
+        st.session_state.cancel_requested = False
+        st.rerun()
 
-                        wb_name = Path(up_file.name).stem
-                        # status_text.text(f"Processing {idx+1}/{total}: {wb_name}...")
-                        log_container.write(f"---\n📂 Starting: **{wb_name}**")
+    if not st.session_state.processing:
+        return
 
-                        tmp_path = os.path.join(tmp_dir, up_file.name)
-                        with open(tmp_path, "wb") as f:
-                            f.write(up_file.getbuffer())
+    progress = st.progress(0)
+    status = st.empty()
+    logs = st.container()
 
-                        file_size = os.path.getsize(tmp_path)
-                        if file_size == 0:
-                            log_container.error("  ❌ Empty file! Skipping.")
-                            failed_files.append((wb_name, "Empty file"))
-                            continue
+    Path(output_folder).mkdir(parents=True, exist_ok=True)
 
-                        res_dict = {"images": [], "success": False, "error": None}
-                        thread = threading.Thread(
-                            target=process_single_file_wrapper,
-                            args=(
-                                res_dict, tmp_path, wb_name, output_folder,
-                                last_table_tail_cols, None,
-                            ),
-                            daemon=True,
-                        )
+    all_images = []
+    failed_files = []
 
-                        start_time = time.time()
-                        thread.start()
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            total = len(uploaded_files)
 
-                        while thread.is_alive() and (time.time() - start_time) < float(file_timeout):
-                            drain_log_queue(log_container)
-                            thread.join(timeout=0.25)
+            for index, uploaded in enumerate(uploaded_files):
+                if st.session_state.cancel_requested:
+                    logs.warning("Processing cancelled.")
+                    break
 
-                        elapsed = time.time() - start_time
-                        drain_log_queue(log_container)
+                name = Path(uploaded.name).stem
+                status.write(
+                    f"Processing {index + 1}/{total}: {name}"
+                )
 
-                        if thread.is_alive():
-                            log_container.warning(f"  ⏱️ TIMEOUT after {elapsed:.1f}s — **{wb_name}** skipped")
-                            timed_out_files.append(wb_name)
-                        else:
-                            if res_dict["success"]:
-                                valid_imgs = [img for img in res_dict.get("images", []) if os.path.exists(img)]
-                                all_images.extend(valid_imgs)
-                                log_container.write(f"  ✅ Success — {len(valid_imgs)} image(s)")
-                            else:
-                                err = res_dict.get("error", "Unknown error")
-                                failed_files.append((wb_name, err))
-                                log_container.error(f"  ❌ Failed: {wb_name}")
-                                with log_container.expander(f"Show error for {wb_name}"):
-                                    st.code(err, language="python")
+                temp_path = os.path.join(
+                    tmp_dir, uploaded.name
+                )
 
-                        progress_bar.progress((idx + 1) / total)
+                with open(temp_path, "wb") as file:
+                    file.write(uploaded.getbuffer())
 
-                # Summary of failures/timeouts
-                if failed_files:
-                    st.subheader("❌ Failed Files")
-                    for name, err in failed_files:
-                        with st.expander(name):
-                            st.code(err, language="python")
+                result = {
+                    "images": [],
+                    "success": False,
+                    "error": None,
+                }
 
-                if timed_out_files:
-                    st.subheader("⏱️ Timed Out Files")
-                    st.write(", ".join(timed_out_files))
+                thread = threading.Thread(
+                    target=process_single_file,
+                    args=(
+                        result,
+                        temp_path,
+                        name,
+                        output_folder,
+                        last_table_tail_cols,
+                    ),
+                    daemon=True,
+                )
 
-                # Sending Images to WhatsApp
-                if send_to_whatsapp and all_images and selected_chat_id and not st.session_state.cancel_requested:
-                    st.subheader("📱 Sending images to WhatsApp...")
-                    wa_status = st.empty()
-                    wa_progress = st.progress(0)
-                    wa_log = st.container()
+                thread.start()
+                thread.join(timeout=30)
 
-                    wa_total = len(all_images)
-                    wa_success, wa_fail = 0, 0
+                drain_log_queue(logs)
 
-                    for i, img_path in enumerate(all_images, start=1):
-                        if st.session_state.cancel_requested:
-                            break
-                        caption = Path(img_path).stem.replace("__", " | ")
-                        wa_status.text(f"📤 Sending image {i}/{wa_total}: {Path(img_path).name}")
-                        try:
-                            res = send_image_to_whatsapp_greenapi(
-                                image_path=img_path,
-                                chat_id=selected_chat_id,
-                                caption=caption,
-                                id_instance=id_instance,
-                                api_token=api_token,
-                            )
-                            if isinstance(res, dict) and "idMessage" in res:
-                                wa_success += 1
-                                wa_log.write(f"  ✅ Sent: {Path(img_path).name}")
-                            else:
-                                wa_fail += 1
-                                wa_log.warning(f"  ⚠️ Failed: {res}")
-                        except Exception as ex:
-                            wa_fail += 1
-                            wa_log.error(f"  ❌ Error: {ex}")
-
-                        wa_progress.progress(i / wa_total)
-                        if i < wa_total:
-                            time.sleep(wa_delay)
-
-                    st.metric("✅ WA Sent", wa_success)
-                    st.metric("❌ WA Failed", wa_fail)
-
-                # ZIP creation & summary
-                if all_images:
-                    zip_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for img in all_images:
-                            zf.write(img, arcname=Path(img).name)
-                    st.session_state.zip_buffer = zip_buf.getvalue()
-                    st.success(f"✅ Done! {len(all_images)} image(s) ready for download.")
+                if thread.is_alive():
+                    failed_files.append(
+                        (name, "Processing timed out after 30 seconds")
+                    )
+                elif result["success"]:
+                    images = [
+                        image for image in result["images"]
+                        if os.path.isfile(image)
+                    ]
+                    all_images.extend(images)
+                    logs.success(
+                        f"{name}: generated {len(images)} image(s)"
+                    )
                 else:
-                    st.warning("⚠️ No images were generated.")
+                    failed_files.append(
+                        (name, result["error"] or "Unknown error")
+                    )
 
-            except Exception as e:
-                import traceback
-                st.error(f"Critical Error: {e}")
-                st.code(traceback.format_exc(), language="python")
-            finally:
-                st.session_state.processing = False
-                st.rerun()  # 👈 This forces Streamlit to refresh and unlock the UI/buttons immediately
+                progress.progress((index + 1) / total)
+
+        # Send images using WA Hero
+        if send_images and all_images:
+            st.subheader("📨 Sending images")
+            send_progress = st.progress(0)
+            send_logs = st.container()
+            sent, failed = 0, 0
+
+            for index, image_path in enumerate(all_images):
+                if st.session_state.cancel_requested:
+                    break
+
+                caption = Path(image_path).stem.replace("__", " | ")
+
+                try:
+                    response = send_image_wahero(
+                        image_path=image_path,
+                        phone=image_phone,
+                        caption=caption,
+                    )
+
+                    sent += 1
+                    send_logs.success(
+                        f"Sent: {Path(image_path).name}"
+                    )
+
+                except Exception as exc:
+                    failed += 1
+                    send_logs.error(
+                        f"{Path(image_path).name}: {exc}"
+                    )
+
+                send_progress.progress(
+                    (index + 1) / len(all_images)
+                )
+
+                if index + 1 < len(all_images):
+                    time.sleep(image_delay)
+
+            st.metric("Images sent", sent)
+            st.metric("Images failed", failed)
+
+        # Optional text message
+        if send_text and not st.session_state.cancel_requested:
+            if text_phone and text_message.strip():
+                try:
+                    result = send_message_wahero(
+                        phone=text_phone,
+                        message=text_message,
+                    )
+                    st.success(f"Text message accepted: {result}")
+                except Exception as exc:
+                    st.error(f"Text message failed: {exc}")
+            else:
+                st.warning("Enter the text recipient and message.")
+
+        # Show processing failures
+        if failed_files:
+            st.subheader("⚠️ Failed files")
+            for name, error in failed_files:
+                with st.expander(name):
+                    st.code(error)
+
+        # ZIP download
+        if all_images:
+            zip_buffer = io.BytesIO()
+
+            with zipfile.ZipFile(
+                zip_buffer, "w", zipfile.ZIP_DEFLATED
+            ) as archive:
+                for image_path in all_images:
+                    archive.write(
+                        image_path,
+                        arcname=Path(image_path).name,
+                    )
+
+            st.download_button(
+                "⬇️ Download generated images",
+                data=zip_buffer.getvalue(),
+                file_name="exported_tables.zip",
+                mime="application/zip",
+            )
+
+    except Exception as exc:
+        st.error(f"Processing error: {exc}")
+        st.code(traceback.format_exc())
+
+    finally:
+        st.session_state.processing = False
