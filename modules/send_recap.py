@@ -12,7 +12,7 @@ import openpyxl
 import streamlit as st
 
 from modules.get_recap import get_recap
-from tools.wahero_client import (
+from tools.whatsapp import (
     send_image as send_image_wahero,
     send_message as send_message_wahero,
 )
