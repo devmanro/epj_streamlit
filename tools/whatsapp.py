@@ -6,6 +6,10 @@ import os
 import json
 import requests
 
+import base64
+from pathlib import Path
+import streamlit as st
+
 import mimetypes
 import time
 from pathlib import Path
@@ -25,6 +29,12 @@ from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_D
 
 GREEN_API_HOST_OVERRIDE = os.getenv("GREEN_API_HOST", "")
 
+
+
+
+
+
+
 def _base_url(id_instance: str, api_token: str, method: str) -> str:
     if GREEN_API_HOST_OVERRIDE:
         host = GREEN_API_HOST_OVERRIDE.rstrip("/")
@@ -32,6 +42,124 @@ def _base_url(id_instance: str, api_token: str, method: str) -> str:
         host = f"https://{str(id_instance)[:4]}.api.greenapi.com"
     return f"{host}/waInstance{id_instance}/{method}/{api_token}"
     
+
+
+
+
+
+
+
+
+
+#WAHERO
+API_BASE = "https://my.wahero.org/api"
+
+
+def _api_key():
+    key = st.secrets.get("WAHERO_API_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "WAHERO_API_KEY is missing from Streamlit secrets."
+        )
+    return str(key)
+
+
+def _headers():
+    return {
+        "x-api-key": _api_key(),
+        "Content-Type": "application/json",
+    }
+
+
+def _read_response(response):
+    if not response.ok:
+        raise RuntimeError(
+            f"WA Hero API error {response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+    try:
+        data = response.json()
+        return data if isinstance(data, dict) else {"data": data}
+    except ValueError:
+        return {"response": response.text}
+
+
+def send_message(phone: str, message: str) -> dict:
+    """Send a WhatsApp text message."""
+
+    if not phone.strip():
+        raise ValueError("Recipient phone number is required.")
+
+    if not message.strip():
+        raise ValueError("Message cannot be empty.")
+
+    response = requests.post(
+        f"{API_BASE}/send-message",
+        headers=_headers(),
+        json={
+            "to": phone.strip(),
+            "message": message,
+        },
+        timeout=30,
+    )
+
+    return _read_response(response)
+
+
+def send_image(
+    image_path: str,
+    phone: str,
+    caption: str = "",
+) -> dict:
+    """Send an image as a native WhatsApp photo."""
+
+    path = Path(image_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Image file not found: {path}"
+        )
+
+    if not phone.strip():
+        raise ValueError("Recipient phone number is required.")
+
+    mimetype, _ = mimetypes.guess_type(path.name)
+
+    if mimetype not in ("image/jpeg", "image/png"):
+        raise ValueError(
+            "Only JPEG and PNG images are supported."
+        )
+
+    # Encode image as raw Base64, without a data URL prefix.
+    image_base64 = base64.b64encode(
+        path.read_bytes()
+    ).decode("ascii")
+
+    payload = {
+        "to": phone.strip(),
+        "image_base64": image_base64,
+        "caption": caption or "",
+        "mimetype": mimetype,
+    }
+
+    response = requests.post(
+        f"{API_BASE}/send-image",
+        headers=_headers(),
+        json=payload,
+        timeout=90,
+    )
+
+    return _read_response(response)
+
+
+
+
+
+
+
+
+
 
 
 # ──────────────────────────────────────────────────────────
@@ -174,19 +302,6 @@ def send_text_to_whatsapp_greenapi(message: str, chat_id: str, id_instance: str,
     except json.JSONDecodeError:
         raise RuntimeError(f"Non-JSON response from sendMessage: {resp.text}")
 
-
-def send_message(phone: str, message: str) -> dict:
-    response = requests.post(
-        "https://my.wahero.org/api/send-message",
-        headers={
-            "x-api-key": st.secrets["WAHERO_API_KEY"],
-            "Content-Type": "application/json",
-        },
-        json={"to": phone, "message": message},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
 
 # ──────────────────────────────────────────────────────────
 # SENDING IMAGES — with automatic fallback
