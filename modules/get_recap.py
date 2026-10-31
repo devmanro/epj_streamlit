@@ -20,9 +20,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib import colors as mcolors
-import numpy as np
+
 import re
 import textwrap
+
+from io import BytesIO
+from PIL import Image
 
 
 
@@ -425,6 +428,29 @@ def excel_row_height_to_inches(pt_height: float) -> float:
 # ============================================================
 # ========== IMAGE EXPORT ====================================
 # ============================================================
+
+# ── Clean & Optimize Image ──────────────────────────────────────────
+def prepare_image_bytes(image_path: str, max_dimension: int = 1600, quality: int = 85) -> bytes:
+    """
+    Opens the image, converts to standard RGB JPEG, resizes if too large,
+    and returns clean JPEG bytes ready for Base64 encoding.
+    """
+    with Image.open(image_path) as img:
+        # Convert RGBA/P/CMYK to clean RGB
+        if img.mode in ("RGBA", "P", "CMYK"):
+            img = img.convert("RGB")
+        
+        # Resize dimensions if larger than max_dimension
+        if max(img.size) > max_dimension:
+            img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+            
+        # Save to memory buffer as optimized JPEG
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=quality, optimize=True)
+        return buffer.getvalue()
+
+
+# ── Export Excel Range to Image ──────────────────────────────────────
 def export_range_as_image(
     sheet,
     rng_bounds: Tuple[int, int, int, int],
@@ -434,17 +460,8 @@ def export_range_as_image(
     format: Optional[str] = None,
     quality: int = 85,
 ) -> None:
-    """
-    Renders the visible portion of *rng_bounds* from *sheet* into an image (PNG, JPEG, etc.).
-
-    rng_bounds   : (start_row, end_row, start_col, end_col) — 1-indexed
-    visible_rows / visible_cols : pre-filtered lists; computed if None.
-    format       : Image format e.g. "PNG", "JPEG", "JPG". Inferred from output_path extension if None.
-    quality      : Compression quality (1-95) passed to Pillow/Matplotlib for JPEG outputs.
-    """
     start_row, end_row, start_col, end_col = rng_bounds
 
-    # ── Format Detection ─────────────────────────────────────────────
     if format is None:
         ext = output_path.split(".")[-1].upper()
         format = "JPEG" if ext in ("JPG", "JPEG") else ext
@@ -453,7 +470,6 @@ def export_range_as_image(
         if format == "JPG":
             format = "JPEG"
 
-    # ── Visible row / col lists ──────────────────────────────────────
     if visible_rows is None:
         visible_rows = get_visible_rows(sheet, start_row, end_row)
     if visible_cols is None:
@@ -467,7 +483,6 @@ def export_range_as_image(
     if n_rows == 0 or n_cols == 0:
         return
 
-    # ── Physical sizes (inches) ──────────────────────────────────────
     col_widths_in = [
         excel_col_width_to_inches(get_col_width_pixels(sheet, c)) for c in visible_cols
     ]
@@ -479,7 +494,6 @@ def export_range_as_image(
     fig_width = max(sum(col_widths_in), 1.0)
     fig_height = max(sum(row_heights_in), 0.5)
 
-    # ── Coordinate grids ────────────────────────────────────────────
     col_x = [0.0]
     for w in col_widths_in:
         col_x.append(col_x[-1] + w)
@@ -492,12 +506,10 @@ def export_range_as_image(
         row_y_bottom[i] = y - h
         y -= h
 
-    # ── Merge map & index maps ───────────────────────────────────────
     merge_map = get_merged_cell_info(sheet)
     row_idx_map = {r: i for i, r in enumerate(visible_rows)}
     col_idx_map = {c: i for i, c in enumerate(visible_cols)}
 
-    # ── Figure ───────────────────────────────────────────────────────
     DPI = 150
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=DPI)
     ax.set_xlim(0, fig_width)
@@ -505,7 +517,7 @@ def export_range_as_image(
     ax.axis("off")
     fig.patch.set_facecolor("white")
 
-    drawn = set()  # (row, col) cells already rendered
+    drawn = set()
 
     for r_idx, r in enumerate(visible_rows):
         for c_idx, c in enumerate(visible_cols):
@@ -514,15 +526,13 @@ def export_range_as_image(
 
             merge_info = merge_map.get((r, c), "NOT_MERGED")
 
-            # ── Slave cell → skip ────────────────────────────────
-            if merge_info is None:  # slave
+            if merge_info is None:
                 drawn.add((r, c))
                 continue
 
             cell = sheet.cell(row=r, column=c)
 
-            # ── Compute rect geometry ────────────────────────────
-            if merge_info != "NOT_MERGED":  # top-left of a merge
+            if merge_info != "NOT_MERGED":
                 min_r, min_c, max_r, max_c = merge_info
 
                 span_r_idxs = [
@@ -548,7 +558,7 @@ def export_range_as_image(
                 for mr in range(min_r, max_r + 1):
                     for mc in range(min_c, max_c + 1):
                         drawn.add((mr, mc))
-            else:  # normal (non-merged) cell
+            else:
                 x_left = col_x[c_idx]
                 x_right = col_x[c_idx + 1]
                 y_top = row_y_top[r_idx]
@@ -558,7 +568,6 @@ def export_range_as_image(
             cell_w = x_right - x_left
             cell_h = y_top - y_bottom
 
-            # ── Background fill ──────────────────────────────────
             bg = get_cell_bg_color(cell)
             ax.add_patch(
                 plt.Rectangle(
@@ -572,7 +581,6 @@ def export_range_as_image(
                 )
             )
 
-            # ── Borders ──────────────────────────────────────────
             edges = get_border_edges_styled(cell)
             border_segments = [
                 ("top", [x_left, x_right], [y_top, y_top]),
@@ -585,7 +593,6 @@ def export_range_as_image(
                 if info:
                     ax.plot(xs, ys, color=info["color"], linewidth=info["lw"], zorder=3)
 
-            # ── Text ─────────────────────────────────────────────
             val = cell.value
             if val is None or str(val).strip() == "":
                 continue
@@ -595,7 +602,7 @@ def export_range_as_image(
             bold = get_cell_font_bold(cell)
             italic = get_cell_font_italic(cell)
             font_pt = get_cell_font_size(cell, default=10.0)
-            font_size = font_pt * 0.82  # slight scale for tight layout
+            font_size = font_pt * 0.82
 
             h_align, v_align, wrap_text = get_cell_alignment(cell)
 
@@ -619,7 +626,7 @@ def export_range_as_image(
             ha = HA_MAP.get(h_align, "left")
             va = VA_MAP.get(v_align, "center")
 
-            PAD = 0.04  # inches padding inside cell
+            PAD = 0.04
             tx = (
                 x_left + PAD
                 if ha == "left"
@@ -635,7 +642,6 @@ def export_range_as_image(
                 else (y_top + y_bottom) / 2
             )
 
-            # ── Text wrapping ────────────────────────────────────
             if wrap_text and cell_w > 0:
                 char_w_in = font_pt * 0.55 / 72.0
                 chars_per_line = max(1, int((cell_w - 2 * PAD) / char_w_in))
@@ -661,20 +667,15 @@ def export_range_as_image(
 
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
-    # ── Save Options ────────────────────────────────────────────────
-    save_kwargs = {
-        "dpi": DPI,
-        "bbox_inches": "tight",
-        "facecolor": "white",
-        "format": format.lower(),
-    }
-
-    if format == "JPEG":
-        save_kwargs["pil_kwargs"] = {"quality": quality, "optimize": True}
-
-    fig.savefig(output_path, **save_kwargs)
+    # Render figure to PNG file first
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white", format="png")
     plt.close(fig)
 
+    # Post-process image: convert to sanitized JPEG via Pillow
+    if format == "JPEG":
+        clean_bytes = prepare_image_bytes(output_path, quality=quality)
+        with open(output_path, "wb") as f:
+            f.write(clean_bytes)
 
 
 
@@ -712,14 +713,14 @@ def get_recap(
     all_vis_rows = get_visible_rows(sheet, s_row, e_row)
     all_vis_cols = get_visible_cols(sheet, s_col, e_col)
 
-    sheet_title = sheet.title
+    # sheet_title = sheet.title
     ext = "jpg" if send_whatsapp else "png"
     img_format = "JPEG" if send_whatsapp else "PNG"
 
     # ── Non-last tables: full picture ───────────────────────────────
     for i, (t_sc, t_ec, t_sr, t_er) in enumerate(tables[:-1], start=1):
         rng = (t_sr, t_er, t_sc, t_ec)
-        fname = f"{workbook_name}__{sheet_title}__table{i}.{ext}"
+        fname = f"{workbook_name}table{i}.{ext}"
         fpath = os.path.join(output_folder, fname)
 
         export_range_as_image(
@@ -748,7 +749,7 @@ def get_recap(
 
     # Picture 1 – full bordered block
     rng_full = (b_sr, b_er, b_sc, b_ec)
-    fname_full = f"{workbook_name}__{sheet_title}__table{table_num}_full.{ext}"
+    fname_full = f"{workbook_name}table{table_num}full.{ext}"
     fpath_full = os.path.join(output_folder, fname_full)
 
     export_range_as_image(
@@ -768,8 +769,9 @@ def get_recap(
 
     if tail_cols:
         rng_tail = (b_sr, b_er, tail_cols[0], tail_cols[-1])
+        
         fname_tail = (
-            f"{workbook_name}__{sheet_title}__table{table_num}_tail{tail_count}.{ext}"
+            f"{workbook_name}table{table_num}tail{tail_count}.{ext}"
         )
         fpath_tail = os.path.join(output_folder, fname_tail)
 

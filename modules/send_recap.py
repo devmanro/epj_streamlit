@@ -53,6 +53,7 @@ def process_single_file(
                 output_folder=output_folder,
                 last_table_tail_cols=int(last_table_tail_cols),
                 log_fn=threadsafe_log,
+                send_whatsapp=True,
             )
 
         result["images"] = images
@@ -88,7 +89,7 @@ def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
 
     st.subheader("📱 WA Hero settings")
 
-    image_phone = st.text_input(
+    recipient = st.text_input(
         "Recipient phone number",
         placeholder="213XXXXXXXXX",
         value=GROUP_NUM,
@@ -158,7 +159,7 @@ def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
             st.warning("Upload at least one Excel file.")
             return
 
-        if send_images and not image_phone:
+        if send_images and not recipient:
             st.warning("Enter the image recipient's phone number.")
             return
 
@@ -258,7 +259,7 @@ def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
                 try:
                     response = send_image_wahero(
                         image_path=image_path,
-                        phone=image_phone,
+                        phone=recipient,
                         caption=caption,
                     )
 

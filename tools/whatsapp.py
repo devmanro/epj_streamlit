@@ -14,6 +14,7 @@ import mimetypes
 import time
 from pathlib import Path
 
+from modules.get_recap import prepare_image_bytes
 
 try:
     from PIL import Image
@@ -21,19 +22,12 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-
 from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE,WAHERO_API_KEY
-
-
-
 
 GREEN_API_HOST_OVERRIDE = os.getenv("GREEN_API_HOST", "")
 
-
-
-
-
-
+#WAHERO
+API_BASE = "https://my.wahero.org/api"
 
 def _base_url(id_instance: str, api_token: str, method: str) -> str:
     if GREEN_API_HOST_OVERRIDE:
@@ -41,19 +35,6 @@ def _base_url(id_instance: str, api_token: str, method: str) -> str:
     else:
         host = f"https://{str(id_instance)[:4]}.api.greenapi.com"
     return f"{host}/waInstance{id_instance}/{method}/{api_token}"
-    
-
-
-
-
-
-
-
-
-
-#WAHERO
-API_BASE = "https://my.wahero.org/api"
-
 
 def _api_key():
     key=st.secrets["api"]["WAHERO_API_KEY"]
@@ -86,6 +67,57 @@ def _read_response(response):
         return {"response": response.text}
 
 
+def send_image(
+    image_path: str,
+    phone: str,
+    caption: str = "",
+) -> dict:
+    """Send an image as a native WhatsApp photo."""
+
+    path = Path(image_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Image file not found: {path}"
+        )
+
+    if not phone.strip():
+        raise ValueError("Recipient phone number is required.")
+
+    # Process and optimize image bytes, getting the safe normalized mimetype back
+    image_bytes, mimetype = prepare_image_bytes(str(path))
+
+    if mimetype not in ("image/jpeg", "image/png"):
+        raise ValueError(
+            f"Unsupported image type: {mimetype}. Only JPEG and PNG are supported."
+        )
+
+    # Encode cleaned image bytes as raw Base64, without a data URL prefix.
+    image_base64 = base64.b64encode(
+        image_bytes
+    ).decode("ascii")
+
+    payload = {
+        "to": phone.strip(),
+        "image_base64": image_base64,
+        "caption": caption or "ship",
+        "mimetype": mimetype,
+    }
+
+    response = requests.post(
+        f"{API_BASE}/send-image",
+        headers=_headers(),
+        json=payload,
+        timeout=90,
+    )
+
+    return _read_response(response)
+
+
+
+
+
+
 def send_message(phone: str, message: str) -> dict:
     """Send a WhatsApp text message."""
 
@@ -106,58 +138,6 @@ def send_message(phone: str, message: str) -> dict:
     )
 
     return _read_response(response)
-
-
-def send_image(
-    image_path: str,
-    phone: str,
-    caption: str = "",
-) -> dict:
-    """Send an image as a native WhatsApp photo."""
-
-    path = Path(image_path)
-
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"Image file not found: {path}"
-        )
-
-    if not phone.strip():
-        raise ValueError("Recipient phone number is required.")
-
-    mimetype, _ = mimetypes.guess_type(path.name)
-
-    if mimetype not in ("image/jpeg", "image/png"):
-        raise ValueError(
-            "Only JPEG and PNG images are supported."
-        )
-
-    # Encode image as raw Base64, without a data URL prefix.
-    image_base64 = base64.b64encode(
-        path.read_bytes()
-    ).decode("ascii")
-
-    payload = {
-        "to": phone.strip(),
-        "image_base64": image_base64,
-        "caption": caption or "",
-        "mimetype": mimetype,
-    }
-
-    response = requests.post(
-        f"{API_BASE}/send-image",
-        headers=_headers(),
-        json=payload,
-        timeout=90,
-    )
-
-    return _read_response(response)
-
-
-
-
-
-
 
 
 
