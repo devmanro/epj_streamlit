@@ -450,7 +450,7 @@ def prepare_image_bytes(image_path: str, max_dimension: int = 1600, quality: int
         return buffer.getvalue()
 
 # ── Helper Subfunction: Render Figure to Disk ─────────────────────
-def _render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
+def render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
     """Renders matplotlib figure directly using the target format."""
     save_fmt = fmt.lower()
 
