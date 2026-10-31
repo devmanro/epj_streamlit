@@ -11,6 +11,7 @@ from pathlib import Path
 import openpyxl
 import streamlit as st
 
+from assets.constants.constants import GROUP_NUM
 from modules.get_recap import get_recap
 from tools.whatsapp import (
     send_image as send_image_wahero,
@@ -90,6 +91,7 @@ def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
     image_phone = st.text_input(
         "Recipient phone number",
         placeholder="213XXXXXXXXX",
+        value=GROUP_NUM,
         help="Country code + number, digits only.",
         key="wahero_image_phone",
     ).strip()
