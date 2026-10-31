@@ -10,7 +10,7 @@ load_dotenv()
 ID_INSTANCE = st.secrets.get("ID_INSTANCE", os.getenv("ID_INSTANCE", ""))
 API_TOKEN = st.secrets.get("API_TOKEN", os.getenv("API_TOKEN", ""))
 
- WAHERO_API_KEY=st.secrets.get("WAHERO_API_KEY")
+WAHERO_API_KEY=st.secrets.get("WAHERO_API_KEY")
 
 
 #PATH_REPORTS="reports/"
