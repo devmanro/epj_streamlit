@@ -22,8 +22,7 @@ except ImportError:
     PIL_AVAILABLE = False
 
 
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE,
-WAHERO_API_KEY
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE,WAHERO_API_KEY
 
 
 
