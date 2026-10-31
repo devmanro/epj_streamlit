@@ -22,7 +22,8 @@ except ImportError:
     PIL_AVAILABLE = False
 
 
-from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE
+from assets.constants.constants import UPLOAD_DIR, DB_PATH, PATH_DEBRQ, UPLOAD_DIR , API_TOKEN, ID_INSTANCE,GREEN_API_BASE,
+WAHERO_API_KEY
 
 
 
@@ -56,7 +57,8 @@ API_BASE = "https://my.wahero.org/api"
 
 
 def _api_key():
-    key = st.secrets.get("WAHERO_API_KEY", "")
+    key=st.secrets["api"]["WAHERO_API_KEY"]
+    
     if not key:
         raise RuntimeError(
             "WAHERO_API_KEY is missing from Streamlit secrets."
