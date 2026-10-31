@@ -450,34 +450,34 @@ def prepare_image_bytes(image_path: str, max_dimension: int = 1600, quality: int
         return buffer.getvalue()
 
 # ── Helper Subfunction: Render Figure to Disk ─────────────────────
-    def _render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
-        """Renders matplotlib figure directly using the target format."""
-        save_fmt = fmt.lower()
+def _render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
+    """Renders matplotlib figure directly using the target format."""
+    save_fmt = fmt.lower()
 
-        if save_fmt in ("jpeg", "jpg"):
-            figure.savefig(
-                path,
-                dpi=dpi_val,
-                bbox_inches="tight",
-                facecolor="white",
-                format="jpeg",
-                pil_kwargs={"quality": qual, "optimize": True},
-            )
-            plt.close(figure)
+    if save_fmt in ("jpeg", "jpg"):
+        figure.savefig(
+            path,
+            dpi=dpi_val,
+            bbox_inches="tight",
+            facecolor="white",
+            format="jpeg",
+            pil_kwargs={"quality": qual, "optimize": True},
+        )
+        plt.close(figure)
 
-            # Post-process image to sanitize JPEG bytes
-            clean_bytes = prepare_image_bytes(path, quality=qual)
-            with open(path, "wb") as f:
-                f.write(clean_bytes)
-        else:
-            figure.savefig(
-                path,
-                dpi=dpi_val,
-                bbox_inches="tight",
-                facecolor="white",
-                format="png",
-            )
-            plt.close(figure)
+        # Post-process image to sanitize JPEG bytes
+        clean_bytes = prepare_image_bytes(path, quality=qual)
+        with open(path, "wb") as f:
+            f.write(clean_bytes)
+    else:
+        figure.savefig(
+            path,
+            dpi=dpi_val,
+            bbox_inches="tight",
+            facecolor="white",
+            format="png",
+        )
+        plt.close(figure)
 
 
 # ── Export Excel Range to Image ──────────────────────────────────────
