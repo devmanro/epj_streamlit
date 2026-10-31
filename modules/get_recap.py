@@ -449,7 +449,38 @@ def prepare_image_bytes(image_path: str, max_dimension: int = 1600, quality: int
         img.save(buffer, format="JPEG", quality=quality, optimize=True)
         return buffer.getvalue()
 
+# ── Helper Subfunction: Render Figure to Disk ─────────────────────
+    def _render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
+        """Renders matplotlib figure directly using the target format."""
+        save_fmt = fmt.lower()
 
+        if save_fmt in ("jpeg", "jpg"):
+            figure.savefig(
+                path,
+                dpi=dpi_val,
+                bbox_inches="tight",
+                facecolor="white",
+                format="jpeg",
+                pil_kwargs={"quality": qual, "optimize": True},
+            )
+            plt.close(figure)
+
+            # Post-process image to sanitize JPEG bytes
+            clean_bytes = prepare_image_bytes(path, quality=qual)
+            with open(path, "wb") as f:
+                f.write(clean_bytes)
+        else:
+            figure.savefig(
+                path,
+                dpi=dpi_val,
+                bbox_inches="tight",
+                facecolor="white",
+                format="png",
+            )
+            plt.close(figure)
+
+
+# ── Export Excel Range to Image ──────────────────────────────────────
 # ── Export Excel Range to Image ──────────────────────────────────────
 def export_range_as_image(
     sheet,
@@ -462,6 +493,7 @@ def export_range_as_image(
 ) -> None:
     start_row, end_row, start_col, end_col = rng_bounds
 
+    # Normalize format parameter
     if format is None:
         ext = output_path.split(".")[-1].upper()
         format = "JPEG" if ext in ("JPG", "JPEG") else ext
@@ -666,17 +698,14 @@ def export_range_as_image(
             )
 
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-
-    # Render figure to PNG file first
-    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white", format="png")
-    plt.close(fig)
-
-    # Post-process image: convert to sanitized JPEG via Pillow
-    if format == "JPEG":
-        clean_bytes = prepare_image_bytes(output_path, quality=quality)
-        with open(output_path, "wb") as f:
-            f.write(clean_bytes)
-
+    # Execute figure rendering via subfunction
+    render_fig_to_disk(
+        figure=fig,
+        path=output_path,
+        fmt=format,
+        dpi_val=DPI,
+        qual=quality,
+    )
 
 
 # ============================================================
