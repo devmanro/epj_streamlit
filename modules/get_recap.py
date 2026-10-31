@@ -423,32 +423,33 @@ def excel_row_height_to_inches(pt_height: float) -> float:
 # ============================================================
 # ========== IMAGE EXPORT ====================================
 # ============================================================
-
-
 def export_range_as_image(
     sheet,
     rng_bounds: Tuple[int, int, int, int],
     output_path: str,
     visible_rows: Optional[List[int]] = None,
     visible_cols: Optional[List[int]] = None,
+    format: Optional[str] = None,
+    quality: int = 85,
 ) -> None:
     """
-    Renders the visible portion of *rng_bounds* from *sheet* into a PNG.
+    Renders the visible portion of *rng_bounds* from *sheet* into an image (PNG, JPEG, etc.).
 
-    rng_bounds : (start_row, end_row, start_col, end_col)  — 1-indexed
+    rng_bounds   : (start_row, end_row, start_col, end_col) — 1-indexed
     visible_rows / visible_cols : pre-filtered lists; computed if None.
-
-    Handles:
-      • merged cells (correct span geometry)
-      • real column widths & row heights
-      • per-cell font (size, bold, italic, colour)
-      • per-cell alignment (H/V) and text-wrap
-      • background fill colours
-      • borders (thin / thick, custom colours)
+    format       : Image format e.g. "PNG", "JPEG", "JPG". Inferred from output_path extension if None.
+    quality      : Compression quality (1-95) passed to Pillow/Matplotlib for JPEG outputs.
     """
-    import textwrap
-
     start_row, end_row, start_col, end_col = rng_bounds
+
+    # ── Format Detection ─────────────────────────────────────────────
+    if format is None:
+        ext = output_path.split(".")[-1].upper()
+        format = "JPEG" if ext in ("JPG", "JPEG") else ext
+    else:
+        format = format.upper()
+        if format == "JPG":
+            format = "JPEG"
 
     # ── Visible row / col lists ──────────────────────────────────────
     if visible_rows is None:
@@ -477,14 +478,10 @@ def export_range_as_image(
     fig_height = max(sum(row_heights_in), 0.5)
 
     # ── Coordinate grids ────────────────────────────────────────────
-    # col_x[i]  = left  edge of visible_cols[i]  (in inches)
-    # col_x[n]  = right edge of last column
     col_x = [0.0]
     for w in col_widths_in:
         col_x.append(col_x[-1] + w)
 
-    # row_y_top[i]    = top    edge of visible_rows[i]  (matplotlib y, 0=bottom)
-    # row_y_bottom[i] = bottom edge of visible_rows[i]
     row_y_top = [0.0] * n_rows
     row_y_bottom = [0.0] * n_rows
     y = fig_height
@@ -526,7 +523,6 @@ def export_range_as_image(
             if merge_info != "NOT_MERGED":  # top-left of a merge
                 min_r, min_c, max_r, max_c = merge_info
 
-                # Collect visible span indices
                 span_r_idxs = [
                     row_idx_map[rr]
                     for rr in range(min_r, max_r + 1)
@@ -547,7 +543,6 @@ def export_range_as_image(
                 y_top = row_y_top[span_r_idxs[0]]
                 y_bottom = row_y_bottom[span_r_idxs[-1]]
 
-                # Mark every cell in the merge as drawn
                 for mr in range(min_r, max_r + 1):
                     for mc in range(min_c, max_c + 1):
                         drawn.add((mr, mc))
@@ -640,7 +635,7 @@ def export_range_as_image(
 
             # ── Text wrapping ────────────────────────────────────
             if wrap_text and cell_w > 0:
-                char_w_in = font_pt * 0.55 / 72.0  # avg char width
+                char_w_in = font_pt * 0.55 / 72.0
                 chars_per_line = max(1, int((cell_w - 2 * PAD) / char_w_in))
                 display_text = textwrap.fill(text_str, width=chars_per_line)
             else:
@@ -663,8 +658,22 @@ def export_range_as_image(
             )
 
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white")
+
+    # ── Save Options ────────────────────────────────────────────────
+    save_kwargs = {
+        "dpi": DPI,
+        "bbox_inches": "tight",
+        "facecolor": "white",
+        "format": format.lower(),
+    }
+
+    if format == "JPEG":
+        save_kwargs["pil_kwargs"] = {"quality": quality, "optimize": True}
+
+    fig.savefig(output_path, **save_kwargs)
     plt.close(fig)
+
+
 
 
 # ============================================================
