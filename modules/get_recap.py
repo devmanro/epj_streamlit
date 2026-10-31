@@ -742,14 +742,13 @@ def get_recap(
     all_vis_rows = get_visible_rows(sheet, s_row, e_row)
     all_vis_cols = get_visible_cols(sheet, s_col, e_col)
 
-    # sheet_title = sheet.title
     ext = "jpg" if send_whatsapp else "png"
     img_format = "JPEG" if send_whatsapp else "PNG"
 
     # ── Non-last tables: full picture ───────────────────────────────
     for i, (t_sc, t_ec, t_sr, t_er) in enumerate(tables[:-1], start=1):
         rng = (t_sr, t_er, t_sc, t_ec)
-        fname = f"{workbook_name}table{i}.{ext}"
+        fname = f"{workbook_name}_table{i}.{ext}"
         fpath = os.path.join(output_folder, fname)
 
         export_range_as_image(
@@ -778,7 +777,7 @@ def get_recap(
 
     # Picture 1 – full bordered block
     rng_full = (b_sr, b_er, b_sc, b_ec)
-    fname_full = f"{workbook_name}table{table_num}full.{ext}"
+    fname_full = f"{workbook_name}_table{table_num}_full.{ext}"
     fpath_full = os.path.join(output_folder, fname_full)
 
     export_range_as_image(
@@ -798,10 +797,7 @@ def get_recap(
 
     if tail_cols:
         rng_tail = (b_sr, b_er, tail_cols[0], tail_cols[-1])
-        
-        fname_tail = (
-            f"{workbook_name}table{table_num}tail{tail_count}.{ext}"
-        )
+        fname_tail = f"{workbook_name}_table{table_num}_tail{tail_count}.{ext}"
         fpath_tail = os.path.join(output_folder, fname_tail)
 
         export_range_as_image(
