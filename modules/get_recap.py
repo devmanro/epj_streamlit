@@ -25,7 +25,7 @@ import re
 import textwrap
 
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 
@@ -428,59 +428,28 @@ def excel_row_height_to_inches(pt_height: float) -> float:
 # ============================================================
 # ========== IMAGE EXPORT ====================================
 # ============================================================
+def prepare_image_bytes(image_path):
+    max_dimension=1200
+    max_kb=70
+    img = Image.open(image_path).convert("RGB")
+    img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
 
-# ── Clean & Optimize Image ──────────────────────────────────────────
-def prepare_image_bytes(image_path: str, max_dimension: int = 1600, quality: int = 85) -> bytes:
-    """
-    Opens the image, converts to standard RGB JPEG, resizes if too large,
-    and returns clean JPEG bytes ready for Base64 encoding.
-    """
-    with Image.open(image_path) as img:
-        # Convert RGBA/P/CMYK to clean RGB
-        if img.mode in ("RGBA", "P", "CMYK"):
-            img = img.convert("RGB")
-        
-        # Resize dimensions if larger than max_dimension
-        if max(img.size) > max_dimension:
-            img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-            
-        # Save to memory buffer as optimized JPEG
-        buffer = BytesIO()
-        img.save(buffer, format="JPEG", quality=quality, optimize=True)
-        return buffer.getvalue()
-
-# ── Helper Subfunction: Render Figure to Disk ─────────────────────
-def render_fig_to_disk(figure, path: str, fmt: str, dpi_val: int, qual: int) -> None:
-    """Renders matplotlib figure directly using the target format."""
-    save_fmt = fmt.lower()
-
-    if save_fmt in ("jpeg", "jpg"):
-        figure.savefig(
-            path,
-            dpi=dpi_val,
-            bbox_inches="tight",
-            facecolor="white",
-            format="jpeg",
-            pil_kwargs={"quality": qual, "optimize": True},
+    # High-quality JPEG, optimized for small text
+    for quality in (95, 92, 90, 88, 85, 82, 78):
+        buf = BytesIO()
+        img.save(
+            buf, format="JPEG",
+            quality=quality,
+            subsampling=0,  # preserves text edges
+            optimize=True,
+            progressive=True
         )
-        plt.close(figure)
+        data = buf.getvalue()
+        if len(data) <= max_kb * 1024:
+            return data
 
-        # Post-process image to sanitize JPEG bytes
-        clean_bytes = prepare_image_bytes(path, quality=qual)
-        with open(path, "wb") as f:
-            f.write(clean_bytes)
-    else:
-        figure.savefig(
-            path,
-            dpi=dpi_val,
-            bbox_inches="tight",
-            facecolor="white",
-            format="png",
-        )
-        plt.close(figure)
+    raise ValueError("Image cannot fit under 70 KB at acceptable quality")
 
-
-# ── Export Excel Range to Image ──────────────────────────────────────
 # ── Export Excel Range to Image ──────────────────────────────────────
 def export_range_as_image(
     sheet,
@@ -489,11 +458,10 @@ def export_range_as_image(
     visible_rows: Optional[List[int]] = None,
     visible_cols: Optional[List[int]] = None,
     format: Optional[str] = None,
-    quality: int = 85,
+    quality: int = 92,
 ) -> None:
     start_row, end_row, start_col, end_col = rng_bounds
 
-    # Normalize format parameter
     if format is None:
         ext = output_path.split(".")[-1].upper()
         format = "JPEG" if ext in ("JPG", "JPEG") else ext
@@ -698,14 +666,17 @@ def export_range_as_image(
             )
 
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    # Execute figure rendering via subfunction
-    render_fig_to_disk(
-        figure=fig,
-        path=output_path,
-        fmt=format,
-        dpi_val=DPI,
-        qual=quality,
-    )
+
+    # Render figure to PNG file first
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight", facecolor="white", format="png")
+    plt.close(fig)
+
+    # Post-process image: convert to sanitized JPEG via Pillow
+    if format == "JPEG":
+        clean_bytes = prepare_image_bytes(output_path)
+        with open(output_path, "wb") as f:
+            f.write(clean_bytes)
+
 
 
 # ============================================================
@@ -742,13 +713,14 @@ def get_recap(
     all_vis_rows = get_visible_rows(sheet, s_row, e_row)
     all_vis_cols = get_visible_cols(sheet, s_col, e_col)
 
+    # sheet_title = sheet.title
     ext = "jpg" if send_whatsapp else "png"
     img_format = "JPEG" if send_whatsapp else "PNG"
 
     # ── Non-last tables: full picture ───────────────────────────────
     for i, (t_sc, t_ec, t_sr, t_er) in enumerate(tables[:-1], start=1):
         rng = (t_sr, t_er, t_sc, t_ec)
-        fname = f"{workbook_name}_table{i}.{ext}"
+        fname = f"{workbook_name}table{i}.{ext}"
         fpath = os.path.join(output_folder, fname)
 
         export_range_as_image(
@@ -776,20 +748,20 @@ def get_recap(
     block_vis_cols = [c for c in all_vis_cols if b_sc <= c <= b_ec]
 
     # Picture 1 – full bordered block
-    rng_full = (b_sr, b_er, b_sc, b_ec)
-    fname_full = f"{workbook_name}_table{table_num}_full.{ext}"
-    fpath_full = os.path.join(output_folder, fname_full)
+    # rng_full = (b_sr, b_er, b_sc, b_ec)
+    # fname_full = f"{workbook_name}table{table_num}full.{ext}"
+    # fpath_full = os.path.join(output_folder, fname_full)
 
-    export_range_as_image(
-        sheet,
-        rng_full,
-        fpath_full,
-        visible_rows=all_vis_rows,
-        visible_cols=block_vis_cols,
-        format=img_format,
-    )
-    generated.append(fpath_full)
-    log_fn(f"✅ Saved (last – full):  {fname_full}")
+    # export_range_as_image(
+    #     sheet,
+    #     rng_full,
+    #     fpath_full,
+    #     visible_rows=all_vis_rows,
+    #     visible_cols=block_vis_cols,
+    #     format=img_format,
+    # )
+    # generated.append(fpath_full)
+    # log_fn(f"✅ Saved (last – full):  {fname_full}")
 
     # Picture 2 – tail (last N visible cols of the block)
     tail_count = min(last_table_tail_cols, len(block_vis_cols))
@@ -797,7 +769,10 @@ def get_recap(
 
     if tail_cols:
         rng_tail = (b_sr, b_er, tail_cols[0], tail_cols[-1])
-        fname_tail = f"{workbook_name}_table{table_num}_tail{tail_count}.{ext}"
+        
+        fname_tail = (
+            f"{workbook_name}table{table_num}tail{tail_count}.{ext}"
+        )
         fpath_tail = os.path.join(output_folder, fname_tail)
 
         export_range_as_image(

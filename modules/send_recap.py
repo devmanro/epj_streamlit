@@ -257,12 +257,13 @@ def render_send_recaps_tab(ID_INSTANCE=None, API_TOKEN=None, st=st):
                 caption = Path(image_path).stem.replace("__", " | ")
 
                 try:
+                    print("sendingggggg")
                     response = send_image_wahero(
                         image_path=image_path,
                         phone=recipient,
                         caption=caption,
                     )
-
+                    print(response)
                     sent += 1
                     send_logs.success(
                         f"Sent: {Path(image_path).name}"

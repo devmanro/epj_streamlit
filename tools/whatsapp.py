@@ -12,8 +12,9 @@ import streamlit as st
 
 import mimetypes
 import time
-from pathlib import Path
 
+from io import BytesIO
+from PIL import Image
 from modules.get_recap import prepare_image_bytes
 
 try:
@@ -72,38 +73,51 @@ def send_image(
     phone: str,
     caption: str = "",
 ) -> dict:
-    """Send an image as a native WhatsApp photo."""
+    """Send an optimized JPEG image through WA Hero."""
 
     path = Path(image_path)
 
     if not path.is_file():
-        raise FileNotFoundError(
-            f"Image file not found: {path}"
-        )
+        raise FileNotFoundError(f"Image not found: {path}")
 
-    if not phone.strip():
+    if not phone or not phone.strip():
         raise ValueError("Recipient phone number is required.")
 
-    # Process and optimize image bytes, getting the safe normalized mimetype back
-    image_bytes, mimetype = prepare_image_bytes(str(path))
+    # 1. Normalize and resize image
+    image_bytes = prepare_image_bytes(
+        str(path)
+    )
 
-    if mimetype not in ("image/jpeg", "image/png"):
-        raise ValueError(
-            f"Unsupported image type: {mimetype}. Only JPEG and PNG are supported."
-        )
+    # 2. Validate resulting image
+    with Image.open(BytesIO(image_bytes)) as img:
+        img.verify()
 
-    # Encode cleaned image bytes as raw Base64, without a data URL prefix.
-    image_base64 = base64.b64encode(
-        image_bytes
-    ).decode("ascii")
+    with Image.open(BytesIO(image_bytes)) as img:
+        width, height = img.size
+
+    if max(width, height) > 6500:
+        raise ValueError(f"Image exceeds 6500px: {width}x{height}")
+
+    # 3. Encode Base64
+    image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
     payload = {
         "to": phone.strip(),
         "image_base64": image_base64,
         "caption": caption or "ship",
-        "mimetype": mimetype,
+        "mimetype": "image/jpeg",
     }
 
+    print(
+        f"WA Hero upload: {width}x{height}, "
+        f"{len(image_bytes) / 1024:.1f} KB"
+    )
+
+    print("JPEG signature:", image_bytes[:10])
+    print("Image dimensions:", width, height)
+    print("Image bytes:", len(image_bytes))
+    print("Base64 characters:", len(image_base64))
+    # 4. Send request
     response = requests.post(
         f"{API_BASE}/send-image",
         headers=_headers(),
@@ -111,7 +125,18 @@ def send_image(
         timeout=90,
     )
 
-    return _read_response(response)
+    # 5. Handle API errors
+    if not response.ok:
+        raise RuntimeError(
+            f"WA Hero HTTP {response.status_code}: "
+            f"{response.text[:1500]}"
+        )
+
+    try:
+        data = response.json()
+        return data if isinstance(data, dict) else {"data": data}
+    except ValueError:
+        return {"response": response.text}
 
 
 

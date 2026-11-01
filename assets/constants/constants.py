@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROUP_NUM=+213776180573
+GROUP_NUM="+213696911757"
 # Tries Streamlit secrets first, falls back to environment variables, then defaults to ""
 ID_INSTANCE = st.secrets.get("ID_INSTANCE", os.getenv("ID_INSTANCE", ""))
 API_TOKEN = st.secrets.get("API_TOKEN", os.getenv("API_TOKEN", ""))
