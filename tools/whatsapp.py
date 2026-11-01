@@ -158,6 +158,5 @@ def get_whatsapp_group_metadata_greenapi(
 # ========== YOUR CREDENTIALS ================================
 # ============================================================
 
-ID_INSTANCE = "7107651033"          # ← paste yours
-API_TOKEN   = "9d9983de28a546eeab96421d62ebac6d30e27257edb147589c" # ← paste yours
+
 
